@@ -14,7 +14,7 @@ model Video {
   id          String   @id @default(cuid())
   url         String   @unique
   username    String
-  description String?
+  description String
   thumbnailUrl String?
   
   // Current metrics (latest values)
