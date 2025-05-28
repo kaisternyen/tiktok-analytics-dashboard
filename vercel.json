@@ -1,0 +1,18 @@
+{
+    "build": {
+        "env": {
+            "NEXT_TELEMETRY_DISABLED": "1"
+        }
+    },
+    "functions": {
+        "src/app/api/scrape-all/route.ts": {
+            "maxDuration": 300
+        },
+        "src/app/api/scrape/route.ts": {
+            "maxDuration": 60
+        }
+    },
+    "regions": [
+        "iad1"
+    ]
+}

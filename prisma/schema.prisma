@@ -1,0 +1,58 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Video {
+  id          String   @id @default(cuid())
+  url         String   @unique
+  username    String
+  description String
+  thumbnailUrl String?
+  
+  // Current metrics (latest values)
+  currentViews    Int      @default(0)
+  currentLikes    Int      @default(0)
+  currentComments Int      @default(0)
+  currentShares   Int      @default(0)
+  
+  // Metadata
+  hashtags      String?  // JSON string for MVP simplicity
+  music         String?  // JSON string for MVP simplicity
+  
+  // Tracking info
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  lastScrapedAt DateTime @default(now())
+  
+  // Relationship
+  metricsHistory MetricsHistory[]
+  
+  @@map("videos")
+}
+
+model MetricsHistory {
+  id       String   @id @default(cuid())
+  videoId  String
+  
+  // Metrics snapshot
+  views    Int
+  likes    Int
+  comments Int
+  shares   Int
+  
+  // Timestamp
+  timestamp DateTime @default(now())
+  
+  // Relationship
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  
+  @@map("metrics_history")
+}
