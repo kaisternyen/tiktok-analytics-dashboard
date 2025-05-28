@@ -18,8 +18,18 @@ interface VideoResult {
     error?: string;
 }
 
+interface VideoRecord {
+    id: string;
+    url: string;
+    username: string;
+    currentViews: number;
+    currentLikes: number;
+    currentComments: number;
+    currentShares: number;
+}
+
 // Concurrent processing function
-async function processVideosConcurrently(videos: any[], concurrency: number = 5) {
+async function processVideosConcurrently(videos: VideoRecord[], concurrency: number = 5) {
     const results: VideoResult[] = [];
     let successful = 0;
     let failed = 0;
@@ -127,7 +137,7 @@ async function processVideosConcurrently(videos: any[], concurrency: number = 5)
     return { results, successful, failed };
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
     console.log('🚀 Starting CONCURRENT automated scrape-all process...');
 
     try {
@@ -190,6 +200,6 @@ export async function GET(request: NextRequest) {
 }
 
 // Also support POST for manual triggers
-export async function POST(request: NextRequest) {
-    return GET(request);
+export async function POST() {
+    return GET();
 } 

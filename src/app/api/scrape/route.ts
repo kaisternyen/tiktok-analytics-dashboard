@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
 
             if (result.success && result.data) {
                 // Update video metrics
-                const updatedVideo = await prisma.video.update({
+                await prisma.video.update({
                     where: { id: existingVideo.id },
                     data: {
                         currentViews: result.data.views,

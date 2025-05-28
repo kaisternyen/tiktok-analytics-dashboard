@@ -27,6 +27,7 @@ export interface ScrapedVideoResult {
     success: boolean;
     data?: TikTokVideoData;
     error?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     debugInfo?: any;
 }
 
@@ -161,7 +162,7 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             timestamp: rawData.createTimeISO || rawData.createTime || new Date().toISOString(),
             hashtags: Array.isArray(rawData.hashtags)
                 ? rawData.hashtags
-                    .map((h: any) => typeof h === 'string' ? h : h?.name || '')
+                    .map((h: { name?: string } | string) => typeof h === 'string' ? h : h?.name || '')
                     .filter((tag: string) => tag && tag.trim() !== '')
                 : [],
             music: rawData.musicMeta ? {
