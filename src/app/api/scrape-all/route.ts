@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { scrapeTikTokVideo } from '@/lib/apify';
 import { prisma } from '@/lib/prisma';
 
