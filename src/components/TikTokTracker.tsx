@@ -374,7 +374,7 @@ export default function TikTokTracker() {
         label?: string;
     }) => {
         if (active && payload && payload.length) {
-            const timestamp = new Date(label || '').toLocaleString();
+            const timestamp = new Date(label!).toLocaleString();
             return (
                 <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
                     <p className="text-sm text-gray-500 mb-1">{timestamp}</p>
@@ -674,9 +674,6 @@ export default function TikTokTracker() {
                                                                         className="w-10 h-14 object-cover rounded bg-gray-200"
                                                                         width={40}
                                                                         height={56}
-                                                                        onError={(e) => {
-                                                                            e.currentTarget.style.display = 'none';
-                                                                        }}
                                                                     />
                                                                 )}
                                                                 <div>
