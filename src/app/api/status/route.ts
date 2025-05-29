@@ -68,7 +68,7 @@ export async function GET() {
                 expectedFrequency: 'Every 1 minute',
                 lastActivity: lastActivity?.toISOString() || 'Never',
                 minutesSinceLastActivity,
-                isHealthy: minutesSinceLastActivity ? minutesSinceLastActivity < 5 : false
+                isHealthy: minutesSinceLastActivity !== null && minutesSinceLastActivity <= 5
             },
             videos: {
                 oldest: oldestVideo ? {
