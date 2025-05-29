@@ -14,7 +14,14 @@ interface VideoHistory {
     likes: number;
     comments: number;
     shares: number;
+    deltaViews?: number;
+    deltaLikes?: number;
+    deltaComments?: number;
+    deltaShares?: number;
 }
+
+type TimePeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'lifetime';
+type ChartMode = 'total' | 'delta';
 
 interface TrackedVideo {
     id: string;
@@ -74,6 +81,8 @@ export default function TikTokTracker() {
     const [success, setSuccess] = useState<string | null>(null);
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
+    const [timePeriod, setTimePeriod] = useState<TimePeriod>('daily');
+    const [chartMode, setChartMode] = useState<ChartMode>('delta');
 
     // Fetch videos from database on component mount
     useEffect(() => {
@@ -276,6 +285,103 @@ export default function TikTokTracker() {
         );
     };
 
+    // Filter data by time period
+    const filterDataByPeriod = (history: VideoHistory[], period: TimePeriod): VideoHistory[] => {
+        const now = new Date();
+        const cutoffDate = new Date();
+
+        switch (period) {
+            case 'daily':
+                cutoffDate.setDate(now.getDate() - 1);
+                break;
+            case 'weekly':
+                cutoffDate.setDate(now.getDate() - 7);
+                break;
+            case 'monthly':
+                cutoffDate.setMonth(now.getMonth() - 1);
+                break;
+            case 'yearly':
+                cutoffDate.setFullYear(now.getFullYear() - 1);
+                break;
+            case 'lifetime':
+                return history; // Return all data
+        }
+
+        return history.filter(h => new Date(h.time) >= cutoffDate);
+    };
+
+    // Calculate deltas for history data
+    const calculateDeltas = (history: VideoHistory[]): VideoHistory[] => {
+        if (history.length <= 1) return history;
+
+        return history.map((current, index) => {
+            if (index === 0) {
+                // First entry has no previous data, so delta is 0
+                return {
+                    ...current,
+                    deltaViews: 0,
+                    deltaLikes: 0,
+                    deltaComments: 0,
+                    deltaShares: 0
+                };
+            }
+
+            const previous = history[index - 1];
+            return {
+                ...current,
+                deltaViews: current.views - previous.views,
+                deltaLikes: current.likes - previous.likes,
+                deltaComments: current.comments - previous.comments,
+                deltaShares: current.shares - previous.shares
+            };
+        });
+    };
+
+    // Get processed data for charts
+    const getChartData = (video: TrackedVideo) => {
+        const filteredHistory = filterDataByPeriod(video.history, timePeriod);
+        return calculateDeltas(filteredHistory);
+    };
+
+    // Format X-axis based on time period
+    const formatXAxis = (timestamp: string, period: TimePeriod) => {
+        const date = new Date(timestamp);
+        switch (period) {
+            case 'daily':
+                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            case 'weekly':
+                return date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+            case 'monthly':
+                return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            case 'yearly':
+                return date.toLocaleDateString([], { month: 'short', year: '2-digit' });
+            case 'lifetime':
+                return date.toLocaleDateString([], { month: 'short', year: '2-digit' });
+            default:
+                return date.toLocaleDateString();
+        }
+    };
+
+    // Custom tooltip with timestamp
+    const CustomTooltip = ({ active, payload, label }: any) => {
+        if (active && payload && payload.length) {
+            const timestamp = new Date(label).toLocaleString();
+            return (
+                <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+                    <p className="text-sm text-gray-500 mb-1">{timestamp}</p>
+                    {payload.map((entry: any, index: number) => (
+                        <p key={index} className="text-sm font-medium" style={{ color: entry.color }}>
+                            {entry.name}: {formatNumber(entry.value)}
+                            {chartMode === 'delta' && entry.value > 0 && ' ↑'}
+                            {chartMode === 'delta' && entry.value < 0 && ' ↓'}
+                        </p>
+                    ))}
+                </div>
+            );
+        }
+        return null;
+    };
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
@@ -434,27 +540,76 @@ export default function TikTokTracker() {
                                 {/* Performance Chart */}
                                 <Card>
                                     <CardContent className="p-6">
-                                        <h3 className="text-lg font-semibold mb-4">Performance Overview</h3>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="text-lg font-semibold">Performance Overview</h3>
+                                            <div className="flex items-center gap-4">
+                                                {/* Chart Mode Toggle */}
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-gray-500">Mode:</span>
+                                                    <div className="flex border border-gray-200 rounded-lg">
+                                                        <button
+                                                            onClick={() => setChartMode('total')}
+                                                            className={`px-3 py-1 text-xs rounded-l-lg transition-colors ${chartMode === 'total'
+                                                                ? 'bg-blue-500 text-white'
+                                                                : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                                }`}
+                                                        >
+                                                            Total
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setChartMode('delta')}
+                                                            className={`px-3 py-1 text-xs rounded-r-lg transition-colors ${chartMode === 'delta'
+                                                                ? 'bg-blue-500 text-white'
+                                                                : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                                }`}
+                                                        >
+                                                            Growth
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Time Period Toggle */}
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-gray-500">Period:</span>
+                                                    <div className="flex border border-gray-200 rounded-lg">
+                                                        {(['daily', 'weekly', 'monthly', 'yearly', 'lifetime'] as TimePeriod[]).map((period) => (
+                                                            <button
+                                                                key={period}
+                                                                onClick={() => setTimePeriod(period)}
+                                                                className={`px-2 py-1 text-xs first:rounded-l-lg last:rounded-r-lg transition-colors ${timePeriod === period
+                                                                    ? 'bg-blue-500 text-white'
+                                                                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                                    }`}
+                                                            >
+                                                                {period.charAt(0).toUpperCase() + period.slice(1)}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                         <div className="h-80">
                                             <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={tracked[0]?.history || []}>
+                                                <AreaChart data={tracked[0] ? getChartData(tracked[0]) : []}>
                                                     <XAxis
                                                         dataKey="time"
-                                                        tickFormatter={(t) => new Date(t).toLocaleDateString()}
+                                                        tickFormatter={(t) => formatXAxis(t, timePeriod)}
                                                         className="text-xs"
                                                     />
-                                                    <YAxis tickFormatter={formatNumber} className="text-xs" />
-                                                    <Tooltip
-                                                        labelFormatter={(l) => new Date(l).toLocaleDateString()}
-                                                        formatter={(value: number) => [formatNumber(value), '']}
+                                                    <YAxis
+                                                        tickFormatter={formatNumber}
+                                                        className="text-xs"
+                                                        domain={chartMode === 'delta' ? ['dataMin', 'dataMax'] : [0, 'dataMax']}
                                                     />
+                                                    <Tooltip content={<CustomTooltip />} />
                                                     <Area
                                                         type="monotone"
-                                                        dataKey="views"
+                                                        dataKey={chartMode === 'delta' ? 'deltaViews' : 'views'}
                                                         stroke="#3b82f6"
                                                         fill="#3b82f6"
                                                         fillOpacity={0.1}
                                                         strokeWidth={2}
+                                                        name={chartMode === 'delta' ? 'Views Growth' : 'Total Views'}
                                                     />
                                                 </AreaChart>
                                             </ResponsiveContainer>
@@ -544,8 +699,8 @@ export default function TikTokTracker() {
                                                                 onClick={(e) => handleDeleteVideo(video.id, e)}
                                                                 disabled={deletingVideoId === video.id}
                                                                 className={`p-1 rounded transition-colors ${deletingVideoId === video.id
-                                                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                                        : 'hover:bg-red-100 text-red-600 hover:text-red-700'
+                                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                                    : 'hover:bg-red-100 text-red-600 hover:text-red-700'
                                                                     }`}
                                                                 title={deletingVideoId === video.id ? 'Deleting...' : 'Remove video'}
                                                             >
@@ -624,122 +779,195 @@ export default function TikTokTracker() {
                             </div>
 
                             {/* Separate Performance Charts */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-6">
+                                {/* Chart Controls */}
                                 <Card>
-                                    <CardContent className="p-6">
-                                        <h3 className="font-semibold mb-4">Views Over Time</h3>
-                                        <div className="h-64">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <LineChart data={selectedVideo.history}>
-                                                    <XAxis
-                                                        dataKey="time"
-                                                        tickFormatter={(t) => new Date(t).toLocaleDateString()}
-                                                        className="text-xs"
-                                                    />
-                                                    <YAxis tickFormatter={formatNumber} className="text-xs" />
-                                                    <Tooltip
-                                                        labelFormatter={(l) => new Date(l).toLocaleDateString()}
-                                                        formatter={(value: number) => [formatNumber(value), 'Views']}
-                                                    />
-                                                    <Line
-                                                        type="monotone"
-                                                        dataKey="views"
-                                                        stroke="#3b82f6"
-                                                        strokeWidth={2}
-                                                        dot={false}
-                                                    />
-                                                </LineChart>
-                                            </ResponsiveContainer>
+                                    <CardContent className="p-4">
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="font-semibold">Performance Charts</h3>
+                                            <div className="flex items-center gap-4">
+                                                {/* Chart Mode Toggle */}
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-gray-500">Mode:</span>
+                                                    <div className="flex border border-gray-200 rounded-lg">
+                                                        <button
+                                                            onClick={() => setChartMode('total')}
+                                                            className={`px-3 py-1 text-xs rounded-l-lg transition-colors ${chartMode === 'total'
+                                                                    ? 'bg-blue-500 text-white'
+                                                                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                                }`}
+                                                        >
+                                                            Total
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setChartMode('delta')}
+                                                            className={`px-3 py-1 text-xs rounded-r-lg transition-colors ${chartMode === 'delta'
+                                                                    ? 'bg-blue-500 text-white'
+                                                                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                                }`}
+                                                        >
+                                                            Growth
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Time Period Toggle */}
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-gray-500">Period:</span>
+                                                    <div className="flex border border-gray-200 rounded-lg">
+                                                        {(['daily', 'weekly', 'monthly', 'yearly', 'lifetime'] as TimePeriod[]).map((period) => (
+                                                            <button
+                                                                key={period}
+                                                                onClick={() => setTimePeriod(period)}
+                                                                className={`px-2 py-1 text-xs first:rounded-l-lg last:rounded-r-lg transition-colors ${timePeriod === period
+                                                                        ? 'bg-blue-500 text-white'
+                                                                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                                    }`}
+                                                            >
+                                                                {period.charAt(0).toUpperCase() + period.slice(1)}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </CardContent>
                                 </Card>
 
-                                <Card>
-                                    <CardContent className="p-6">
-                                        <h3 className="font-semibold mb-4">Likes Over Time</h3>
-                                        <div className="h-64">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <LineChart data={selectedVideo.history}>
-                                                    <XAxis
-                                                        dataKey="time"
-                                                        tickFormatter={(t) => new Date(t).toLocaleDateString()}
-                                                        className="text-xs"
-                                                    />
-                                                    <YAxis tickFormatter={formatNumber} className="text-xs" />
-                                                    <Tooltip
-                                                        labelFormatter={(l) => new Date(l).toLocaleDateString()}
-                                                        formatter={(value: number) => [formatNumber(value), 'Likes']}
-                                                    />
-                                                    <Line
-                                                        type="monotone"
-                                                        dataKey="likes"
-                                                        stroke="#ef4444"
-                                                        strokeWidth={2}
-                                                        dot={false}
-                                                    />
-                                                </LineChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                {/* Charts Grid */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <Card>
+                                        <CardContent className="p-6">
+                                            <h3 className="font-semibold mb-4">
+                                                {chartMode === 'delta' ? 'Views Growth' : 'Views Over Time'}
+                                            </h3>
+                                            <div className="h-64">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <LineChart data={getChartData(selectedVideo)}>
+                                                        <XAxis
+                                                            dataKey="time"
+                                                            tickFormatter={(t) => formatXAxis(t, timePeriod)}
+                                                            className="text-xs"
+                                                        />
+                                                        <YAxis
+                                                            tickFormatter={formatNumber}
+                                                            className="text-xs"
+                                                            domain={chartMode === 'delta' ? ['dataMin', 'dataMax'] : [0, 'dataMax']}
+                                                        />
+                                                        <Tooltip content={<CustomTooltip />} />
+                                                        <Line
+                                                            type="monotone"
+                                                            dataKey={chartMode === 'delta' ? 'deltaViews' : 'views'}
+                                                            stroke="#3b82f6"
+                                                            strokeWidth={2}
+                                                            dot={false}
+                                                            name={chartMode === 'delta' ? 'Views Growth' : 'Total Views'}
+                                                        />
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
 
-                                <Card>
-                                    <CardContent className="p-6">
-                                        <h3 className="font-semibold mb-4">Comments Over Time</h3>
-                                        <div className="h-64">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <LineChart data={selectedVideo.history}>
-                                                    <XAxis
-                                                        dataKey="time"
-                                                        tickFormatter={(t) => new Date(t).toLocaleDateString()}
-                                                        className="text-xs"
-                                                    />
-                                                    <YAxis tickFormatter={formatNumber} className="text-xs" />
-                                                    <Tooltip
-                                                        labelFormatter={(l) => new Date(l).toLocaleDateString()}
-                                                        formatter={(value: number) => [formatNumber(value), 'Comments']}
-                                                    />
-                                                    <Line
-                                                        type="monotone"
-                                                        dataKey="comments"
-                                                        stroke="#10b981"
-                                                        strokeWidth={2}
-                                                        dot={false}
-                                                    />
-                                                </LineChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                    <Card>
+                                        <CardContent className="p-6">
+                                            <h3 className="font-semibold mb-4">
+                                                {chartMode === 'delta' ? 'Likes Growth' : 'Likes Over Time'}
+                                            </h3>
+                                            <div className="h-64">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <LineChart data={getChartData(selectedVideo)}>
+                                                        <XAxis
+                                                            dataKey="time"
+                                                            tickFormatter={(t) => formatXAxis(t, timePeriod)}
+                                                            className="text-xs"
+                                                        />
+                                                        <YAxis
+                                                            tickFormatter={formatNumber}
+                                                            className="text-xs"
+                                                            domain={chartMode === 'delta' ? ['dataMin', 'dataMax'] : [0, 'dataMax']}
+                                                        />
+                                                        <Tooltip content={<CustomTooltip />} />
+                                                        <Line
+                                                            type="monotone"
+                                                            dataKey={chartMode === 'delta' ? 'deltaLikes' : 'likes'}
+                                                            stroke="#ef4444"
+                                                            strokeWidth={2}
+                                                            dot={false}
+                                                            name={chartMode === 'delta' ? 'Likes Growth' : 'Total Likes'}
+                                                        />
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
 
-                                <Card>
-                                    <CardContent className="p-6">
-                                        <h3 className="font-semibold mb-4">Shares Over Time</h3>
-                                        <div className="h-64">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <LineChart data={selectedVideo.history}>
-                                                    <XAxis
-                                                        dataKey="time"
-                                                        tickFormatter={(t) => new Date(t).toLocaleDateString()}
-                                                        className="text-xs"
-                                                    />
-                                                    <YAxis tickFormatter={formatNumber} className="text-xs" />
-                                                    <Tooltip
-                                                        labelFormatter={(l) => new Date(l).toLocaleDateString()}
-                                                        formatter={(value: number) => [formatNumber(value), 'Shares']}
-                                                    />
-                                                    <Line
-                                                        type="monotone"
-                                                        dataKey="shares"
-                                                        stroke="#8b5cf6"
-                                                        strokeWidth={2}
-                                                        dot={false}
-                                                    />
-                                                </LineChart>
-                                            </ResponsiveContainer>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                    <Card>
+                                        <CardContent className="p-6">
+                                            <h3 className="font-semibold mb-4">
+                                                {chartMode === 'delta' ? 'Comments Growth' : 'Comments Over Time'}
+                                            </h3>
+                                            <div className="h-64">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <LineChart data={getChartData(selectedVideo)}>
+                                                        <XAxis
+                                                            dataKey="time"
+                                                            tickFormatter={(t) => formatXAxis(t, timePeriod)}
+                                                            className="text-xs"
+                                                        />
+                                                        <YAxis
+                                                            tickFormatter={formatNumber}
+                                                            className="text-xs"
+                                                            domain={chartMode === 'delta' ? ['dataMin', 'dataMax'] : [0, 'dataMax']}
+                                                        />
+                                                        <Tooltip content={<CustomTooltip />} />
+                                                        <Line
+                                                            type="monotone"
+                                                            dataKey={chartMode === 'delta' ? 'deltaComments' : 'comments'}
+                                                            stroke="#10b981"
+                                                            strokeWidth={2}
+                                                            dot={false}
+                                                            name={chartMode === 'delta' ? 'Comments Growth' : 'Total Comments'}
+                                                        />
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                        <CardContent className="p-6">
+                                            <h3 className="font-semibold mb-4">
+                                                {chartMode === 'delta' ? 'Shares Growth' : 'Shares Over Time'}
+                                            </h3>
+                                            <div className="h-64">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <LineChart data={getChartData(selectedVideo)}>
+                                                        <XAxis
+                                                            dataKey="time"
+                                                            tickFormatter={(t) => formatXAxis(t, timePeriod)}
+                                                            className="text-xs"
+                                                        />
+                                                        <YAxis
+                                                            tickFormatter={formatNumber}
+                                                            className="text-xs"
+                                                            domain={chartMode === 'delta' ? ['dataMin', 'dataMax'] : [0, 'dataMax']}
+                                                        />
+                                                        <Tooltip content={<CustomTooltip />} />
+                                                        <Line
+                                                            type="monotone"
+                                                            dataKey={chartMode === 'delta' ? 'deltaShares' : 'shares'}
+                                                            stroke="#8b5cf6"
+                                                            strokeWidth={2}
+                                                            dot={false}
+                                                            name={chartMode === 'delta' ? 'Shares Growth' : 'Total Shares'}
+                                                        />
+                                                    </LineChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </div>
                             </div>
 
                             {/* Video Details */}
