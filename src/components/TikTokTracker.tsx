@@ -73,6 +73,7 @@ export default function TikTokTracker() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
+    const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
 
     // Fetch videos from database on component mount
     useEffect(() => {
@@ -199,13 +200,54 @@ export default function TikTokTracker() {
         }
     };
 
-    const handleDeleteVideo = (videoId: string, event: React.MouseEvent) => {
+    const handleDeleteVideo = async (videoId: string, event: React.MouseEvent) => {
         event.stopPropagation();
-        // TODO: Implement delete API endpoint
-        setTracked(prev => prev.filter(video => video.id !== videoId));
-        if (selectedVideo?.id === videoId) {
-            setSelectedVideo(null);
-            setActiveTab("overview");
+
+        // Find the video to get username for confirmation
+        const videoToDelete = tracked.find(v => v.id === videoId);
+        if (!videoToDelete) return;
+
+        // Show confirmation
+        if (!confirm(`Are you sure you want to delete @${videoToDelete.username}? This will remove all tracking data permanently.`)) {
+            return;
+        }
+
+        try {
+            setDeletingVideoId(videoId);
+            console.log(`🗑️ Deleting video: @${videoToDelete.username}`);
+
+            const response = await fetch(`/api/videos/${videoId}`, {
+                method: 'DELETE',
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to delete video');
+            }
+
+            console.log(`✅ Successfully deleted: @${videoToDelete.username}`);
+
+            // Remove from local state immediately
+            setTracked(prev => prev.filter(video => video.id !== videoId));
+
+            // Clear selected video if it was the deleted one
+            if (selectedVideo?.id === videoId) {
+                setSelectedVideo(null);
+                setActiveTab("overview");
+            }
+
+            // Show success message
+            setSuccess(`✅ Successfully deleted @${videoToDelete.username} and all tracking data`);
+            setError(null);
+
+        } catch (err) {
+            console.error('💥 Error deleting video:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+            setError(`Failed to delete video: ${errorMessage}`);
+            setSuccess(null);
+        } finally {
+            setDeletingVideoId(null);
         }
     };
 
@@ -251,8 +293,8 @@ export default function TikTokTracker() {
                             {cronStatus && (
                                 <div className="flex items-center gap-2">
                                     <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${cronStatus.cron.isHealthy
-                                            ? 'bg-green-100 text-green-800'
-                                            : 'bg-red-100 text-red-800'
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-red-100 text-red-800'
                                         }`}>
                                         <span className={`w-2 h-2 rounded-full ${cronStatus.cron.isHealthy ? 'bg-green-500' : 'bg-red-500'
                                             }`} />
@@ -500,10 +542,18 @@ export default function TikTokTracker() {
                                                         <td className="p-4">
                                                             <button
                                                                 onClick={(e) => handleDeleteVideo(video.id, e)}
-                                                                className="p-1 rounded hover:bg-red-100 text-red-600"
-                                                                title="Remove video"
+                                                                disabled={deletingVideoId === video.id}
+                                                                className={`p-1 rounded transition-colors ${deletingVideoId === video.id
+                                                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                                        : 'hover:bg-red-100 text-red-600 hover:text-red-700'
+                                                                    }`}
+                                                                title={deletingVideoId === video.id ? 'Deleting...' : 'Remove video'}
                                                             >
-                                                                <X className="w-4 h-4" />
+                                                                {deletingVideoId === video.id ? (
+                                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                                ) : (
+                                                                    <X className="w-4 h-4" />
+                                                                )}
                                                             </button>
                                                         </td>
                                                     </tr>
