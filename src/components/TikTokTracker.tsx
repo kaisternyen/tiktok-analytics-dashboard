@@ -59,36 +59,6 @@ export default function TikTokTracker() {
         fetchVideos();
     }, []);
 
-    // Auto-refresh functionality - scrape every minute when dashboard is open
-    useEffect(() => {
-        const autoScrape = async () => {
-            try {
-                console.log('🔄 Auto-scraping all videos...');
-                const response = await fetch('/api/scrape-all');
-                const result = await response.json();
-
-                if (result.success) {
-                    console.log('✅ Auto-scrape completed:', result.message);
-                    // Refresh the videos list
-                    await fetchVideos();
-                } else {
-                    console.warn('⚠️ Auto-scrape failed:', result.error);
-                }
-            } catch (err) {
-                console.warn('💥 Auto-scrape error:', err);
-            }
-        };
-
-        // Start auto-scraping after 30 seconds, then every minute
-        const initialTimeout = setTimeout(autoScrape, 30000);
-        const interval = setInterval(autoScrape, 60000);
-
-        return () => {
-            clearTimeout(initialTimeout);
-            clearInterval(interval);
-        };
-    }, []);
-
     const fetchVideos = async () => {
         try {
             console.log('📋 Fetching videos from API...');

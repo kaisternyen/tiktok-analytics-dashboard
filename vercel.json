@@ -10,6 +10,9 @@
         },
         "src/app/api/scrape/route.ts": {
             "maxDuration": 60
+        },
+        "src/app/api/webhook/cron/route.ts": {
+            "maxDuration": 60
         }
     },
     "regions": [
