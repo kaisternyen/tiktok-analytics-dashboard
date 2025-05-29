@@ -5,17 +5,17 @@
         }
     },
     "functions": {
-        "src/app/api/scrape-all/route.ts": {
-            "maxDuration": 60
-        },
-        "src/app/api/scrape/route.ts": {
-            "maxDuration": 60
-        },
-        "src/app/api/webhook/cron/route.ts": {
+        "src/app/api/*/route.ts": {
             "maxDuration": 60
         }
     },
     "regions": [
         "iad1"
+    ],
+    "crons": [
+        {
+            "path": "/api/scrape-all",
+            "schedule": "*/15 * * * *"
+        }
     ]
 }
