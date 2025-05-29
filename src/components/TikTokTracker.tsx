@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -363,13 +364,21 @@ export default function TikTokTracker() {
     };
 
     // Custom tooltip with timestamp
-    const CustomTooltip = ({ active, payload, label }: any) => {
+    const CustomTooltip = ({ active, payload, label }: {
+        active?: boolean;
+        payload?: Array<{
+            color: string;
+            name: string;
+            value: number;
+        }>;
+        label?: string;
+    }) => {
         if (active && payload && payload.length) {
-            const timestamp = new Date(label).toLocaleString();
+            const timestamp = new Date(label || '').toLocaleString();
             return (
                 <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
                     <p className="text-sm text-gray-500 mb-1">{timestamp}</p>
-                    {payload.map((entry: any, index: number) => (
+                    {payload.map((entry, index: number) => (
                         <p key={index} className="text-sm font-medium" style={{ color: entry.color }}>
                             {entry.name}: {formatNumber(entry.value)}
                             {chartMode === 'delta' && entry.value > 0 && ' ↑'}
@@ -659,10 +668,12 @@ export default function TikTokTracker() {
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-3">
                                                                 {video.thumbnailUrl && (
-                                                                    <img
+                                                                    <Image
                                                                         src={video.thumbnailUrl}
                                                                         alt={`${video.username} thumbnail`}
                                                                         className="w-10 h-14 object-cover rounded bg-gray-200"
+                                                                        width={40}
+                                                                        height={56}
                                                                         onError={(e) => {
                                                                             e.currentTarget.style.display = 'none';
                                                                         }}
@@ -793,8 +804,8 @@ export default function TikTokTracker() {
                                                         <button
                                                             onClick={() => setChartMode('total')}
                                                             className={`px-3 py-1 text-xs rounded-l-lg transition-colors ${chartMode === 'total'
-                                                                    ? 'bg-blue-500 text-white'
-                                                                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                                ? 'bg-blue-500 text-white'
+                                                                : 'bg-white text-gray-600 hover:bg-gray-50'
                                                                 }`}
                                                         >
                                                             Total
@@ -802,8 +813,8 @@ export default function TikTokTracker() {
                                                         <button
                                                             onClick={() => setChartMode('delta')}
                                                             className={`px-3 py-1 text-xs rounded-r-lg transition-colors ${chartMode === 'delta'
-                                                                    ? 'bg-blue-500 text-white'
-                                                                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                                ? 'bg-blue-500 text-white'
+                                                                : 'bg-white text-gray-600 hover:bg-gray-50'
                                                                 }`}
                                                         >
                                                             Growth
@@ -820,8 +831,8 @@ export default function TikTokTracker() {
                                                                 key={period}
                                                                 onClick={() => setTimePeriod(period)}
                                                                 className={`px-2 py-1 text-xs first:rounded-l-lg last:rounded-r-lg transition-colors ${timePeriod === period
-                                                                        ? 'bg-blue-500 text-white'
-                                                                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                                                                    ? 'bg-blue-500 text-white'
+                                                                    : 'bg-white text-gray-600 hover:bg-gray-50'
                                                                     }`}
                                                             >
                                                                 {period.charAt(0).toUpperCase() + period.slice(1)}
