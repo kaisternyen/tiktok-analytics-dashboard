@@ -4,68 +4,70 @@ import { prisma } from '@/lib/prisma';
 export async function GET() {
     try {
         // Get basic stats
-        const totalVideos = await prisma.video.count();
-        const activeVideos = await prisma.video.count({
+        const totalVideos = await prisma.video.count({
             where: { isActive: true }
         });
 
-        // Get recent activity
-        const recentUpdates = await prisma.video.findMany({
+        const recentlyUpdated = await prisma.video.count({
+            where: {
+                isActive: true,
+                lastScrapedAt: {
+                    gte: new Date(Date.now() - 5 * 60 * 1000) // Last 5 minutes
+                }
+            }
+        });
+
+        const oldestUpdate = await prisma.video.findFirst({
             where: { isActive: true },
-            orderBy: { lastScrapedAt: 'desc' },
-            take: 5,
+            orderBy: { lastScrapedAt: 'asc' },
             select: {
                 username: true,
-                lastScrapedAt: true,
-                currentViews: true,
-                currentLikes: true
+                lastScrapedAt: true
             }
         });
 
-        // Get total metrics count
-        const totalMetricsHistory = await prisma.metricsHistory.count();
-
-        // Get earliest and latest scrapes
-        const oldestScrape = await prisma.metricsHistory.findFirst({
-            orderBy: { timestamp: 'asc' },
-            select: { timestamp: true }
+        const newestUpdate = await prisma.video.findFirst({
+            where: { isActive: true },
+            orderBy: { lastScrapedAt: 'desc' },
+            select: {
+                username: true,
+                lastScrapedAt: true
+            }
         });
 
-        const latestScrape = await prisma.metricsHistory.findFirst({
-            orderBy: { timestamp: 'desc' },
-            select: { timestamp: true }
-        });
+        // Check if cron is working (at least one update in last 2 minutes)
+        const cronHealthy = recentlyUpdated > 0;
+
+        const status = {
+            healthy: cronHealthy,
+            totalVideos,
+            recentlyUpdated,
+            oldestUpdate: oldestUpdate ? {
+                username: oldestUpdate.username,
+                lastScrapedAt: oldestUpdate.lastScrapedAt,
+                minutesAgo: Math.floor((Date.now() - oldestUpdate.lastScrapedAt.getTime()) / (1000 * 60))
+            } : null,
+            newestUpdate: newestUpdate ? {
+                username: newestUpdate.username,
+                lastScrapedAt: newestUpdate.lastScrapedAt,
+                minutesAgo: Math.floor((Date.now() - newestUpdate.lastScrapedAt.getTime()) / (1000 * 60))
+            } : null,
+            timestamp: new Date().toISOString()
+        };
 
         return NextResponse.json({
-            status: 'healthy',
-            timestamp: new Date().toISOString(),
-            database: {
-                totalVideos,
-                activeVideos,
-                totalMetricsHistory,
-                tracking_period: {
-                    start: oldestScrape?.timestamp,
-                    latest: latestScrape?.timestamp
-                }
-            },
-            recent_activity: recentUpdates.map(video => ({
-                username: video.username,
-                lastScrapedAt: video.lastScrapedAt,
-                views: video.currentViews,
-                likes: video.currentLikes
-            })),
-            automation: {
-                scrape_all_endpoint: '/api/scrape-all',
-                github_actions: 'Runs every hour',
-                next_estimated_run: 'Top of next hour'
-            }
+            success: true,
+            status
         });
 
     } catch (error) {
-        return NextResponse.json({
-            status: 'error',
-            error: error instanceof Error ? error.message : 'Unknown error',
-            timestamp: new Date().toISOString()
-        }, { status: 500 });
+        console.error('💥 Status check failed:', error);
+        return NextResponse.json(
+            {
+                error: 'Status check failed',
+                details: error instanceof Error ? error.message : 'Unknown error'
+            },
+            { status: 500 }
+        );
     }
 } 

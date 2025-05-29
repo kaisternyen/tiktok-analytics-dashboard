@@ -3,7 +3,7 @@ import { scrapeTikTokVideo } from '@/lib/apify';
 import { prisma } from '@/lib/prisma';
 
 interface VideoResult {
-    status: 'success' | 'failed';
+    status: 'success' | 'failed' | 'skipped';
     username: string;
     views?: number;
     likes?: number;
@@ -16,6 +16,7 @@ interface VideoResult {
         shares: number;
     };
     error?: string;
+    reason?: string;
 }
 
 interface VideoRecord {
@@ -26,128 +27,137 @@ interface VideoRecord {
     currentLikes: number;
     currentComments: number;
     currentShares: number;
+    lastScrapedAt: Date;
 }
 
-// Concurrent processing function
-async function processVideosConcurrently(videos: VideoRecord[], concurrency: number = 5) {
+// Smart processing: Only scrape videos that need updates
+function shouldScrapeVideo(video: VideoRecord): boolean {
+    const now = new Date();
+    const lastScraped = new Date(video.lastScrapedAt);
+    const minutesSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60);
+
+    // Only scrape if it's been more than 1 minute since last scrape
+    return minutesSinceLastScrape >= 1;
+}
+
+// Process videos with smart batching and rate limiting
+async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 3) {
     const results: VideoResult[] = [];
     let successful = 0;
     let failed = 0;
+    let skipped = 0;
 
-    // Process videos in batches to avoid overwhelming the service
-    for (let i = 0; i < videos.length; i += concurrency) {
-        const batch = videos.slice(i, i + concurrency);
-        console.log(`🔄 Processing batch ${Math.floor(i / concurrency) + 1}/${Math.ceil(videos.length / concurrency)} (${batch.length} videos)`);
+    // Filter videos that need scraping
+    const videosToScrape = videos.filter(shouldScrapeVideo);
 
-        // Process batch concurrently
-        const batchPromises = batch.map(async (video) => {
-            try {
-                console.log(`🎬 Scraping @${video.username} (${video.url})`);
+    // Limit to maxPerRun to avoid overwhelming Apify
+    const videosToProcess = videosToScrape.slice(0, maxPerRun);
 
-                // Scrape the video
-                const result = await scrapeTikTokVideo(video.url);
+    console.log(`📊 Analysis: ${videos.length} total, ${videosToScrape.length} need updates, processing ${videosToProcess.length}`);
 
-                if (result.success && result.data) {
-                    // Update video metrics
-                    await prisma.video.update({
-                        where: { id: video.id },
-                        data: {
-                            currentViews: result.data.views,
-                            currentLikes: result.data.likes,
-                            currentComments: result.data.comments,
-                            currentShares: result.data.shares,
-                            lastScrapedAt: new Date(),
-                        }
-                    });
+    // Skip videos that don't need updates
+    for (const video of videos) {
+        if (!videosToScrape.includes(video)) {
+            results.push({
+                status: 'skipped',
+                username: video.username,
+                reason: 'Recently updated'
+            });
+            skipped++;
+        }
+    }
 
-                    // Add new metrics history entry
-                    await prisma.metricsHistory.create({
-                        data: {
-                            videoId: video.id,
-                            views: result.data.views,
-                            likes: result.data.likes,
-                            comments: result.data.comments,
-                            shares: result.data.shares,
-                        }
-                    });
+    // Process videos that need updates (sequentially to be nice to Apify)
+    for (const [index, video] of videosToProcess.entries()) {
+        try {
+            console.log(`🎬 [${index + 1}/${videosToProcess.length}] Scraping @${video.username}`);
 
-                    console.log(`✅ Successfully updated @${video.username}`);
+            const result = await scrapeTikTokVideo(video.url);
 
-                    return {
-                        status: 'success' as const,
-                        username: video.username,
+            if (result.success && result.data) {
+                // Update video metrics
+                await prisma.video.update({
+                    where: { id: video.id },
+                    data: {
+                        currentViews: result.data.views,
+                        currentLikes: result.data.likes,
+                        currentComments: result.data.comments,
+                        currentShares: result.data.shares,
+                        lastScrapedAt: new Date(),
+                    }
+                });
+
+                // Add new metrics history entry
+                await prisma.metricsHistory.create({
+                    data: {
+                        videoId: video.id,
                         views: result.data.views,
                         likes: result.data.likes,
                         comments: result.data.comments,
                         shares: result.data.shares,
-                        changes: {
-                            views: result.data.views - video.currentViews,
-                            likes: result.data.likes - video.currentLikes,
-                            comments: result.data.comments - video.currentComments,
-                            shares: result.data.shares - video.currentShares,
-                        }
-                    };
-                } else {
-                    console.log(`❌ Failed to scrape @${video.username}: ${result.error}`);
-                    return {
-                        status: 'failed' as const,
-                        username: video.username,
-                        error: result.error || 'Unknown error'
-                    };
-                }
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                console.error(`💥 Error processing @${video.username}:`, error);
-                return {
-                    status: 'failed' as const,
+                    }
+                });
+
+                console.log(`✅ Updated @${video.username}: ${result.data.views} views`);
+
+                results.push({
+                    status: 'success',
                     username: video.username,
-                    error: errorMessage
-                };
-            }
-        });
+                    views: result.data.views,
+                    likes: result.data.likes,
+                    comments: result.data.comments,
+                    shares: result.data.shares,
+                    changes: {
+                        views: result.data.views - video.currentViews,
+                        likes: result.data.likes - video.currentLikes,
+                        comments: result.data.comments - video.currentComments,
+                        shares: result.data.shares - video.currentShares,
+                    }
+                });
 
-        // Wait for batch to complete
-        const batchResults = await Promise.allSettled(batchPromises);
-
-        // Process results
-        batchResults.forEach((result) => {
-            if (result.status === 'fulfilled') {
-                results.push(result.value);
-                if (result.value.status === 'success') {
-                    successful++;
-                } else {
-                    failed++;
-                }
+                successful++;
             } else {
-                failed++;
+                console.log(`❌ Failed @${video.username}: ${result.error}`);
                 results.push({
                     status: 'failed',
-                    username: 'unknown',
-                    error: result.reason?.message || 'Promise rejected'
+                    username: video.username,
+                    error: result.error || 'Unknown error'
                 });
+                failed++;
             }
-        });
 
-        // Small delay between batches to be respectful
-        if (i + concurrency < videos.length) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Rate limiting: wait 2 seconds between requests
+            if (index < videosToProcess.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.error(`💥 Error processing @${video.username}:`, error);
+            results.push({
+                status: 'failed',
+                username: video.username,
+                error: errorMessage
+            });
+            failed++;
         }
     }
 
-    return { results, successful, failed };
+    return { results, successful, failed, skipped };
 }
 
 export async function GET() {
-    console.log('🚀 Starting CONCURRENT automated scrape-all process...');
+    const startTime = Date.now();
+    console.log(`🚀 [${new Date().toISOString()}] Starting smart cron scrape...`);
 
     try {
-        // Fetch all active videos from database
+        // Fetch all active videos, prioritizing oldest scraped first
         const videos = await prisma.video.findMany({
             where: { isActive: true },
-            orderBy: { lastScrapedAt: 'asc' } // Prioritize videos that haven't been scraped recently
+            orderBy: { lastScrapedAt: 'asc' }
         });
 
-        console.log(`📋 Found ${videos.length} active videos to scrape`);
+        console.log(`📋 Found ${videos.length} active videos`);
 
         if (videos.length === 0) {
             return NextResponse.json({
@@ -157,41 +167,42 @@ export async function GET() {
                     totalVideos: 0,
                     successful: 0,
                     failed: 0,
+                    skipped: 0,
                     results: []
                 }
             });
         }
 
-        const startTime = Date.now();
-
-        // Process videos concurrently (5 at a time)
-        const { results, successful, failed } = await processVideosConcurrently(videos, 5);
+        // Smart processing with rate limiting
+        const { results, successful, failed, skipped } = await processVideosSmartly(videos, 3);
 
         const endTime = Date.now();
-        const duration = (endTime - startTime) / 1000; // in seconds
+        const duration = (endTime - startTime) / 1000;
 
         const summary = {
             totalVideos: videos.length,
             successful,
             failed,
+            skipped,
+            processed: successful + failed,
             duration: `${duration.toFixed(1)}s`,
             timestamp: new Date().toISOString(),
-            results
+            results: results.slice(0, 10) // Limit response size
         };
 
-        console.log(`🎉 CONCURRENT scrape-all completed in ${duration.toFixed(1)}s: ${successful}/${videos.length} successful`);
+        console.log(`🎉 Cron completed: ${successful}/${videos.length} updated, ${skipped} skipped, ${failed} failed in ${duration.toFixed(1)}s`);
 
         return NextResponse.json({
             success: true,
-            message: `Processed ${videos.length} videos in ${duration.toFixed(1)}s: ${successful} successful, ${failed} failed`,
+            message: `Smart cron: ${successful} updated, ${skipped} skipped, ${failed} failed in ${duration.toFixed(1)}s`,
             summary
         });
 
     } catch (error) {
-        console.error('💥 Scrape-all process failed:', error);
+        console.error('💥 Cron scrape failed:', error);
         return NextResponse.json(
             {
-                error: 'Scrape-all process failed',
+                error: 'Cron scrape failed',
                 details: error instanceof Error ? error.message : 'Unknown error'
             },
             { status: 500 }
@@ -199,7 +210,7 @@ export async function GET() {
     }
 }
 
-// Also support POST for manual triggers
+// Keep POST for manual triggers
 export async function POST() {
-    return GET();
+    return GET(); // Same logic for manual triggers
 } 

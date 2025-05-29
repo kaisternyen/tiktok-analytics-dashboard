@@ -6,12 +6,18 @@
     },
     "functions": {
         "src/app/api/scrape-all/route.ts": {
-            "maxDuration": 60
+            "maxDuration": 120
         },
         "src/app/api/scrape/route.ts": {
             "maxDuration": 60
         }
     },
+    "crons": [
+        {
+            "path": "/api/scrape-all",
+            "schedule": "* * * * *"
+        }
+    ],
     "regions": [
         "iad1"
     ]
