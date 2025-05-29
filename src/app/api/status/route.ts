@@ -3,57 +3,104 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
     try {
-        // Get basic stats
-        const totalVideos = await prisma.video.count({
-            where: { isActive: true }
-        });
+        console.log('🔍 Status check requested at:', new Date().toISOString());
 
-        const recentlyUpdated = await prisma.video.count({
+        // Get video count and recent activity
+        const [
+            totalVideos,
+            activeVideos,
+            recentHistory,
+            oldestVideo,
+            newestVideo
+        ] = await Promise.all([
+            prisma.video.count(),
+            prisma.video.count({ where: { isActive: true } }),
+            prisma.metricsHistory.findMany({
+                take: 10,
+                orderBy: { timestamp: 'desc' },
+                include: {
+                    video: {
+                        select: { username: true }
+                    }
+                }
+            }),
+            prisma.video.findFirst({
+                where: { isActive: true },
+                orderBy: { lastScrapedAt: 'asc' },
+                select: { username: true, lastScrapedAt: true }
+            }),
+            prisma.video.findFirst({
+                where: { isActive: true },
+                orderBy: { lastScrapedAt: 'desc' },
+                select: { username: true, lastScrapedAt: true }
+            })
+        ]);
+
+        // Calculate time since last activity
+        const now = new Date();
+        const lastActivity = recentHistory[0]?.timestamp;
+        const minutesSinceLastActivity = lastActivity
+            ? Math.floor((now.getTime() - new Date(lastActivity).getTime()) / (1000 * 60))
+            : null;
+
+        // Check which videos need scraping
+        const videosNeedingScrape = await prisma.video.findMany({
             where: {
                 isActive: true,
                 lastScrapedAt: {
-                    gte: new Date(Date.now() - 5 * 60 * 1000) // Last 5 minutes
+                    lt: new Date(Date.now() - 60 * 1000) // More than 1 minute ago
                 }
-            }
-        });
-
-        const oldestUpdate = await prisma.video.findFirst({
-            where: { isActive: true },
+            },
+            select: { username: true, lastScrapedAt: true },
             orderBy: { lastScrapedAt: 'asc' },
-            select: {
-                username: true,
-                lastScrapedAt: true
-            }
+            take: 20
         });
-
-        const newestUpdate = await prisma.video.findFirst({
-            where: { isActive: true },
-            orderBy: { lastScrapedAt: 'desc' },
-            select: {
-                username: true,
-                lastScrapedAt: true
-            }
-        });
-
-        // Check if cron is working (at least one update in last 2 minutes)
-        const cronHealthy = recentlyUpdated > 0;
 
         const status = {
-            healthy: cronHealthy,
-            totalVideos,
-            recentlyUpdated,
-            oldestUpdate: oldestUpdate ? {
-                username: oldestUpdate.username,
-                lastScrapedAt: oldestUpdate.lastScrapedAt,
-                minutesAgo: Math.floor((Date.now() - oldestUpdate.lastScrapedAt.getTime()) / (1000 * 60))
-            } : null,
-            newestUpdate: newestUpdate ? {
-                username: newestUpdate.username,
-                lastScrapedAt: newestUpdate.lastScrapedAt,
-                minutesAgo: Math.floor((Date.now() - newestUpdate.lastScrapedAt.getTime()) / (1000 * 60))
-            } : null,
-            timestamp: new Date().toISOString()
+            timestamp: now.toISOString(),
+            system: {
+                status: totalVideos > 0 ? 'active' : 'no_videos',
+                totalVideos,
+                activeVideos,
+                videosNeedingScrape: videosNeedingScrape.length
+            },
+            cron: {
+                expectedFrequency: 'Every 1 minute',
+                lastActivity: lastActivity?.toISOString() || 'Never',
+                minutesSinceLastActivity,
+                isHealthy: minutesSinceLastActivity ? minutesSinceLastActivity < 5 : false
+            },
+            videos: {
+                oldest: oldestVideo ? {
+                    username: oldestVideo.username,
+                    lastScraped: oldestVideo.lastScrapedAt.toISOString(),
+                    minutesAgo: Math.floor((now.getTime() - oldestVideo.lastScrapedAt.getTime()) / (1000 * 60))
+                } : null,
+                newest: newestVideo ? {
+                    username: newestVideo.username,
+                    lastScraped: newestVideo.lastScrapedAt.toISOString(),
+                    minutesAgo: Math.floor((now.getTime() - newestVideo.lastScrapedAt.getTime()) / (1000 * 60))
+                } : null,
+                needingScrape: videosNeedingScrape.map(v => ({
+                    username: v.username,
+                    minutesAgo: Math.floor((now.getTime() - v.lastScrapedAt.getTime()) / (1000 * 60))
+                }))
+            },
+            recentActivity: recentHistory.map(h => ({
+                username: h.video.username,
+                views: h.views,
+                timestamp: h.timestamp.toISOString(),
+                minutesAgo: Math.floor((now.getTime() - h.timestamp.getTime()) / (1000 * 60))
+            }))
         };
+
+        console.log('📊 Status:', {
+            totalVideos,
+            activeVideos,
+            needingScrape: videosNeedingScrape.length,
+            lastActivity: lastActivity?.toISOString(),
+            minutesSinceLastActivity
+        });
 
         return NextResponse.json({
             success: true,
@@ -64,8 +111,10 @@ export async function GET() {
         console.error('💥 Status check failed:', error);
         return NextResponse.json(
             {
+                success: false,
                 error: 'Status check failed',
-                details: error instanceof Error ? error.message : 'Unknown error'
+                details: error instanceof Error ? error.message : 'Unknown error',
+                timestamp: new Date().toISOString()
             },
             { status: 500 }
         );

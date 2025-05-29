@@ -44,6 +44,25 @@ interface TrackedVideo {
     };
 }
 
+interface CronStatus {
+    system: {
+        status: string;
+        totalVideos: number;
+        activeVideos: number;
+        videosNeedingScrape: number;
+    };
+    cron: {
+        lastActivity: string;
+        minutesSinceLastActivity: number | null;
+        isHealthy: boolean;
+    };
+    recentActivity: Array<{
+        username: string;
+        views: number;
+        minutesAgo: number;
+    }>;
+}
+
 export default function TikTokTracker() {
     const [videoUrl, setVideoUrl] = useState("");
     const [tracked, setTracked] = useState<TrackedVideo[]>([]);
@@ -53,10 +72,34 @@ export default function TikTokTracker() {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
 
     // Fetch videos from database on component mount
     useEffect(() => {
         fetchVideos();
+    }, []);
+
+    // Auto-refresh status every 30 seconds
+    useEffect(() => {
+        const fetchStatus = async () => {
+            try {
+                const response = await fetch('/api/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    setCronStatus(data.status);
+                }
+            } catch (error) {
+                console.error('Failed to fetch status:', error);
+            }
+        };
+
+        // Fetch immediately
+        fetchStatus();
+
+        // Set up interval for auto-refresh
+        const interval = setInterval(fetchStatus, 30000); // Every 30 seconds
+
+        return () => clearInterval(interval);
     }, []);
 
     const fetchVideos = async () => {
@@ -205,6 +248,28 @@ export default function TikTokTracker() {
                             <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded-full">
                                 ● {tracked.length} videos tracked
                             </span>
+                            {cronStatus && (
+                                <div className="flex items-center gap-2">
+                                    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${cronStatus.cron.isHealthy
+                                            ? 'bg-green-100 text-green-800'
+                                            : 'bg-red-100 text-red-800'
+                                        }`}>
+                                        <span className={`w-2 h-2 rounded-full ${cronStatus.cron.isHealthy ? 'bg-green-500' : 'bg-red-500'
+                                            }`} />
+                                        Cron {cronStatus.cron.isHealthy ? 'Active' : 'Inactive'}
+                                    </span>
+                                    {cronStatus.cron.minutesSinceLastActivity !== null && (
+                                        <span className="text-xs text-gray-500">
+                                            Last: {cronStatus.cron.minutesSinceLastActivity}m ago
+                                        </span>
+                                    )}
+                                    {cronStatus.system.videosNeedingScrape > 0 && (
+                                        <span className="bg-yellow-100 text-yellow-800 text-xs font-medium px-2 py-1 rounded-full">
+                                            {cronStatus.system.videosNeedingScrape} pending
+                                        </span>
+                                    )}
+                                </div>
+                            )}
                         </div>
                         <div className="flex items-center gap-3">
                             <Button

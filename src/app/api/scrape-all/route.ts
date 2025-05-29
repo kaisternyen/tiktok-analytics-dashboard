@@ -53,11 +53,17 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
     // Limit to maxPerRun to avoid overwhelming Apify and stay under 60s timeout
     const videosToProcess = videosToScrape.slice(0, maxPerRun);
 
-    console.log(`📊 Analysis: ${videos.length} total, ${videosToScrape.length} need updates, processing ${videosToProcess.length}`);
+    console.log(`📊 ===== SMART PROCESSING ANALYSIS =====`);
+    console.log(`📹 Total videos in DB: ${videos.length}`);
+    console.log(`🔄 Videos needing scrape: ${videosToScrape.length}`);
+    console.log(`⚡ Videos to process this run: ${videosToProcess.length}`);
+    console.log(`🚫 Videos to skip: ${videos.length - videosToScrape.length}`);
 
     // Skip videos that don't need updates
     for (const video of videos) {
         if (!videosToScrape.includes(video)) {
+            const minutesAgo = Math.floor((Date.now() - video.lastScrapedAt.getTime()) / (1000 * 60));
+            console.log(`⏭️ Skipping @${video.username} (scraped ${minutesAgo} min ago)`);
             results.push({
                 status: 'skipped',
                 username: video.username,
@@ -67,15 +73,27 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
         }
     }
 
+    if (videosToProcess.length === 0) {
+        console.log(`🏁 No videos need processing - all recently updated`);
+        return { results, successful, failed, skipped };
+    }
+
     // Process videos in parallel batches of 3 to speed up while respecting rate limits
     const batchSize = 3;
+    console.log(`🚀 Starting batch processing with batch size: ${batchSize}`);
+
     for (let i = 0; i < videosToProcess.length; i += batchSize) {
         const batch = videosToProcess.slice(i, i + batchSize);
+        const batchNum = Math.floor(i / batchSize) + 1;
+        const totalBatches = Math.ceil(videosToProcess.length / batchSize);
+
+        console.log(`📦 ===== BATCH ${batchNum}/${totalBatches} =====`);
+        console.log(`🎬 Processing: ${batch.map(v => '@' + v.username).join(', ')}`);
 
         // Process batch in parallel
         const batchPromises = batch.map(async (video, index) => {
             try {
-                console.log(`🎬 [${i + index + 1}/${videosToProcess.length}] Scraping @${video.username}`);
+                console.log(`🎬 [${i + index + 1}/${videosToProcess.length}] Starting @${video.username}...`);
 
                 const result = await scrapeTikTokVideo(video.url);
 
@@ -103,7 +121,9 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         }
                     });
 
-                    console.log(`✅ Updated @${video.username}: ${result.data.views} views`);
+                    const viewsChange = result.data.views - video.currentViews;
+                    const likesChange = result.data.likes - video.currentLikes;
+                    console.log(`✅ [${i + index + 1}] @${video.username}: ${result.data.views.toLocaleString()} views (+${viewsChange.toLocaleString()}), ${result.data.likes.toLocaleString()} likes (+${likesChange.toLocaleString()})`);
 
                     return {
                         status: 'success' as const,
@@ -113,14 +133,14 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         comments: result.data.comments,
                         shares: result.data.shares,
                         changes: {
-                            views: result.data.views - video.currentViews,
-                            likes: result.data.likes - video.currentLikes,
+                            views: viewsChange,
+                            likes: likesChange,
                             comments: result.data.comments - video.currentComments,
                             shares: result.data.shares - video.currentShares,
                         }
                     };
                 } else {
-                    console.log(`❌ Failed @${video.username}: ${result.error}`);
+                    console.log(`❌ [${i + index + 1}] @${video.username} failed: ${result.error}`);
                     return {
                         status: 'failed' as const,
                         username: video.username,
@@ -129,7 +149,7 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                 }
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                console.error(`💥 Error processing @${video.username}:`, error);
+                console.error(`💥 [${i + index + 1}] @${video.username} crashed: ${errorMessage}`);
                 return {
                     status: 'failed' as const,
                     username: video.username,
@@ -139,6 +159,7 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
         });
 
         // Wait for batch to complete
+        console.log(`⏳ Waiting for batch ${batchNum} to complete...`);
         const batchResults = await Promise.all(batchPromises);
 
         // Count results
@@ -148,29 +169,43 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
             else if (result.status === 'failed') failed++;
         });
 
+        const batchSuccess = batchResults.filter(r => r.status === 'success').length;
+        const batchFailed = batchResults.filter(r => r.status === 'failed').length;
+        console.log(`📊 Batch ${batchNum} complete: ${batchSuccess} success, ${batchFailed} failed`);
+
         // Rate limiting: wait 1 second between batches to be nice to Apify
         if (i + batchSize < videosToProcess.length) {
+            console.log(`⏱️ Rate limiting: waiting 1 second before next batch...`);
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }
+
+    console.log(`🏁 ===== PROCESSING COMPLETE =====`);
+    console.log(`📊 Final results: ${successful} success, ${failed} failed, ${skipped} skipped`);
 
     return { results, successful, failed, skipped };
 }
 
 export async function GET() {
     const startTime = Date.now();
-    console.log(`🚀 [${new Date().toISOString()}] Starting smart cron scrape...`);
+    const timestamp = new Date().toISOString();
+    console.log(`🚀 [${timestamp}] ===== CRON SCRAPE STARTING =====`);
+    console.log(`🕐 Execution time: ${timestamp}`);
+    console.log(`💾 Database connection: ${prisma ? 'Connected' : 'Failed'}`);
 
     try {
         // Fetch all active videos, prioritizing oldest scraped first
+        console.log(`📋 Fetching active videos from database...`);
         const videos = await prisma.video.findMany({
             where: { isActive: true },
             orderBy: { lastScrapedAt: 'asc' }
         });
 
-        console.log(`📋 Found ${videos.length} active videos`);
+        console.log(`📊 Found ${videos.length} active videos in database`);
 
         if (videos.length === 0) {
+            console.log(`⚠️ No videos found - database might be empty`);
+            console.log(`🏁 Exiting early - nothing to scrape`);
             return NextResponse.json({
                 success: true,
                 message: 'No videos to scrape',
@@ -184,6 +219,14 @@ export async function GET() {
             });
         }
 
+        // Log video ages
+        const now = new Date();
+        videos.forEach((video, index) => {
+            const minutesAgo = Math.floor((now.getTime() - video.lastScrapedAt.getTime()) / (1000 * 60));
+            console.log(`📹 [${index + 1}/${videos.length}] @${video.username} - last scraped ${minutesAgo} minutes ago`);
+        });
+
+        console.log(`⚡ Starting smart processing...`);
         // Smart processing with rate limiting
         const { results, successful, failed, skipped } = await processVideosSmartly(videos, 10);
 
@@ -201,7 +244,12 @@ export async function GET() {
             results: results.slice(0, 10) // Limit response size
         };
 
-        console.log(`🎉 Cron completed: ${successful}/${videos.length} updated, ${skipped} skipped, ${failed} failed in ${duration.toFixed(1)}s`);
+        console.log(`🎉 ===== CRON COMPLETED =====`);
+        console.log(`✅ Success: ${successful} videos updated`);
+        console.log(`⏭️ Skipped: ${skipped} videos (too recent)`);
+        console.log(`❌ Failed: ${failed} videos had errors`);
+        console.log(`⏱️ Duration: ${duration.toFixed(1)} seconds`);
+        console.log(`📈 Total processed: ${successful + failed}/${videos.length}`);
 
         return NextResponse.json({
             success: true,
@@ -210,11 +258,17 @@ export async function GET() {
         });
 
     } catch (error) {
-        console.error('💥 Cron scrape failed:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('💥 ===== CRON FAILED =====');
+        console.error(`❌ Error: ${errorMsg}`);
+        console.error(`🔍 Stack trace:`, error);
+        console.error(`🕐 Failed at: ${new Date().toISOString()}`);
+
         return NextResponse.json(
             {
                 error: 'Cron scrape failed',
-                details: error instanceof Error ? error.message : 'Unknown error'
+                details: errorMsg,
+                timestamp: new Date().toISOString()
             },
             { status: 500 }
         );
