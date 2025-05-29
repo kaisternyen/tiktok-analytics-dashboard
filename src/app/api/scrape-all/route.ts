@@ -36,8 +36,8 @@ function shouldScrapeVideo(video: VideoRecord): boolean {
     const lastScraped = new Date(video.lastScrapedAt);
     const minutesSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60);
 
-    // Only scrape if it's been more than 15 minutes since last scrape
-    return minutesSinceLastScrape >= 15;
+    // Only scrape if it's been more than 1 minute since last scrape
+    return minutesSinceLastScrape >= 1;
 }
 
 // Process videos with smart batching and rate limiting
