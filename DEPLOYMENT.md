@@ -2,7 +2,22 @@
 
 ## 📦 Free Deployment Setup
 
-### Step 1: Deploy to Vercel
+### Step 1: Set up Database (Required for Vercel)
+
+**⚠️ IMPORTANT**: SQLite doesn't work on Vercel. You need a PostgreSQL database.
+
+**Option A: Vercel Postgres (Recommended)**
+1. Go to your Vercel dashboard
+2. Select your project → Storage tab
+3. Create → Postgres
+4. Copy the `DATABASE_URL` from the `.env.local` tab
+
+**Option B: Neon (Free alternative)**
+1. Go to [neon.tech](https://neon.tech) and sign up
+2. Create a new project
+3. Copy the connection string
+
+### Step 2: Deploy to Vercel
 
 1. **Push code to GitHub** (if not already done)
 2. **Connect to Vercel**:
@@ -14,12 +29,37 @@
 3. **Configure Environment Variables** in Vercel:
    ```
    APIFY_API_TOKEN=apify_api_0cULMFde4RJ5fclZJ5c5mPQZwnzbM43ELzw0
-   DATABASE_URL=file:./dev.db
+   DATABASE_URL=postgresql://username:password@host:port/database?sslmode=require
    ```
+   
+   **⚠️ Replace `DATABASE_URL` with your actual PostgreSQL connection string from Step 1**
 
 4. **Deploy**: Vercel will automatically deploy your app
 
-### Step 2: Set up GitHub Actions
+### Step 3: Run Database Migration
+
+After deployment, you need to set up the database schema:
+
+1. **In your local terminal**:
+   ```bash
+   # Install Vercel CLI if not already installed
+   npm i -g vercel
+   
+   # Login to Vercel
+   vercel login
+   
+   # Link your project
+   vercel link
+   
+   # Pull environment variables
+   vercel env pull .env.local
+   
+   # Run migration
+   npx prisma migrate deploy
+   npx prisma generate
+   ```
+
+### Step 4: Set up GitHub Actions
 
 1. **Add GitHub Secret**:
    - Go to your GitHub repo → Settings → Secrets and variables → Actions
@@ -30,7 +70,7 @@
    - GitHub Actions should automatically detect the workflow file
    - The workflow will run every hour starting from deployment
 
-### Step 3: Test Manual Scraping
+### Step 5: Test Manual Scraping
 
 Visit these URLs to test:
 - **Manual scrape all**: `https://your-app.vercel.app/api/scrape-all`
@@ -46,8 +86,8 @@ Visit these URLs to test:
 ## 💰 Cost Breakdown
 
 - **Vercel hosting**: FREE
+- **Vercel Postgres**: FREE (for starter projects)
 - **GitHub Actions**: FREE (2000 minutes/month)
-- **Database**: FREE (SQLite in repo)
 - **Apify scraping**: ~$0.35-0.40 per 1000 scrapes
 
 **Example monthly costs**:
@@ -67,9 +107,10 @@ Visit these URLs to test:
 - **View raw data**: Visit `/api/videos`
 
 ### Troubleshooting
+- **500 Errors**: Check DATABASE_URL is set correctly and database is accessible
 - **Actions failing**: Check VERCEL_URL secret is correct
 - **Scraping errors**: Check Apify API token and rate limits
-- **Database issues**: Prisma migrations may be needed
+- **Database issues**: Run `npx prisma migrate deploy` to sync schema
 
 ## 📊 Expected Performance
 
@@ -80,9 +121,11 @@ Visit these URLs to test:
 
 ## 🚀 Going Live Checklist
 
+- [ ] PostgreSQL database created (Vercel Postgres or Neon)
 - [ ] Code pushed to GitHub
 - [ ] Vercel deployment successful
-- [ ] Environment variables configured
+- [ ] Environment variables configured (APIFY_API_TOKEN + DATABASE_URL)
+- [ ] Database migration completed (`npx prisma migrate deploy`)
 - [ ] VERCEL_URL secret added to GitHub
 - [ ] Test manual scrape-all endpoint
 - [ ] First automated run completed
