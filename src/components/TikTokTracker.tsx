@@ -92,6 +92,15 @@ interface HealthStatus {
     };
 }
 
+interface ChartDataPoint {
+    time: string;
+    views: number;
+    delta: number;
+    originalTime: Date;
+}
+
+type TimePeriod = 'D' | 'W' | 'M' | '3M' | '1Y' | 'ALL';
+
 export default function TikTokTracker() {
     const [videoUrl, setVideoUrl] = useState("");
     const [tracked, setTracked] = useState<TrackedVideo[]>([]);
@@ -104,6 +113,8 @@ export default function TikTokTracker() {
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
     const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
+    const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('W');
+    const [showDelta, setShowDelta] = useState(false);
 
     // Fetch videos from database on component mount
     useEffect(() => {
@@ -395,6 +406,132 @@ export default function TikTokTracker() {
         );
     };
 
+    // Enhanced chart data processing with time periods and delta calculation
+    const getChartData = (): ChartDataPoint[] => {
+        if (tracked.length === 0 || !tracked[0]?.history?.length) return [];
+
+        const history = tracked[0].history;
+        const now = new Date();
+        let filteredData = [...history];
+
+        // Filter by time period
+        switch (selectedTimePeriod) {
+            case 'D':
+                filteredData = history.filter(point =>
+                    new Date(point.time) >= new Date(now.getTime() - 24 * 60 * 60 * 1000)
+                );
+                break;
+            case 'W':
+                filteredData = history.filter(point =>
+                    new Date(point.time) >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+                );
+                break;
+            case 'M':
+                filteredData = history.filter(point =>
+                    new Date(point.time) >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+                );
+                break;
+            case '3M':
+                filteredData = history.filter(point =>
+                    new Date(point.time) >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+                );
+                break;
+            case '1Y':
+                filteredData = history.filter(point =>
+                    new Date(point.time) >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+                );
+                break;
+            case 'ALL':
+            default:
+                // Use all data
+                break;
+        }
+
+        // Sort by time
+        filteredData.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+        // Calculate delta values
+        const chartData: ChartDataPoint[] = filteredData.map((point, index) => {
+            const previousPoint = index > 0 ? filteredData[index - 1] : point;
+            const delta = point.views - previousPoint.views;
+
+            return {
+                time: point.time,
+                views: showDelta ? delta : point.views,
+                delta,
+                originalTime: new Date(point.time)
+            };
+        });
+
+        return chartData;
+    };
+
+    // Custom tick formatter for simplified X-axis labels
+    const formatXAxisTick = (tickItem: string) => {
+        // For now, just format the date - we'll use the interval prop to control which ticks show
+        return new Date(tickItem).toLocaleDateString();
+    };
+
+    // Calculate interval for showing only 3 ticks (start, middle, end)
+    const getTickInterval = (dataLength: number) => {
+        if (dataLength <= 3) return 0; // Show all if 3 or fewer points
+        return Math.floor(dataLength / 2); // Show approximately every half of the data
+    };
+
+    // Dynamic Y-axis domain for meaningful scaling
+    const getYAxisDomain = (data: ChartDataPoint[]) => {
+        if (data.length === 0) return [0, 100];
+
+        const values = data.map(d => d.views);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+
+        // Add some padding to the range
+        const padding = (max - min) * 0.1;
+        return [Math.max(0, min - padding), max + padding];
+    };
+
+    // Custom tooltip with hover details
+    const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: ChartDataPoint }>; label?: string }) => {
+        if (active && payload && payload.length) {
+            const data = payload[0].payload as ChartDataPoint;
+            const date = new Date(label || '');
+
+            return (
+                <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+                    <p className="font-medium text-gray-900">
+                        {date.toLocaleDateString()} {date.toLocaleTimeString()}
+                    </p>
+                    {showDelta ? (
+                        <>
+                            <p className="text-blue-600">
+                                Delta: {formatNumber(data.delta)} views
+                            </p>
+                            <p className="text-gray-600 text-sm">
+                                Total: {formatNumber(tracked[0]?.views || 0)} views
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <p className="text-blue-600">
+                                Views: {formatNumber(data.views)}
+                            </p>
+                            {data.delta !== 0 && (
+                                <p className="text-gray-600 text-sm">
+                                    Change: {data.delta > 0 ? '+' : ''}{formatNumber(data.delta)}
+                                </p>
+                            )}
+                        </>
+                    )}
+                </div>
+            );
+        }
+        return null;
+    };
+
+    const chartData = getChartData();
+    const yAxisDomain = getYAxisDomain(chartData);
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
@@ -575,38 +712,80 @@ export default function TikTokTracker() {
                                     </Card>
                                 </div>
 
-                                {/* Performance Chart - Reverted to Original */}
+                                {/* Enhanced Performance Chart */}
                                 <Card>
                                     <CardContent className="p-6">
-                                        <h3 className="text-lg font-semibold mb-4">Performance Overview</h3>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-lg font-semibold">
+                                                Performance Overview - {tracked[0]?.username || 'No Data'}
+                                            </h3>
+                                            <div className="flex items-center gap-2">
+                                                {/* Time Period Selector */}
+                                                <div className="flex border border-gray-200 rounded-md">
+                                                    {(['D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
+                                                        <button
+                                                            key={period}
+                                                            onClick={() => setSelectedTimePeriod(period)}
+                                                            className={`px-3 py-1 text-xs font-medium transition-colors ${selectedTimePeriod === period
+                                                                ? 'bg-blue-500 text-white'
+                                                                : 'text-gray-600 hover:bg-gray-100'
+                                                                } first:rounded-l-md last:rounded-r-md`}
+                                                        >
+                                                            {period}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                {/* Delta Toggle */}
+                                                <Button
+                                                    variant={showDelta ? "default" : "outline"}
+                                                    size="sm"
+                                                    onClick={() => setShowDelta(!showDelta)}
+                                                    className="text-xs"
+                                                >
+                                                    {showDelta ? 'Total Views' : 'View Delta'}
+                                                </Button>
+                                            </div>
+                                        </div>
                                         <div className="h-80">
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={tracked[0]?.history || []}>
-                                                    <XAxis
-                                                        dataKey="time"
-                                                        tickFormatter={(t) => new Date(t).toLocaleDateString()}
-                                                        className="text-xs"
-                                                    />
-                                                    <YAxis tickFormatter={formatNumber} className="text-xs" />
-                                                    <Tooltip
-                                                        labelFormatter={(l) => new Date(l).toLocaleDateString()}
-                                                        formatter={(value: number) => [formatNumber(value), '']}
-                                                    />
-                                                    <Area
-                                                        type="monotone"
-                                                        dataKey="views"
-                                                        stroke="#3b82f6"
-                                                        fill="#3b82f6"
-                                                        fillOpacity={0.1}
-                                                        strokeWidth={2}
-                                                    />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
+                                            {chartData.length > 0 ? (
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <AreaChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                                        <XAxis
+                                                            dataKey="time"
+                                                            tickFormatter={formatXAxisTick}
+                                                            className="text-xs"
+                                                            tick={{ fontSize: 10 }}
+                                                            interval={getTickInterval(chartData.length)}
+                                                        />
+                                                        <YAxis
+                                                            tickFormatter={formatNumber}
+                                                            className="text-xs"
+                                                            domain={yAxisDomain}
+                                                        />
+                                                        <Tooltip content={<CustomTooltip />} />
+                                                        <Area
+                                                            type="monotone"
+                                                            dataKey="views"
+                                                            stroke="#3b82f6"
+                                                            fill="#3b82f6"
+                                                            fillOpacity={0.1}
+                                                            strokeWidth={2}
+                                                        />
+                                                    </AreaChart>
+                                                </ResponsiveContainer>
+                                            ) : (
+                                                <div className="flex items-center justify-center h-full text-gray-500">
+                                                    <div className="text-center">
+                                                        <Play className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                                                        <p>No data available for selected period</p>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </CardContent>
                                 </Card>
 
-                                {/* Real-time Update Indicator - Keep this */}
+                                {/* Real-time Update Indicator */}
                                 <Card>
                                     <CardContent className="p-4">
                                         <div className="flex items-center justify-between">
