@@ -120,15 +120,30 @@ export default function TikTokTracker() {
         }
     };
 
-    const handleTrack = async () => {
-        if (!videoUrl) return;
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
 
+        console.log('🎬 Form submission started:', { videoUrl, isLoading });
+
+        if (!videoUrl.trim()) {
+            console.warn('⚠️ Empty URL submitted');
+            setError('Please enter a TikTok URL');
+            return;
+        }
+
+        if (isLoading) {
+            console.warn('⚠️ Request already in progress, ignoring duplicate submission');
+            return;
+        }
+
+        console.log('🚀 Processing URL:', videoUrl.trim());
         setIsLoading(true);
         setError(null);
         setSuccess(null);
 
         try {
-            console.log('🚀 Submitting URL for scraping:', videoUrl);
+            console.log('📡 Making API call to /api/scrape...');
+            const startTime = Date.now();
 
             const response = await fetch('/api/scrape', {
                 method: 'POST',
@@ -138,27 +153,70 @@ export default function TikTokTracker() {
                 body: JSON.stringify({ url: videoUrl.trim() }),
             });
 
-            const result = await response.json();
-            console.log('📦 API response:', result);
+            const requestTime = Date.now() - startTime;
+            console.log(`⏱️ API request completed in ${requestTime}ms`);
+            console.log('📞 Response details:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok,
+                headers: Object.fromEntries(response.headers.entries())
+            });
 
             if (!response.ok) {
-                throw new Error(result.error || 'Failed to scrape video');
+                console.error('❌ HTTP error response:', {
+                    status: response.status,
+                    statusText: response.statusText
+                });
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            if (result.success && result.data) {
+            console.log('🔄 Parsing JSON response...');
+            const data = await response.json();
+
+            console.log('📦 Received data:', {
+                success: data.success,
+                hasData: !!data.data,
+                hasError: !!data.error,
+                hasDebugInfo: !!data.debugInfo,
+                dataKeys: Object.keys(data)
+            });
+
+            console.log('🔍 Full response data:', JSON.stringify(data, null, 2));
+
+            if (data.success && data.data) {
+                console.log('✅ Video data received successfully:', {
+                    id: data.data.id,
+                    username: data.data.username,
+                    views: data.data.views,
+                    likes: data.data.likes
+                });
                 setVideoUrl("");
-                setSuccess(`✅ Successfully ${result.message || 'added'} video by @${result.data.username}!`);
+                setSuccess(`✅ Successfully ${data.message || 'added'} video by @${data.data.username}!`);
 
                 // Refresh the videos list
                 await fetchVideos();
             } else {
-                throw new Error(result.error || 'No data received');
+                console.error('❌ API returned error:', {
+                    error: data.error,
+                    debugInfo: data.debugInfo
+                });
+                setError(data.error || 'Failed to scrape video');
+
+                // Log debug info if available for troubleshooting
+                if (data.debugInfo) {
+                    console.log('🐛 Debug information:', data.debugInfo);
+                }
             }
         } catch (err) {
-            console.error('💥 Error adding video:', err);
-            const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-            setError(`Failed to add video: ${errorMessage}`);
+            console.error('💥 Exception occurred during fetch:', err);
+            console.error('Error details:', {
+                name: err instanceof Error ? err.name : 'Unknown',
+                message: err instanceof Error ? err.message : String(err),
+                stack: err instanceof Error ? err.stack : undefined
+            });
+            setError(err instanceof Error ? err.message : 'An unexpected error occurred');
         } finally {
+            console.log('🏁 Request completed, setting loading to false');
             setIsLoading(false);
         }
     };
@@ -330,7 +388,7 @@ export default function TikTokTracker() {
                                 disabled={isLoading}
                                 className="w-80"
                             />
-                            <Button onClick={handleTrack} disabled={isLoading || !videoUrl}>
+                            <Button onClick={handleSubmit} disabled={isLoading || !videoUrl}>
                                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Track Video"}
                             </Button>
                         </div>

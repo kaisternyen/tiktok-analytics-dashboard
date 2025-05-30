@@ -143,16 +143,26 @@ export function extractVideoId(url: string): string | null {
 // Scrape a single TikTok video using TikHub API
 export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult> {
     console.log('🚀 Starting TikTok video scrape for URL:', url);
+    console.log('🌍 Environment check at start:', {
+        nodeEnv: process.env.NODE_ENV,
+        hasApiKey: !!process.env.TIKHUB_API_KEY,
+        apiKeyLength: process.env.TIKHUB_API_KEY?.length,
+        apiKeyStart: process.env.TIKHUB_API_KEY?.substring(0, 10) + '...'
+    });
 
     try {
         // Validate URL
         if (!url || typeof url !== 'string') {
+            console.error('❌ INVALID URL:', { url, type: typeof url });
             throw new Error('Invalid URL provided');
         }
 
         // Clean and validate the URL
         const cleanUrl = url.trim();
+        console.log('🧹 URL cleaning:', { original: url, cleaned: cleanUrl });
+
         if (!cleanUrl.includes('tiktok.com')) {
+            console.error('❌ NOT A TIKTOK URL:', cleanUrl);
             throw new Error('URL must be a valid TikTok URL');
         }
 
@@ -161,19 +171,29 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         // Check if TikHub API key is configured
         const apiKey = process.env.TIKHUB_API_KEY;
         if (!apiKey) {
+            console.error('❌ NO API KEY FOUND');
+            console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('TIK')));
             throw new Error('TIKHUB_API_KEY environment variable is not configured');
         }
 
+        console.log('🔑 API Key found:', apiKey.substring(0, 10) + '...');
+
         // Extract video ID for validation
+        console.log('🔍 Starting video ID extraction...');
         const videoId = extractVideoId(cleanUrl);
         if (!videoId) {
+            console.error('❌ VIDEO ID EXTRACTION FAILED');
+            console.error('URL patterns tested against:', cleanUrl);
             throw new Error('Could not extract video ID from URL');
         }
+
+        console.log('✅ Video ID extracted:', videoId);
 
         // Prepare TikHub API request - Updated to use correct V3 endpoint with aweme_id
         const tikHubUrl = `https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_one_video?aweme_id=${videoId}`;
 
         console.log('📋 TikHub API request prepared for URL:', tikHubUrl);
+        console.log('🌐 Making API request...');
 
         // Make request to TikHub API
         console.log('🎬 Calling TikHub API...');
@@ -188,6 +208,7 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         console.log('📞 TikHub API response status:', {
             status: response.status,
             statusText: response.statusText,
+            ok: response.ok,
             headers: Object.fromEntries(response.headers.entries())
         });
 
@@ -197,7 +218,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
                 status: response.status,
                 statusText: response.statusText,
                 body: errorText,
-                url: tikHubUrl
+                url: tikHubUrl,
+                headers: Object.fromEntries(response.headers.entries())
             });
 
             // Provide more specific error messages based on status codes
@@ -215,14 +237,19 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             throw new Error(errorMessage);
         }
 
+        console.log('🎉 API response successful, parsing JSON...');
         const apiResponse: TikHubApiResponse = await response.json();
+
         console.log('📦 Raw TikHub API response structure:', {
             hasData: !!apiResponse.data,
             hasAwemeDetails: !!apiResponse.data?.aweme_details,
             awemeDetailsLength: apiResponse.data?.aweme_details?.length || 0,
             code: apiResponse.code,
-            message: apiResponse.msg || apiResponse.message
+            message: apiResponse.msg || apiResponse.message,
+            dataKeys: apiResponse.data ? Object.keys(apiResponse.data) : []
         });
+
+        console.log('🔍 Full API response preview:', JSON.stringify(apiResponse, null, 2).substring(0, 1000) + '...');
 
         // Check API response status (TikHub returns 200 for success)
         if (apiResponse.code && apiResponse.code !== 200) {
@@ -262,7 +289,14 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             };
         }
 
-        console.log('🔍 Processing TikHub video data:', JSON.stringify(videoData, null, 2));
+        console.log('🔍 Processing TikHub video data...');
+        console.log('📊 Video data keys:', Object.keys(videoData));
+        console.log('📊 Video stats preview:', {
+            aweme_id: videoData.aweme_id,
+            author: videoData.author?.unique_id,
+            views: videoData.statistics?.play_count,
+            likes: videoData.statistics?.digg_count
+        });
 
         // Transform TikHub data to our standard format
         const transformedData: TikTokVideoData = {
