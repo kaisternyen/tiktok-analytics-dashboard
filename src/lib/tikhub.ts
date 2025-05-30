@@ -121,8 +121,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         // Extract video ID for validation
         const videoId = extractVideoId(cleanUrl);
 
-        // Prepare TikHub API request
-        const tikHubUrl = 'https://api.tikhub.io/api/v1/tiktok/web/fetch_video';
+        // Prepare TikHub API request - Updated to use correct endpoint
+        const tikHubUrl = 'https://api.tikhub.io/api/v1/tiktok/web/fetch_one_video';
         const requestBody = {
             url: cleanUrl
         };

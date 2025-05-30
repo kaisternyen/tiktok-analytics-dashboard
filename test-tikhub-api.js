@@ -63,16 +63,21 @@ async function testTikHubAPI() {
         console.log(`✉️  Email Verified: ${userData.user_data?.email_verified || false}`);
 
         // Test single video fetch
-        console.log('\n🎬 Testing single video fetch...');
+        console.log('🎬 Testing single video fetch...');
+        const testUrl = `https://api.tikhub.io/api/v1/tiktok/web/fetch_one_video`;
 
         const videoResponse = await fetch(
-            `https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_one_video?aweme_id=${TEST_VIDEO_ID}`,
+            testUrl,
             {
-                method: 'GET',
+                method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${TIKHUB_API_KEY}`,
                     'Content-Type': 'application/json',
+                    'User-Agent': 'TikTok-Analytics-Dashboard/1.0'
                 },
+                body: JSON.stringify({
+                    url: `https://www.tiktok.com/@g_markhowell/video/${TEST_VIDEO_ID}`
+                })
             }
         );
 
