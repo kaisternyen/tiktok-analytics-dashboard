@@ -64,20 +64,16 @@ async function testTikHubAPI() {
 
         // Test single video fetch
         console.log('🎬 Testing single video fetch...');
-        const testUrl = `https://api.tikhub.io/api/v1/tiktok/web/fetch_one_video`;
+        const testUrl = `https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_one_video?aweme_id=${TEST_VIDEO_ID}`;
 
         const videoResponse = await fetch(
             testUrl,
             {
-                method: 'POST',
+                method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${TIKHUB_API_KEY}`,
-                    'Content-Type': 'application/json',
                     'User-Agent': 'TikTok-Analytics-Dashboard/1.0'
-                },
-                body: JSON.stringify({
-                    url: `https://www.tiktok.com/@g_markhowell/video/${TEST_VIDEO_ID}`
-                })
+                }
             }
         );
 

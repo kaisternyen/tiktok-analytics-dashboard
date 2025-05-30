@@ -120,25 +120,23 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
 
         // Extract video ID for validation
         const videoId = extractVideoId(cleanUrl);
+        if (!videoId) {
+            throw new Error('Could not extract video ID from URL');
+        }
 
-        // Prepare TikHub API request - Updated to use correct endpoint
-        const tikHubUrl = 'https://api.tikhub.io/api/v1/tiktok/web/fetch_one_video';
-        const requestBody = {
-            url: cleanUrl
-        };
+        // Prepare TikHub API request - Updated to use correct V3 endpoint with aweme_id
+        const tikHubUrl = `https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_one_video?aweme_id=${videoId}`;
 
-        console.log('📋 TikHub API request prepared:', JSON.stringify(requestBody, null, 2));
+        console.log('📋 TikHub API request prepared for URL:', tikHubUrl);
 
         // Make request to TikHub API
         console.log('🎬 Calling TikHub API...');
         const response = await fetch(tikHubUrl, {
-            method: 'POST',
+            method: 'GET',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
                 'User-Agent': 'TikTok-Analytics-Dashboard/1.0'
-            },
-            body: JSON.stringify(requestBody)
+            }
         });
 
         if (!response.ok) {
