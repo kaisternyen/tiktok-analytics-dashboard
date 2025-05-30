@@ -77,6 +77,9 @@ interface TikHubApiResponse {
     data?: {
         aweme_details?: TikHubVideoData[];
         aweme_list?: TikHubVideoData[];
+        status_code?: number;
+        status_msg?: string;
+        log_pb?: any;
     } & TikHubVideoData;
     message?: string;
 }
@@ -170,6 +173,39 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
                 success: false,
                 error: `TikHub API error: ${apiResponse.msg || 'Unknown error'}`,
                 debugInfo: { apiResponse, url: cleanUrl }
+            };
+        }
+
+        // Check for TikHub V3 API status codes in data object
+        if (apiResponse.data?.status_code && apiResponse.data.status_code !== 0) {
+            const statusCode = apiResponse.data.status_code;
+            const statusMsg = apiResponse.data.status_msg || 'Unknown error';
+
+            console.error('❌ TikHub API returned status code:', statusCode, statusMsg);
+
+            // Provide user-friendly error messages for common status codes
+            let userFriendlyError = statusMsg;
+            switch (statusCode) {
+                case 2053:
+                    userFriendlyError = 'Video has been removed or is no longer available';
+                    break;
+                case 2054:
+                    userFriendlyError = 'Video is private or restricted';
+                    break;
+                case 2055:
+                    userFriendlyError = 'Video not found - invalid URL or video ID';
+                    break;
+                case 10204:
+                    userFriendlyError = 'Video access denied - may be region restricted';
+                    break;
+                default:
+                    userFriendlyError = `Video unavailable: ${statusMsg}`;
+            }
+
+            return {
+                success: false,
+                error: userFriendlyError,
+                debugInfo: { apiResponse, url: cleanUrl, statusCode, statusMsg }
             };
         }
 
