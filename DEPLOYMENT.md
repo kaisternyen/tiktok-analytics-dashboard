@@ -1,134 +1,273 @@
-# 🚀 TikTok Analytics Deployment Guide
+# 🚀 Deployment Guide
 
-## 📦 Free Deployment Setup
+Complete deployment guide for the TikTok Analytics Dashboard.
 
-### Step 1: Set up Database (Required for Vercel)
+## 📋 Prerequisites
 
-**⚠️ IMPORTANT**: SQLite doesn't work on Vercel. You need a PostgreSQL database.
+- Node.js 18+
+- PostgreSQL database (Neon DB recommended)
+- TikHub API account
+- Vercel account (for easy deployment)
 
-**Option A: Vercel Postgres (Recommended)**
-1. Go to your Vercel dashboard
-2. Select your project → Storage tab
-3. Create → Postgres
-4. Copy the `DATABASE_URL` from the `.env.local` tab
+## 🌍 Environment Variables
 
-**Option B: Neon (Free alternative)**
-1. Go to [neon.tech](https://neon.tech) and sign up
+### Required Variables
+```bash
+# TikHub API Configuration
+TIKHUB_API_KEY=your_tikhub_api_key_here
+
+# Database Configuration  
+DATABASE_URL=postgresql://user:password@host:port/database
+
+# Optional: Redis for caching (if using BullMQ)
+REDIS_URL=redis://localhost:6379
+```
+
+### Getting TikHub API Key
+1. Visit [TikHub API](https://api.tikhub.io)
+2. Sign up for an account
+3. Navigate to your dashboard
+4. Copy your API key
+5. Add to environment variables
+
+### Example .env.local
+```bash
+TIKHUB_API_KEY=tikhub_api_0cULMFde4RJ5fclZJ5c5mPQZwnzbM43ELzw0
+DATABASE_URL=postgresql://username:password@ep-cool-cloud-123456.us-east-1.postgres.vercel-storage.com/verceldb
+REDIS_URL=redis://default:password@host:port
+```
+
+## 🚀 Vercel Deployment (Recommended)
+
+### 1. Connect Repository
+1. Push your code to GitHub/GitLab
+2. Visit [Vercel Dashboard](https://vercel.com/dashboard)
+3. Click "New Project"
+4. Import your repository
+
+### 2. Configure Build Settings
+```bash
+# Build Command (auto-detected)
+npm run build
+
+# Output Directory (auto-detected)  
+.next
+
+# Install Command (auto-detected)
+npm install
+```
+
+### 3. Environment Variables
+Add these in Vercel Dashboard → Settings → Environment Variables:
+- `TIKHUB_API_KEY`
+- `DATABASE_URL`
+- `REDIS_URL` (optional)
+
+### 4. Deploy
+Click "Deploy" - Vercel handles everything automatically!
+
+### 5. Enable Cron Jobs (Pro Plan Required)
+Add to `vercel.json`:
+```json
+{
+  "crons": [
+    {
+      "path": "/api/scrape-all",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
+```
+
+## 🗄️ Database Setup
+
+### Neon DB (Recommended)
+1. Visit [Neon](https://neon.tech)
 2. Create a new project
 3. Copy the connection string
+4. Run migrations:
+```bash
+npx prisma migrate deploy
+npx prisma generate
+```
 
-### Step 2: Deploy to Vercel
+### Local PostgreSQL
+```bash
+# Install PostgreSQL locally
+brew install postgresql  # macOS
+# or install via your package manager
 
-1. **Push code to GitHub** (if not already done)
-2. **Connect to Vercel**:
-   - Go to [vercel.com](https://vercel.com)
-   - Sign up with GitHub
-   - Click "Import Project"
-   - Select your repository
+# Create database
+createdb analytics_dashboard
 
-3. **Configure Environment Variables** in Vercel:
-   ```
-   APIFY_API_TOKEN=apify_api_0cULMFde4RJ5fclZJ5c5mPQZwnzbM43ELzw0
-   DATABASE_URL=postgresql://username:password@host:port/database?sslmode=require
-   ```
-   
-   **⚠️ Replace `DATABASE_URL` with your actual PostgreSQL connection string from Step 1**
+# Set DATABASE_URL
+DATABASE_URL=postgresql://localhost/analytics_dashboard
+```
 
-4. **Deploy**: Vercel will automatically deploy your app
+## 💰 Cost Estimation
 
-### Step 3: Run Database Migration
+### TikHub API Pricing
+- **TikHub scraping**: Check current pricing at [TikHub Pricing](https://api.tikhub.io/pricing)
+- **Free tier**: Available for testing
+- **Batch processing**: More cost-effective for multiple videos
 
-After deployment, you need to set up the database schema:
+### Vercel Costs
+- **Hobby Plan**: Free (with limitations)
+- **Pro Plan**: $20/month (required for cron jobs)
+- **Enterprise**: Custom pricing
 
-1. **In your local terminal**:
-   ```bash
-   # Install Vercel CLI if not already installed
-   npm i -g vercel
-   
-   # Login to Vercel
-   vercel login
-   
-   # Link your project
-   vercel link
-   
-   # Pull environment variables
-   vercel env pull .env.local
-   
-   # Run migration
-   npx prisma migrate deploy
-   npx prisma generate
-   ```
+### Database Costs
+- **Neon**: Free tier available, paid plans from $19/month
+- **Vercel Postgres**: Integrated with Vercel plans
 
-### Step 4: Set up GitHub Actions
+## 🔧 Manual Deployment
 
-1. **Add GitHub Secret**:
-   - Go to your GitHub repo → Settings → Secrets and variables → Actions
-   - Add new secret: `VERCEL_URL`
-   - Value: `https://your-app-name.vercel.app` (get this from Vercel dashboard)
+### 1. Server Setup
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install nodejs npm postgresql
 
-2. **Enable Actions**:
-   - GitHub Actions should automatically detect the workflow file
-   - The workflow will run every hour starting from deployment
+# CentOS/RHEL  
+sudo yum install nodejs npm postgresql
+```
 
-### Step 5: Test Manual Scraping
+### 2. Application Setup
+```bash
+# Clone repository
+git clone <your-repo-url>
+cd analytics_dashboard
 
-Visit these URLs to test:
-- **Manual scrape all**: `https://your-app.vercel.app/api/scrape-all`
-- **View videos**: `https://your-app.vercel.app/api/videos`
-- **Dashboard**: `https://your-app.vercel.app`
+# Install dependencies
+npm ci --production
 
-## 🕐 Automation Schedule
+# Build application
+npm run build
+```
 
-- **Frequency**: Every hour at minute 0 (12:00, 1:00, 2:00, etc.)
-- **Manual trigger**: Go to GitHub Actions tab → "Hourly TikTok Video Scraping" → "Run workflow"
-- **Logs**: Check GitHub Actions tab for detailed logs of each run
+### 3. Process Manager (PM2)
+```bash
+# Install PM2
+npm install -g pm2
 
-## 💰 Cost Breakdown
+# Start application
+pm2 start npm --name "analytics-dashboard" -- start
 
-- **Vercel hosting**: FREE
-- **Vercel Postgres**: FREE (for starter projects)
-- **GitHub Actions**: FREE (2000 minutes/month)
-- **Apify scraping**: ~$0.35-0.40 per 1000 scrapes
+# Auto-start on boot
+pm2 startup
+pm2 save
+```
 
-**Example monthly costs**:
-- 50 videos × 24 hours × 30 days = 36,000 scrapes = ~$13-15/month
-- 100 videos = ~$25-30/month
+### 4. Reverse Proxy (Nginx)
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
 
-## 🔧 Monitoring & Maintenance
+## 🔐 Security Checklist
 
-### Check GitHub Actions Logs
-1. Go to your repo → Actions tab
-2. Click on latest "Hourly TikTok Video Scraping" run
-3. Expand steps to see detailed logs
+- [ ] Environment variables configured (TIKHUB_API_KEY + DATABASE_URL)
+- [ ] Database connection secured with SSL
+- [ ] API rate limiting implemented
+- [ ] CORS properly configured
+- [ ] HTTPS enabled in production
+- [ ] Secrets not committed to repository
 
-### Manual Triggers
-- **Scrape all videos**: Visit `/api/scrape-all`
-- **Add new video**: Use the dashboard form
-- **View raw data**: Visit `/api/videos`
+## 📊 Monitoring
 
-### Troubleshooting
-- **500 Errors**: Check DATABASE_URL is set correctly and database is accessible
-- **Actions failing**: Check VERCEL_URL secret is correct
-- **Scraping errors**: Check Apify API token and rate limits
-- **Database issues**: Run `npx prisma migrate deploy` to sync schema
+### Vercel Analytics
+- Enable in Vercel Dashboard
+- Monitor performance and errors
+- Track API usage
 
-## 📊 Expected Performance
+### Custom Monitoring
+```bash
+# Check application health
+curl https://your-domain.com/api/health
 
-- **Scrape speed**: ~2-3 seconds per video
-- **Concurrent limit**: 1 video at a time (respectful to TikTok)
-- **Success rate**: 95%+ under normal conditions
-- **Data freshness**: Updated every hour automatically
+# Monitor TikHub API usage
+# (Check TikHub dashboard)
+```
 
-## 🚀 Going Live Checklist
+## 🐛 Troubleshooting
 
-- [ ] PostgreSQL database created (Vercel Postgres or Neon)
-- [ ] Code pushed to GitHub
-- [ ] Vercel deployment successful
-- [ ] Environment variables configured (APIFY_API_TOKEN + DATABASE_URL)
-- [ ] Database migration completed (`npx prisma migrate deploy`)
-- [ ] VERCEL_URL secret added to GitHub
-- [ ] Test manual scrape-all endpoint
-- [ ] First automated run completed
-- [ ] Dashboard shows real data
+### Common Issues
 
-Your TikTok Analytics platform is now running on autopilot! 🎉 
+**TikHub API Errors**
+- Check API key validity
+- Verify API usage limits
+- Review TikHub status page
+
+**Database Connection Issues**
+- Verify DATABASE_URL format
+- Check database server status
+- Ensure proper SSL configuration
+
+**Build Failures**
+- Check Node.js version (18+ required)
+- Verify all dependencies installed
+- Review build logs for errors
+
+**Cron Job Issues**
+- Ensure Vercel Pro plan active
+- Check cron syntax in vercel.json
+- Monitor execution logs
+
+### Debug Commands
+```bash
+# Check environment
+npm run build
+
+# Test database connection
+npx prisma db push
+
+# Validate TikHub connection
+# (Test in application)
+```
+
+## 📈 Scaling Considerations
+
+### Performance Optimization
+- Use Redis for caching
+- Implement connection pooling
+- Optimize database queries
+- Enable CDN for static assets
+
+### Load Balancing
+- Multiple Vercel deployments
+- Database read replicas
+- API rate limiting
+- Queue system for heavy workloads
+
+## 🔄 Maintenance
+
+### Regular Tasks
+- Monitor TikHub API usage
+- Review database performance
+- Update dependencies
+- Check for rate limit issues
+- Backup database regularly
+
+### Updates
+```bash
+# Update dependencies
+npm update
+
+# Deploy new version
+git push origin main  # Auto-deploys on Vercel
+```
+
+---
+
+**Need help?** Check the [main README](README.md) or create an issue. 

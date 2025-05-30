@@ -1,0 +1,69 @@
+import { ApifyClient } from 'apify-client';
+
+// Initialize Apify client
+const client = new ApifyClient({
+    token: process.env.APIFY_API_TOKEN,
+});
+
+// THIS FILE IS A BACKUP OF THE ORIGINAL APIFY IMPLEMENTATION
+// KEPT FOR REFERENCE DURING MIGRATION TO TIKHUB API
+// CREATED ON: 2024-XX-XX
+// ORIGINAL FILE: src/lib/apify.ts
+
+export interface TikTokVideoData {
+    id: string;
+    url: string;
+    username: string;
+    description: string;
+    views: number;
+    likes: number;
+    comments: number;
+    shares: number;
+    timestamp: string;
+    hashtags: string[];
+    thumbnailUrl?: string;
+    music?: {
+        name: string;
+        author: string;
+    };
+}
+
+export interface ScrapedVideoResult {
+    success: boolean;
+    data?: TikTokVideoData;
+    error?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    debugInfo?: any;
+}
+
+// Type for raw Apify data
+interface ApifyRawData {
+    id?: string;
+    webVideoUrl?: string;
+    'authorMeta.name'?: string;
+    authorMeta?: {
+        name?: string;
+    };
+    text?: string;
+    description?: string;
+    playCount?: number;
+    diggCount?: number;
+    commentCount?: number;
+    shareCount?: number;
+    createTimeISO?: string;
+    createTime?: string;
+    hashtags?: Array<{ name?: string } | string>;
+    videoMeta?: {
+        coverUrl?: string;
+        originalCoverUrl?: string;
+        height?: number;
+        width?: number;
+        duration?: number;
+    };
+    musicMeta?: {
+        musicName?: string;
+        musicAuthor?: string;
+    };
+}
+
+// ... rest of the original implementation would be here ... 

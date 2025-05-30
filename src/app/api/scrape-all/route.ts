@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { scrapeTikTokVideo } from '@/lib/apify';
+import { scrapeTikTokVideo } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 
 interface VideoResult {
@@ -50,7 +50,7 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
     // Filter videos that need scraping
     const videosToScrape = videos.filter(shouldScrapeVideo);
 
-    // Limit to maxPerRun to avoid overwhelming Apify and stay under 60s timeout
+    // Limit to maxPerRun to avoid overwhelming TikHub and stay under 60s timeout
     const videosToProcess = videosToScrape.slice(0, maxPerRun);
 
     console.log(`📊 ===== SMART PROCESSING ANALYSIS =====`);
@@ -173,7 +173,7 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
         const batchFailed = batchResults.filter(r => r.status === 'failed').length;
         console.log(`📊 Batch ${batchNum} complete: ${batchSuccess} success, ${batchFailed} failed`);
 
-        // Rate limiting: wait 1 second between batches to be nice to Apify
+        // Rate limiting: wait 1 second between batches to be nice to TikHub
         if (i + batchSize < videosToProcess.length) {
             console.log(`⏱️ Rate limiting: waiting 1 second before next batch...`);
             await new Promise(resolve => setTimeout(resolve, 1000));

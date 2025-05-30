@@ -1,186 +1,195 @@
-# 📊 TikTok Performance Tracker
+# 📊 TikTok Analytics Dashboard
 
-A powerful analytics dashboard for tracking TikTok video performance over time using real-time scraping via Apify.
+A powerful analytics dashboard for tracking TikTok video performance over time using real-time scraping via TikHub API.
 
 ## ✨ Features
 
-- **Real-time TikTok Scraping**: Powered by Apify's robust TikTok scrapers
+- **Real-time TikTok Scraping**: Powered by TikHub's robust TikTok API
 - **Performance Tracking**: Monitor views, likes, comments, and shares over time
-- **Interactive Charts**: Beautiful visualizations of performance metrics
-- **Video-specific Insights**: Detailed analytics for each tracked video
-- **Automated Updates**: Hourly tracking with smart frequency adjustment
-- **Modern UI**: Built with Next.js, TypeScript, and Tailwind CSS
+- **Beautiful Charts**: Visualize growth trends with interactive charts
+- **Automated Updates**: Hourly cron jobs for continuous monitoring
+- **Multiple Videos**: Track unlimited TikTok videos simultaneously
+- **Smart Processing**: Intelligent batch processing with rate limiting
+- **Cost Effective**: Optimized API usage to minimize costs
 
-## 🚀 Getting Started
+## 🔑 **IMPORTANT: Get Your TikHub API Key First!**
+
+Before you can use this dashboard, you need a TikHub API key:
+
+1. **Visit**: [https://tikhub.io](https://tikhub.io)
+2. **Sign up**: Create a free account (no credit card required)
+3. **Verify**: Check your email and verify your account
+4. **Get API key**: Generate your API key in the dashboard
+5. **Daily credits**: Use the check-in feature for free daily credits
+
+📖 **Detailed setup guide**: See `TIKHUB_SETUP.md` for step-by-step instructions.
+
+🧪 **Test your key**: Run `node test-tikhub-api.js` after setup.
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
 - Node.js 18+ 
-- npm or yarn
-- Apify account (free tier available)
+- PostgreSQL database (or Neon DB)
+- TikHub account (free tier available)
 
 ### Installation
 
 1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd analytics_dashboard
-   ```
+```bash
+git clone <your-repo-url>
+cd analytics_dashboard
+npm install
+```
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+2. **Set up your database**
+```bash
+# Set up your PostgreSQL database URL
+npx prisma migrate dev
+npx prisma generate
+```
 
-3. **Set up Apify**
-   - Create a free account at [Apify](https://apify.com)
-   - Go to [Settings > Integrations](https://console.apify.com/settings/integrations)
-   - Copy your API token
+3. **Set up TikHub**
+- Create a free account at [TikHub](https://api.tikhub.io)
+- Get your API key from the dashboard
+- Copy your API key
 
 4. **Configure environment variables**
-   ```bash
-   # Create .env.local file
-   echo "APIFY_API_TOKEN=your_apify_api_token_here" > .env.local
-   ```
+```bash
+echo "TIKHUB_API_KEY=your_tikhub_api_key_here" > .env.local
+echo "DATABASE_URL=your_database_url_here" >> .env.local
+```
 
-5. **Start the development server**
-   ```bash
-   npm run dev
-   ```
+5. **Run the development server**
+```bash
+npm run dev
+```
 
-6. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## 🎯 How to Use
+## 📈 How it Works
 
-### Adding Videos to Track
+### Adding a Video
 
-1. **Paste TikTok URL**: Copy any TikTok video URL (e.g., `https://www.tiktok.com/@user/video/123`)
-2. **Click "Start Tracking"**: The app will scrape the video data using Apify
-3. **View Results**: The video appears in your tracked videos list with current metrics
+1. **Paste TikTok URL**: Copy any TikTok video URL
+2. **Click "Start Tracking"**: The app will scrape the video data using TikHub
+3. **View Analytics**: See real-time metrics and historical trends
 
-### Viewing Insights
+### Automated Monitoring
 
-1. **Click on any video card** in the "Tracked Videos" tab
-2. **Automatic switch** to the "Insights" tab for that specific video
-3. **Explore metrics**: View performance overview and time-series charts
+- Videos are automatically re-scraped every hour via Vercel cron jobs
+- Historical data is stored for trend analysis
+- Smart processing only updates videos that need refreshing
 
-### Supported URL Formats
+## 🛠️ Tech Stack
 
-- `https://www.tiktok.com/@username/video/1234567890`
-- `https://tiktok.com/@username/video/1234567890`
-- `https://vm.tiktok.com/shortcode`
+- **Frontend**: Next.js 15, React 19, TypeScript
+- **Backend**: Next.js API Routes, Prisma ORM
+- **Database**: PostgreSQL (Neon DB)
+- **Scraping**: TikHub API integration
+- **Charts**: Recharts
+- **Styling**: Tailwind CSS
+- **Deployment**: Vercel
 
-## 🔧 Technical Architecture
+## 🔄 Data Flow
 
-### Frontend
-- **Next.js 14** with App Router
-- **TypeScript** for type safety
-- **Tailwind CSS** for styling
-- **shadcn/ui** for components
-- **Recharts** for data visualization
-
-### Backend
-- **Apify Integration** for TikTok scraping
-- **API Routes** for server-side logic
-- **Real-time data processing**
-
-### Data Flow
 1. User submits TikTok URL
-2. Frontend calls `/api/scrape` endpoint
-3. Backend uses Apify's TikTok Video Scraper
-4. Data is processed and returned to frontend
-5. Video added to tracking list with initial metrics
+2. Next.js API validates and cleans the URL
+3. Backend uses TikHub's TikTok API
+4. Data is transformed and stored in PostgreSQL
+5. Frontend displays real-time analytics
 
-## 📊 Apify Integration Details
+## 📊 TikHub API Integration Details
 
-### Scrapers Used
-- **Primary**: `clockworks/tiktok-video-scraper`
-- **Fallback**: `clockworks/tiktok-scraper`
+### Single Video Scraping
+- **Endpoint**: `/api/v1/tiktok/web/fetch_video`
+- **Method**: POST with video URL
+- **Authentication**: Bearer token (API key)
+- **Rate Limiting**: Respectful delays between requests
 
-### Data Extracted
-- **Video Metrics**: Views, likes, comments, shares
-- **Author Info**: Username, verification status, follower count
-- **Video Details**: Duration, description, upload time
-- **Engagement Data**: Historical performance tracking
+### Batch Processing
+- **Endpoint**: `/api/v1/tiktok/app/v3/fetch_multi_video`
+- **Method**: POST with multiple URLs
+- **Optimization**: Processes multiple videos in single request
+- **Fallback**: Individual requests if batch fails
 
-### Cost Efficiency
-- **~$0.35-0.40** per 1000 video scrapes
-- **Free tier** available for testing
-- **Batch processing** for multiple videos
+### Data Transformation
+Raw TikHub data is transformed to standardized format:
+- Video metadata (ID, URL, description)
+- Performance metrics (views, likes, comments, shares)
+- User information (username, profile data)
+- Content details (hashtags, music, thumbnails)
+- Timestamps for tracking changes
 
-## 🔄 Future Enhancements
+## 📁 Project Structure
 
-### Planned Features
-- **Database Storage**: Persistent data with PostgreSQL/MongoDB
-- **Automated Scheduling**: Cron jobs for regular updates
-- **Smart Frequency**: Adjust tracking frequency based on video age/performance
-- **Export Features**: CSV/JSON data export
-- **Alerts**: Notifications for performance milestones
-- **Competitor Analysis**: Track multiple creators
-- **Advanced Analytics**: Growth rates, engagement rates, trending detection
-
-### Tracking Logic (Planned)
-- **First Week**: Hourly updates
-- **After 1 Week**: Every 6 hours
-- **After 1 Month**: Daily updates
-- **Flatlined Videos**: Weekly updates
-
-## 🛠️ Development
-
-### Project Structure
 ```
-src/
-├── app/
-│   ├── api/scrape/          # Scraping API endpoint
-│   └── page.tsx             # Main page
-├── components/
-│   ├── ui/                  # shadcn/ui components
-│   └── TikTokTracker.tsx    # Main tracker component
-└── lib/
-    └── apify.ts             # Apify integration service
+analytics_dashboard/
+├── src/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── scrape/           # Single video scraping
+│   │   │   └── scrape-all/       # Batch processing & cron
+│   │   ├── components/           # React components
+│   │   └── page.tsx             # Main dashboard
+│   └── lib/
+│       ├── prisma.ts            # Database client
+│       └── tikhub.ts            # TikHub integration service
+└── prisma/
+    └── schema.prisma            # Database schema
 ```
 
-### Environment Variables
-```bash
-APIFY_API_TOKEN=your_token_here    # Required for scraping
-DATABASE_URL=your_db_url           # Optional, for future use
+## 🌍 Environment Variables
+
+```env
+TIKHUB_API_KEY=your_token_here    # Required for scraping
+DATABASE_URL=your_db_url_here     # PostgreSQL connection
 ```
 
-### Available Scripts
-```bash
-npm run dev          # Start development server
-npm run build        # Build for production
-npm run start        # Start production server
-npm run lint         # Run ESLint
-```
+## 🎯 Performance & Costs
 
-## 🔒 Privacy & Ethics
+### API Usage Optimization
+- **Smart Caching**: Only scrapes videos that need updates
+- **Batch Processing**: Multiple videos in single API call
+- **Rate Limiting**: Respects platform guidelines through TikHub
+- **Error Handling**: Graceful failures with detailed logging
+- **Compliance**: Follows TikHub's terms of service
 
-- **Public Data Only**: Only scrapes publicly available TikTok data
-- **Rate Limiting**: Respects platform guidelines through Apify
-- **No Authentication**: Doesn't require TikTok login
-- **Compliance**: Follows Apify's terms of service
+### Cost Estimation
+Typical costs with TikHub API (varies by plan):
+- **Small Scale**: 100 videos tracked = ~$X/month
+- **Medium Scale**: 1000 videos tracked = ~$Y/month  
+- **Enterprise**: Custom pricing available
 
-## 📝 License
+## 🚀 Deployment
 
-This project is for educational and research purposes. Please ensure compliance with TikTok's terms of service and applicable laws in your jurisdiction.
+### Vercel (Recommended)
+
+1. **Connect your repository** to Vercel
+2. **Configure environment variables** in Vercel dashboard
+3. **Enable cron jobs** for automated scraping (Pro plan required)
+4. **Deploy** - automatic deployments on push
+
+### Manual Deployment
+
+See `DEPLOYMENT.md` for detailed manual deployment instructions.
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+4. Submit a pull request
 
 ## 📞 Support
 
-- **Issues**: Create a GitHub issue
-- **Apify Help**: [Apify Documentation](https://docs.apify.com)
-- **TikTok API**: [TikTok for Developers](https://developers.tiktok.com)
+- **TikHub Help**: [TikHub Documentation](https://api.tikhub.io/docs)
+- **Next.js**: [Next.js Documentation](https://nextjs.org/docs)
+- **Prisma**: [Prisma Documentation](https://www.prisma.io/docs)
 
----
+## 📄 License
 
-**Built with ❤️ using Next.js, TypeScript, and Apify**
-# Force deployment trigger
+MIT License - see LICENSE file for details.
+
+**Built with ❤️ using Next.js, TypeScript, and TikHub API**

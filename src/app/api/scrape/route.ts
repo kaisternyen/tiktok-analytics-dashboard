@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { scrapeTikTokVideo } from '@/lib/apify';
+import { scrapeTikTokVideo } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
 
         console.log('🔍 Processing URL:', url);
         console.log('🌍 Environment check:', {
-            hasApifyToken: !!process.env.APIFY_API_TOKEN,
-            tokenLength: process.env.APIFY_API_TOKEN?.length || 0
+            hasTikHubKey: !!process.env.TIKHUB_API_KEY,
+            keyLength: process.env.TIKHUB_API_KEY?.length || 0
         });
 
         // Check if video already exists
