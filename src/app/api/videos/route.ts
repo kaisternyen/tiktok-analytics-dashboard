@@ -40,7 +40,8 @@ export async function GET() {
                 };
             }
 
-            return {
+            // Base video data
+            const baseVideo = {
                 id: video.id,
                 url: video.url,
                 username: video.username,
@@ -55,7 +56,7 @@ export async function GET() {
                 shares: video.currentShares,
                 hashtags,
                 music,
-                platform: 'tiktok' as const,
+                platform: (video.platform || 'tiktok') as 'tiktok' | 'instagram',
                 growth,
                 history: history.map(h => ({
                     time: h.timestamp.toISOString(),
@@ -65,6 +66,17 @@ export async function GET() {
                     shares: h.shares
                 })).reverse() // Oldest first for charts
             };
+
+            // Add Instagram-specific fields if it's an Instagram post
+            if (video.platform === 'instagram') {
+                return {
+                    ...baseVideo,
+                    isReel: video.isReel,
+                    location: video.location
+                };
+            }
+
+            return baseVideo;
         });
 
         return NextResponse.json({
