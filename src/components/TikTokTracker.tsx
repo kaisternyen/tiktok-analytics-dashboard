@@ -63,6 +63,31 @@ interface CronStatus {
     }>;
 }
 
+interface HealthStatus {
+    status: string;
+    timestamp: string;
+    environment: string;
+    deployment: {
+        vercel: boolean;
+        region: string;
+        url: string;
+    };
+    apiKey: {
+        configured: boolean;
+        length: number;
+        preview: string;
+    };
+    tikHub: {
+        status: string;
+        error: string | null;
+        response: any;
+    };
+    database: {
+        configured: boolean;
+        preview: string;
+    };
+}
+
 export default function TikTokTracker() {
     const [videoUrl, setVideoUrl] = useState("");
     const [tracked, setTracked] = useState<TrackedVideo[]>([]);
@@ -73,6 +98,7 @@ export default function TikTokTracker() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
+    const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
 
     // Fetch videos from database on component mount
@@ -94,11 +120,31 @@ export default function TikTokTracker() {
             }
         };
 
+        const fetchHealth = async () => {
+            try {
+                console.log('🏥 Fetching health status...');
+                const response = await fetch('/api/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('🏥 Health status received:', data);
+                    setHealthStatus(data);
+                } else {
+                    console.error('❌ Health check failed:', response.status, response.statusText);
+                }
+            } catch (error) {
+                console.error('💥 Health check error:', error);
+            }
+        };
+
         // Fetch immediately
         fetchStatus();
+        fetchHealth();
 
         // Set up interval for auto-refresh
-        const interval = setInterval(fetchStatus, 30000); // Every 30 seconds
+        const interval = setInterval(() => {
+            fetchStatus();
+            fetchHealth();
+        }, 30000); // Every 30 seconds
 
         return () => clearInterval(interval);
     }, []);
@@ -368,6 +414,31 @@ export default function TikTokTracker() {
                                             {cronStatus.system.videosNeedingScrape} pending
                                         </span>
                                     )}
+                                </div>
+                            )}
+                            {healthStatus && (
+                                <div className="flex items-center gap-2">
+                                    <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${healthStatus.tikHub.status === 'CONNECTED'
+                                            ? 'bg-green-100 text-green-800'
+                                            : healthStatus.tikHub.status === 'NO_API_KEY'
+                                                ? 'bg-red-100 text-red-800'
+                                                : 'bg-yellow-100 text-yellow-800'
+                                        }`}>
+                                        <span className={`w-2 h-2 rounded-full ${healthStatus.tikHub.status === 'CONNECTED' ? 'bg-green-500' :
+                                                healthStatus.tikHub.status === 'NO_API_KEY' ? 'bg-red-500' : 'bg-yellow-500'
+                                            }`} />
+                                        TikHub {healthStatus.tikHub.status === 'CONNECTED' ? 'Connected' :
+                                            healthStatus.tikHub.status === 'NO_API_KEY' ? 'No API Key' :
+                                                healthStatus.tikHub.status}
+                                    </span>
+                                    {healthStatus.tikHub.error && (
+                                        <span className="text-xs text-red-600 max-w-xs truncate" title={healthStatus.tikHub.error}>
+                                            {healthStatus.tikHub.error}
+                                        </span>
+                                    )}
+                                    <span className="text-xs text-gray-500">
+                                        {healthStatus.environment} | Key: {healthStatus.apiKey.configured ? '✓' : '✗'}
+                                    </span>
                                 </div>
                             )}
                         </div>
