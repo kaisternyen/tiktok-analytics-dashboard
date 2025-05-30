@@ -77,9 +77,6 @@ interface TikHubApiResponse {
     data?: {
         aweme_details?: TikHubVideoData[];
         aweme_list?: TikHubVideoData[];
-        status_code?: number;
-        status_msg?: string;
-        log_pb?: any;
     } & TikHubVideoData;
     message?: string;
 }
@@ -88,24 +85,59 @@ interface TikHubApiResponse {
 export function extractVideoId(url: string): string | null {
     console.log('🔍 Extracting video ID from URL:', url);
 
-    // Handle different TikTok URL formats
-    const patterns = [
-        /tiktok\.com\/@[^\/]+\/video\/(\d+)/,
-        /vm\.tiktok\.com\/([A-Za-z0-9]+)/,
-        /tiktok\.com\/t\/([A-Za-z0-9]+)/,
-        /tiktok\.com\/.*\/(\d+)/
-    ];
+    try {
+        // Clean the URL first
+        const cleanUrl = url.trim();
 
-    for (const pattern of patterns) {
-        const match = url.match(pattern);
-        if (match) {
-            console.log('✅ Video ID extracted:', match[1]);
-            return match[1];
+        // Handle different TikTok URL formats
+        const patterns = [
+            // Standard video URLs
+            /tiktok\.com\/@[^\/]+\/video\/(\d+)/,
+            // Short URLs (vm.tiktok.com)
+            /vm\.tiktok\.com\/([A-Za-z0-9]+)/,
+            // TikTok short links (tiktok.com/t/)
+            /tiktok\.com\/t\/([A-Za-z0-9]+)/,
+            // Mobile URLs
+            /m\.tiktok\.com\/v\/(\d+)/,
+            // Share URLs with video ID
+            /tiktok\.com\/.*[?&]video_id=(\d+)/,
+            // Any remaining pattern with digits
+            /tiktok\.com\/.*\/(\d+)/,
+            // Alternative patterns for edge cases
+            /tiktok\.com.*\/(\d{19})/,  // 19-digit video IDs
+            /(\d{19})/, // Last resort: extract any 19-digit number
+        ];
+
+        for (let i = 0; i < patterns.length; i++) {
+            const pattern = patterns[i];
+            const match = cleanUrl.match(pattern);
+            if (match && match[1]) {
+                const videoId = match[1];
+                console.log(`✅ Video ID extracted using pattern ${i + 1}:`, videoId);
+                return videoId;
+            }
         }
-    }
 
-    console.log('❌ Could not extract video ID from URL');
-    return null;
+        // If no pattern matched, try to extract from query parameters
+        try {
+            const urlObj = new URL(cleanUrl);
+            const videoId = urlObj.searchParams.get('video_id') ||
+                urlObj.searchParams.get('aweme_id') ||
+                urlObj.searchParams.get('id');
+            if (videoId) {
+                console.log('✅ Video ID extracted from query params:', videoId);
+                return videoId;
+            }
+        } catch (urlError) {
+            console.log('⚠️ URL parsing failed:', urlError);
+        }
+
+        console.log('❌ Could not extract video ID from URL');
+        return null;
+    } catch (error) {
+        console.error('💥 Error in extractVideoId:', error);
+        return null;
+    }
 }
 
 // Scrape a single TikTok video using TikHub API
@@ -153,18 +185,44 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             }
         });
 
+        console.log('📞 TikHub API response status:', {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries())
+        });
+
         if (!response.ok) {
             const errorText = await response.text();
             console.error('❌ TikHub API error:', {
                 status: response.status,
                 statusText: response.statusText,
-                body: errorText
+                body: errorText,
+                url: tikHubUrl
             });
-            throw new Error(`TikHub API error: ${response.status} ${response.statusText}`);
+
+            // Provide more specific error messages based on status codes
+            let errorMessage = `TikHub API error: ${response.status} ${response.statusText}`;
+            if (response.status === 401) {
+                errorMessage = 'TikHub API authentication failed. Please check your API key.';
+            } else if (response.status === 404) {
+                errorMessage = 'Video not found or URL is invalid. Please check the TikTok URL.';
+            } else if (response.status === 429) {
+                errorMessage = 'TikHub API rate limit exceeded. Please try again later.';
+            } else if (response.status >= 500) {
+                errorMessage = 'TikHub API server error. Please try again later.';
+            }
+
+            throw new Error(errorMessage);
         }
 
         const apiResponse: TikHubApiResponse = await response.json();
-        console.log('📦 Raw TikHub API response:', JSON.stringify(apiResponse, null, 2));
+        console.log('📦 Raw TikHub API response structure:', {
+            hasData: !!apiResponse.data,
+            hasAwemeDetails: !!apiResponse.data?.aweme_details,
+            awemeDetailsLength: apiResponse.data?.aweme_details?.length || 0,
+            code: apiResponse.code,
+            message: apiResponse.msg || apiResponse.message
+        });
 
         // Check API response status (TikHub returns 200 for success)
         if (apiResponse.code && apiResponse.code !== 200) {
@@ -172,40 +230,12 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             return {
                 success: false,
                 error: `TikHub API error: ${apiResponse.msg || 'Unknown error'}`,
-                debugInfo: { apiResponse, url: cleanUrl }
-            };
-        }
-
-        // Check for TikHub V3 API status codes in data object
-        if (apiResponse.data?.status_code && apiResponse.data.status_code !== 0) {
-            const statusCode = apiResponse.data.status_code;
-            const statusMsg = apiResponse.data.status_msg || 'Unknown error';
-
-            console.error('❌ TikHub API returned status code:', statusCode, statusMsg);
-
-            // Provide user-friendly error messages for common status codes
-            let userFriendlyError = statusMsg;
-            switch (statusCode) {
-                case 2053:
-                    userFriendlyError = 'Video has been removed or is no longer available';
-                    break;
-                case 2054:
-                    userFriendlyError = 'Video is private or restricted';
-                    break;
-                case 2055:
-                    userFriendlyError = 'Video not found - invalid URL or video ID';
-                    break;
-                case 10204:
-                    userFriendlyError = 'Video access denied - may be region restricted';
-                    break;
-                default:
-                    userFriendlyError = `Video unavailable: ${statusMsg}`;
-            }
-
-            return {
-                success: false,
-                error: userFriendlyError,
-                debugInfo: { apiResponse, url: cleanUrl, statusCode, statusMsg }
+                debugInfo: {
+                    apiResponse,
+                    url: cleanUrl,
+                    videoId: videoId,
+                    tikHubUrl: tikHubUrl
+                }
             };
         }
 
@@ -214,10 +244,21 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
 
         if (!videoData) {
             console.log('❌ No video data returned from TikHub API');
+            console.log('📊 API Response debugging info:', {
+                hasData: !!apiResponse.data,
+                dataKeys: apiResponse.data ? Object.keys(apiResponse.data) : [],
+                fullResponse: JSON.stringify(apiResponse, null, 2)
+            });
+
             return {
                 success: false,
-                error: 'No video data returned from TikHub API',
-                debugInfo: { apiResponse, url: cleanUrl }
+                error: 'No video data returned from TikHub API. The video may be private, deleted, or the URL format is not supported.',
+                debugInfo: {
+                    apiResponse,
+                    url: cleanUrl,
+                    videoId: videoId,
+                    tikHubUrl: tikHubUrl
+                }
             };
         }
 
@@ -225,50 +266,51 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
 
         // Transform TikHub data to our standard format
         const transformedData: TikTokVideoData = {
-            id: videoData.aweme_id || videoData.group_id || 'N/A',
-            username: videoData.author?.unique_id || 'N/A',
-            description: videoData.desc || 'N/A',
+            id: videoData.aweme_id || videoData.group_id || videoId,
+            username: videoData.author?.unique_id || videoData.author?.nickname || 'N/A',
+            description: videoData.desc || videoData.content || 'N/A',
             views: videoData.statistics?.play_count || videoData.stats?.play_count || 0,
             likes: videoData.statistics?.digg_count || videoData.stats?.digg_count || 0,
             comments: videoData.statistics?.comment_count || videoData.stats?.comment_count || 0,
             shares: videoData.statistics?.share_count || videoData.stats?.share_count || 0,
-            timestamp: videoData.create_time ? new Date(videoData.create_time * 1000).toISOString() : new Date().toISOString(),
+            timestamp: videoData.create_time ? new Date(videoData.create_time * 1000).toISOString() :
+                videoData.created_at ? new Date(videoData.created_at * 1000).toISOString() :
+                    new Date().toISOString(),
             hashtags: Array.isArray(videoData.text_extra)
                 ? videoData.text_extra
                     .filter((item: { type?: number; hashtag_name?: string }) => item.type === 1 && item.hashtag_name)
                     .map((item: { hashtag_name?: string }) => item.hashtag_name || '')
+                    .filter(tag => tag.trim() !== '')
                 : [],
             music: videoData.music ? {
-                name: videoData.music.title || 'N/A',
-                author: videoData.music.author || 'N/A'
+                name: videoData.music.title || videoData.music.owner_nickname || 'N/A',
+                author: videoData.music.author || videoData.music.owner_nickname || 'N/A'
             } : undefined,
-            thumbnailUrl: videoData.video?.cover?.url_list?.[0] || undefined,
-            url: cleanUrl
+            thumbnailUrl: videoData.video?.cover?.url_list?.[0] ||
+                videoData.video?.origin_cover?.url_list?.[0] ||
+                undefined,
+            url: cleanUrl // Always use the original cleaned URL
         };
 
         console.log('✨ Transformed data:', JSON.stringify(transformedData, null, 2));
 
-        // Validate that we got the right video
-        const scrapedUrl = transformedData.url;
-        const originalVideoId = extractVideoId(cleanUrl);
-        const scrapedVideoId = extractVideoId(scrapedUrl);
-
-        console.log('🔍 URL validation:', {
-            originalUrl: cleanUrl,
-            scrapedUrl: scrapedUrl,
-            originalVideoId: originalVideoId,
-            scrapedVideoId: scrapedVideoId,
-            urlsMatch: originalVideoId === scrapedVideoId
+        // Validate that we got meaningful data
+        console.log('🔍 Data validation:', {
+            hasVideoId: !!transformedData.id,
+            hasUsername: transformedData.username !== 'N/A',
+            hasViews: transformedData.views > 0,
+            originalVideoId: videoId,
+            extractedVideoId: transformedData.id
         });
 
-        if (originalVideoId && scrapedVideoId && originalVideoId !== scrapedVideoId) {
-            console.log('⚠️ WARNING: Video ID mismatch detected!');
+        // Basic validation - ensure we have essential data
+        if (!transformedData.id || transformedData.id === 'N/A') {
+            console.log('⚠️ WARNING: No video ID found in response');
             return {
                 success: false,
-                error: `Video ID mismatch: requested ${originalVideoId}, got ${scrapedVideoId}`,
+                error: 'No valid video ID found in API response',
                 debugInfo: {
                     originalUrl: cleanUrl,
-                    scrapedUrl: scrapedUrl,
                     rawData: videoData,
                     transformedData: transformedData
                 }
@@ -282,9 +324,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
                 rawData: videoData,
                 urlValidation: {
                     originalUrl: cleanUrl,
-                    scrapedUrl: scrapedUrl,
-                    originalVideoId: originalVideoId,
-                    scrapedVideoId: scrapedVideoId
+                    extractedVideoId: videoId,
+                    responseVideoId: transformedData.id
                 }
             }
         };
