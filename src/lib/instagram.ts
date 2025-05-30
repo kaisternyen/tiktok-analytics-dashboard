@@ -99,6 +99,11 @@ export function extractInstagramId(url: string): string | null {
 // Scrape a single Instagram post/reel using TikHub API
 export async function scrapeInstagramVideo(url: string): Promise<ScrapedInstagramResult> {
     console.log('🚀 Starting Instagram video scrape for URL:', url);
+    console.log('🔍 Initial environment check:', {
+        nodeEnv: process.env.NODE_ENV,
+        hasApiKey: !!process.env.TIKHUB_API_KEY,
+        apiKeyLength: process.env.TIKHUB_API_KEY?.length
+    });
 
     try {
         // Validate URL
@@ -122,6 +127,7 @@ export async function scrapeInstagramVideo(url: string): Promise<ScrapedInstagra
         const apiKey = process.env.TIKHUB_API_KEY;
         if (!apiKey) {
             console.error('❌ NO API KEY FOUND');
+            console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('TIK')));
             throw new Error('TIKHUB_API_KEY environment variable is not configured');
         }
 
@@ -132,6 +138,7 @@ export async function scrapeInstagramVideo(url: string): Promise<ScrapedInstagra
         const postId = extractInstagramId(cleanUrl);
         if (!postId) {
             console.error('❌ INSTAGRAM ID EXTRACTION FAILED');
+            console.error('URL patterns tested against:', cleanUrl);
             throw new Error('Could not extract post ID from URL');
         }
 
@@ -142,6 +149,13 @@ export async function scrapeInstagramVideo(url: string): Promise<ScrapedInstagra
 
         console.log('📋 TikHub Instagram API request prepared for URL:', tikHubUrl);
         console.log('🌐 Making API request...');
+        console.log('📊 Request parameters:', {
+            method: 'GET',
+            url: tikHubUrl,
+            hasAuth: !!apiKey,
+            authPreview: `Bearer ${apiKey.substring(0, 10)}...`,
+            encodedUrl: encodeURIComponent(cleanUrl)
+        });
 
         // Make request to TikHub API
         console.log('🎬 Calling TikHub Instagram API...');
@@ -170,6 +184,14 @@ export async function scrapeInstagramVideo(url: string): Promise<ScrapedInstagra
                 headers: Object.fromEntries(response.headers.entries())
             });
 
+            // Try to parse error response as JSON for more details
+            try {
+                const errorJson = JSON.parse(errorText);
+                console.error('📋 Parsed error response:', errorJson);
+            } catch (parseError) {
+                console.log('⚠️ Could not parse error response as JSON');
+            }
+
             // Provide more specific error messages based on status codes
             let errorMessage = `TikHub Instagram API error: ${response.status} ${response.statusText}`;
             if (response.status === 401) {
@@ -180,6 +202,8 @@ export async function scrapeInstagramVideo(url: string): Promise<ScrapedInstagra
                 errorMessage = 'TikHub API rate limit exceeded. Please try again later.';
             } else if (response.status >= 500) {
                 errorMessage = 'TikHub API server error. Please try again later.';
+            } else if (response.status === 400) {
+                errorMessage = 'Bad request to TikHub API. The Instagram URL may be invalid or the post may be private.';
             }
 
             throw new Error(errorMessage);
@@ -192,7 +216,8 @@ export async function scrapeInstagramVideo(url: string): Promise<ScrapedInstagra
             hasData: !!apiResponse.data,
             code: apiResponse.code,
             message: apiResponse.msg || apiResponse.message,
-            dataKeys: apiResponse.data ? Object.keys(apiResponse.data) : []
+            dataKeys: apiResponse.data ? Object.keys(apiResponse.data) : [],
+            fullResponsePreview: JSON.stringify(apiResponse, null, 2).substring(0, 500) + '...'
         });
 
         // Check API response status
@@ -229,6 +254,16 @@ export async function scrapeInstagramVideo(url: string): Promise<ScrapedInstagra
 
         console.log('🔍 Processing TikHub Instagram data...');
         console.log('📊 Instagram data keys:', Object.keys(videoData));
+        console.log('📋 Instagram data sample:', {
+            id: videoData.id,
+            shortcode: videoData.shortcode,
+            owner: videoData.owner?.username,
+            hasCaption: !!videoData.caption?.text,
+            hasLikes: !!videoData.edge_media_preview_like?.count,
+            hasComments: !!videoData.edge_media_to_comment?.count,
+            hasViews: !!videoData.video_view_count,
+            isVideo: videoData.is_video
+        });
 
         // Extract hashtags from caption
         const captionText = videoData.caption?.text || '';
@@ -264,6 +299,11 @@ export async function scrapeInstagramVideo(url: string): Promise<ScrapedInstagra
 
     } catch (error) {
         console.error('💥 Unexpected error in scrapeInstagramVideo:', error);
+        console.error('Error details:', {
+            name: error instanceof Error ? error.name : 'Unknown',
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+        });
 
         return {
             success: false,

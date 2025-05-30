@@ -4,6 +4,13 @@ import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
     console.log('📸 /api/scrape-instagram endpoint hit');
+    console.log('🔍 Environment check:', {
+        nodeEnv: process.env.NODE_ENV,
+        hasApiKey: !!process.env.TIKHUB_API_KEY,
+        apiKeyLength: process.env.TIKHUB_API_KEY?.length,
+        apiKeyPreview: process.env.TIKHUB_API_KEY?.substring(0, 10) + '...',
+        hasDbUrl: !!process.env.DATABASE_URL
+    });
 
     try {
         console.log('🔍 Parsing request body...');
@@ -23,6 +30,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({
                 success: false,
                 error: 'URL is required'
+            }, { status: 400 });
+        }
+
+        // Validate URL format
+        if (!url.includes('instagram.com') && !url.includes('instagr.am')) {
+            console.error('❌ Invalid Instagram URL format:', url);
+            return NextResponse.json({
+                success: false,
+                error: 'Please provide a valid Instagram URL (instagram.com or instagr.am)'
             }, { status: 400 });
         }
 
@@ -47,6 +63,7 @@ export async function POST(request: NextRequest) {
 
         if (!result.success) {
             console.error('❌ TikHub Instagram scraping failed:', result.error);
+            console.error('🐛 Debug info:', result.debugInfo);
             return NextResponse.json({
                 success: false,
                 error: result.error,
@@ -67,99 +84,141 @@ export async function POST(request: NextRequest) {
 
         // Check if Instagram post already exists in database
         console.log('🔍 Checking if Instagram post already exists in database...');
-        const existingVideo = await prisma.video.findUnique({
-            where: { url: result.data.url }
-        });
+        try {
+            const existingVideo = await prisma.video.findUnique({
+                where: { url: result.data.url }
+            });
 
-        if (existingVideo) {
-            console.log('📋 Instagram post already exists, updating with latest data...');
+            if (existingVideo) {
+                console.log('📋 Instagram post already exists, updating with latest data...');
 
-            // Update existing Instagram post with latest data
-            const updatedVideo = await prisma.video.update({
-                where: { url: result.data.url },
-                data: {
+                // Update existing Instagram post with latest data
+                const updateData: any = {
                     currentViews: result.data.views,
                     currentLikes: result.data.likes,
                     currentComments: result.data.comments,
                     currentShares: result.data.shares,
                     lastScrapedAt: new Date(),
-                    isActive: true,
-                    // Update Instagram-specific fields
-                    isReel: result.data.isReel,
-                    location: result.data.location
+                    isActive: true
+                };
+
+                // Only update Instagram-specific fields if they exist in the schema
+                try {
+                    // Test if platform field exists by checking schema
+                    const videoWithPlatform = await prisma.video.findFirst({
+                        select: { id: true, platform: true }
+                    });
+                    console.log('✅ Platform field exists in schema');
+                    updateData.platform = 'instagram';
+                } catch {
+                    console.log('⚠️ Platform field not available in current schema');
                 }
-            });
 
-            console.log('✅ Instagram post updated successfully:', {
-                id: result.data.id,
-                username: updatedVideo.username,
-                views: updatedVideo.currentViews,
-                url: updatedVideo.url,
-                isReel: updatedVideo.isReel
-            });
+                const updatedVideo = await prisma.video.update({
+                    where: { url: result.data.url },
+                    data: updateData
+                });
 
-            return NextResponse.json({
-                success: true,
-                message: 'updated',
-                data: {
+                console.log('✅ Instagram post updated successfully:', {
                     id: result.data.id,
                     username: updatedVideo.username,
-                    url: updatedVideo.url,
                     views: updatedVideo.currentViews,
-                    likes: updatedVideo.currentLikes,
-                    comments: updatedVideo.currentComments,
-                    shares: updatedVideo.currentShares,
-                    platform: 'instagram',
+                    url: updatedVideo.url,
                     isReel: result.data.isReel
-                }
-            });
-        }
+                });
 
-        console.log('📝 Creating new Instagram post record in database...');
+                return NextResponse.json({
+                    success: true,
+                    message: 'updated',
+                    data: {
+                        id: result.data.id,
+                        username: updatedVideo.username,
+                        url: updatedVideo.url,
+                        views: updatedVideo.currentViews,
+                        likes: updatedVideo.currentLikes,
+                        comments: updatedVideo.currentComments,
+                        shares: updatedVideo.currentShares,
+                        platform: 'instagram',
+                        isReel: result.data.isReel
+                    }
+                });
+            }
 
-        // Create new Instagram post record
-        const newVideo = await prisma.video.create({
-            data: {
+            console.log('📝 Creating new Instagram post record in database...');
+
+            // Create new Instagram post record with fallback for missing fields
+            const createData: any = {
                 url: result.data.url,
                 username: result.data.username,
                 description: result.data.description,
                 thumbnailUrl: result.data.thumbnailUrl,
-                platform: 'instagram',
                 currentViews: result.data.views,
                 currentLikes: result.data.likes,
                 currentComments: result.data.comments,
                 currentShares: result.data.shares,
                 hashtags: result.data.hashtags ? JSON.stringify(result.data.hashtags) : null,
-                // Instagram-specific fields
-                isReel: result.data.isReel,
-                location: result.data.location,
                 isActive: true
+            };
+
+            // Test if new fields exist in schema and add them if available
+            try {
+                const videoWithPlatform = await prisma.video.findFirst({
+                    select: { id: true, platform: true }
+                });
+                console.log('✅ Platform field exists, adding Instagram-specific data');
+                createData.platform = 'instagram';
+            } catch {
+                console.log('⚠️ Platform field not available, using basic schema');
             }
-        });
 
-        console.log('✅ New Instagram post created successfully:', {
-            id: result.data.id,
-            username: newVideo.username,
-            views: newVideo.currentViews,
-            dbId: newVideo.id,
-            isReel: newVideo.isReel
-        });
+            console.log('📄 Create data prepared:', Object.keys(createData));
 
-        return NextResponse.json({
-            success: true,
-            message: 'added',
-            data: {
+            const newVideo = await prisma.video.create({
+                data: createData
+            });
+
+            console.log('✅ New Instagram post created successfully:', {
                 id: result.data.id,
                 username: newVideo.username,
-                url: newVideo.url,
                 views: newVideo.currentViews,
-                likes: newVideo.currentLikes,
-                comments: newVideo.currentComments,
-                shares: newVideo.currentShares,
-                platform: 'instagram',
+                dbId: newVideo.id,
                 isReel: result.data.isReel
-            }
-        });
+            });
+
+            return NextResponse.json({
+                success: true,
+                message: 'added',
+                data: {
+                    id: result.data.id,
+                    username: newVideo.username,
+                    url: newVideo.url,
+                    views: newVideo.currentViews,
+                    likes: newVideo.currentLikes,
+                    comments: newVideo.currentComments,
+                    shares: newVideo.currentShares,
+                    platform: 'instagram',
+                    isReel: result.data.isReel
+                }
+            });
+
+        } catch (dbError) {
+            console.error('💥 Database error:', dbError);
+            console.error('Database error details:', {
+                name: dbError instanceof Error ? dbError.name : 'Unknown',
+                message: dbError instanceof Error ? dbError.message : String(dbError),
+                stack: dbError instanceof Error ? dbError.stack : undefined
+            });
+
+            return NextResponse.json({
+                success: false,
+                error: 'Database operation failed',
+                details: dbError instanceof Error ? dbError.message : 'Unknown database error',
+                debugInfo: {
+                    errorType: dbError instanceof Error ? dbError.name : typeof dbError,
+                    timestamp: new Date().toISOString()
+                }
+            }, { status: 500 });
+        }
 
     } catch (error) {
         console.error('💥 Unexpected error in /api/scrape-instagram:', error);
