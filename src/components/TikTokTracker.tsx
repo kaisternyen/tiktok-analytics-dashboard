@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Bar, BarChart, Area } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
 import Image from "next/image";
 
@@ -395,57 +395,6 @@ export default function TikTokTracker() {
         );
     };
 
-    // Enhanced data processing for better graphs
-    const getOverallTrendsData = () => {
-        // Combine all video histories into a timeline
-        const timelineData: {
-            [key: string]: {
-                time: string;
-                totalViews: number;
-                totalLikes: number;
-                totalComments: number;
-                totalShares: number;
-                videos: number;
-            }
-        } = {};
-
-        tracked.forEach(video => {
-            video.history.forEach(point => {
-                const time = new Date(point.time).toLocaleString();
-                if (!timelineData[time]) {
-                    timelineData[time] = {
-                        time,
-                        totalViews: 0,
-                        totalLikes: 0,
-                        totalComments: 0,
-                        totalShares: 0,
-                        videos: 0
-                    };
-                }
-                timelineData[time].totalViews += point.views;
-                timelineData[time].totalLikes += point.likes;
-                timelineData[time].totalComments += point.comments;
-                timelineData[time].totalShares += point.shares;
-                timelineData[time].videos++;
-            });
-        });
-
-        return Object.values(timelineData).sort((a, b) =>
-            new Date(a.time).getTime() - new Date(b.time).getTime()
-        ).slice(-20); // Last 20 data points
-    };
-
-    const getVideoComparison = () => {
-        return tracked.map(video => ({
-            username: video.username,
-            views: video.views,
-            likes: video.likes,
-            comments: video.comments,
-            shares: video.shares,
-            engagement: ((video.likes + video.comments + video.shares) / video.views * 100).toFixed(2)
-        }));
-    };
-
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
@@ -626,101 +575,38 @@ export default function TikTokTracker() {
                                     </Card>
                                 </div>
 
-                                {/* Enhanced Performance Charts */}
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    {/* Overall Trends Chart */}
-                                    <Card>
-                                        <CardContent className="p-6">
-                                            <h3 className="text-lg font-semibold mb-4">Overall Trends (Last 20 Points)</h3>
-                                            <div className="h-80">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <ComposedChart data={getOverallTrendsData()}>
-                                                        <XAxis
-                                                            dataKey="time"
-                                                            tickFormatter={(t) => new Date(t).toLocaleDateString()}
-                                                            className="text-xs"
-                                                        />
-                                                        <YAxis
-                                                            yAxisId="views"
-                                                            orientation="left"
-                                                            tickFormatter={formatNumber}
-                                                            className="text-xs"
-                                                        />
-                                                        <YAxis
-                                                            yAxisId="engagement"
-                                                            orientation="right"
-                                                            tickFormatter={formatNumber}
-                                                            className="text-xs"
-                                                        />
-                                                        <Tooltip
-                                                            labelFormatter={(l) => new Date(l).toLocaleString()}
-                                                            formatter={(value: number, name: string) => [formatNumber(value), name]}
-                                                        />
-                                                        <Area
-                                                            yAxisId="views"
-                                                            type="monotone"
-                                                            dataKey="totalViews"
-                                                            stroke="#3b82f6"
-                                                            fill="#3b82f6"
-                                                            fillOpacity={0.1}
-                                                            strokeWidth={2}
-                                                            name="Total Views"
-                                                        />
-                                                        <Line
-                                                            yAxisId="engagement"
-                                                            type="monotone"
-                                                            dataKey="totalLikes"
-                                                            stroke="#ef4444"
-                                                            strokeWidth={2}
-                                                            dot={false}
-                                                            name="Total Likes"
-                                                        />
-                                                        <Line
-                                                            yAxisId="engagement"
-                                                            type="monotone"
-                                                            dataKey="totalComments"
-                                                            stroke="#f59e0b"
-                                                            strokeWidth={2}
-                                                            dot={false}
-                                                            name="Total Comments"
-                                                        />
-                                                    </ComposedChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
+                                {/* Performance Chart - Reverted to Original */}
+                                <Card>
+                                    <CardContent className="p-6">
+                                        <h3 className="text-lg font-semibold mb-4">Performance Overview</h3>
+                                        <div className="h-80">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={tracked[0]?.history || []}>
+                                                    <XAxis
+                                                        dataKey="time"
+                                                        tickFormatter={(t) => new Date(t).toLocaleDateString()}
+                                                        className="text-xs"
+                                                    />
+                                                    <YAxis tickFormatter={formatNumber} className="text-xs" />
+                                                    <Tooltip
+                                                        labelFormatter={(l) => new Date(l).toLocaleDateString()}
+                                                        formatter={(value: number) => [formatNumber(value), '']}
+                                                    />
+                                                    <Area
+                                                        type="monotone"
+                                                        dataKey="views"
+                                                        stroke="#3b82f6"
+                                                        fill="#3b82f6"
+                                                        fillOpacity={0.1}
+                                                        strokeWidth={2}
+                                                    />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </CardContent>
+                                </Card>
 
-                                    {/* Video Comparison Chart */}
-                                    <Card>
-                                        <CardContent className="p-6">
-                                            <h3 className="text-lg font-semibold mb-4">Video Performance Comparison</h3>
-                                            <div className="h-80">
-                                                <ResponsiveContainer width="100%" height="100%">
-                                                    <BarChart data={getVideoComparison()}>
-                                                        <XAxis
-                                                            dataKey="username"
-                                                            tick={{ fontSize: 10 }}
-                                                            angle={-45}
-                                                            textAnchor="end"
-                                                        />
-                                                        <YAxis tickFormatter={formatNumber} className="text-xs" />
-                                                        <Tooltip
-                                                            formatter={(value: number, name: string) => [
-                                                                name === 'engagement' ? value + '%' : formatNumber(value),
-                                                                name
-                                                            ]}
-                                                        />
-                                                        <Bar dataKey="views" fill="#3b82f6" name="Views" />
-                                                        <Bar dataKey="likes" fill="#ef4444" name="Likes" />
-                                                        <Bar dataKey="comments" fill="#f59e0b" name="Comments" />
-                                                    </BarChart>
-                                                </ResponsiveContainer>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                </div>
-
-                                {/* Real-time Update Indicator */}
+                                {/* Real-time Update Indicator - Keep this */}
                                 <Card>
                                     <CardContent className="p-4">
                                         <div className="flex items-center justify-between">
