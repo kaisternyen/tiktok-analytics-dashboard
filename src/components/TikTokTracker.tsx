@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
-import Image from "next/image";
 
 interface VideoHistory {
     time: string;
@@ -1009,32 +1008,15 @@ export default function TikTokTracker() {
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-3">
                                                                 {video.thumbnailUrl ? (
-                                                                    <div className="relative group">
-                                                                        <Image
-                                                                            src={video.thumbnailUrl}
-                                                                            alt={`${video.username} thumbnail`}
-                                                                            width={40}
-                                                                            height={56}
-                                                                            className="w-10 h-14 object-cover rounded bg-gray-200"
-                                                                            unoptimized={true}
-                                                                            onError={(e) => {
-                                                                                console.log(`❌ Thumbnail failed to load for @${video.username}:`, video.thumbnailUrl);
-                                                                                // Replace with fallback SVG
-                                                                                const target = e.currentTarget;
-                                                                                target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNTYiIHZpZXdCb3g9IjAgMCA0MCA1NiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjU2IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyOEwyNiAzMkgyMEwxNCAzMkwyMCAyOFoiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+';
-                                                                                target.alt = 'Thumbnail failed to load';
-                                                                            }}
-                                                                            onLoad={() => {
-                                                                                console.log(`✅ Thumbnail loaded successfully for @${video.username}`);
-                                                                            }}
-                                                                        />
-                                                                        {/* Debug: Show URL on hover */}
-                                                                        <div className="absolute -top-2 left-0 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 max-w-xs truncate">
-                                                                            {video.thumbnailUrl}
-                                                                        </div>
-                                                                    </div>
+                                                                    <img
+                                                                        src={video.thumbnailUrl}
+                                                                        alt={`${video.username} thumbnail`}
+                                                                        className="w-10 h-14 object-cover rounded bg-gray-200"
+                                                                        onError={(e) => {
+                                                                            e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNTYiIHZpZXdCb3g9IjAgMCA0MCA1NiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjU2IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyOEwyNiAzMkgyMEwxNCAzMkwyMCAyOFoiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+';
+                                                                        }}
+                                                                    />
                                                                 ) : (
-                                                                    /* Fallback when no thumbnail URL */
                                                                     <div className="w-10 h-14 bg-gray-200 rounded flex items-center justify-center">
                                                                         <Play className="w-4 h-4 text-gray-400" />
                                                                     </div>
@@ -1044,12 +1026,6 @@ export default function TikTokTracker() {
                                                                     <div className="text-sm text-gray-500 max-w-xs truncate">
                                                                         {video.description}
                                                                     </div>
-                                                                    {/* Debug: Show thumbnail status */}
-                                                                    {video.thumbnailUrl && (
-                                                                        <div className="text-xs text-green-600 flex items-center gap-1">
-                                                                            <span>🖼️ Thumbnail available</span>
-                                                                        </div>
-                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </td>
