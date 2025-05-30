@@ -10,7 +10,7 @@
 require('dotenv').config({ path: '.env.local' });
 
 const TIKHUB_API_KEY = process.env.TIKHUB_API_KEY;
-const TEST_VIDEO_ID = "7304809083817774382"; // Sample TikTok video ID
+const TEST_VIDEO_ID = "7494355764417547551"; // User's specific TikTok video ID
 
 async function testTikHubAPI() {
     console.log('🔍 Testing TikHub API Key...\n');

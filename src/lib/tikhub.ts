@@ -28,8 +28,10 @@ export interface ScrapedVideoResult {
 interface TikHubVideoData {
     id?: string;
     aweme_id?: string;
+    group_id?: string;
     url?: string;
     video_url?: string;
+    share_url?: string;
     author?: {
         unique_id?: string;
         nickname?: string;
@@ -52,21 +54,30 @@ interface TikHubVideoData {
     created_at?: number;
     text_extra?: Array<{
         hashtag_name?: string;
+        type?: number;
     }>;
     music?: {
         title?: string;
         author?: string;
+        owner_nickname?: string;
     };
     video?: {
-        cover?: string;
-        origin_cover?: string;
+        cover?: {
+            url_list?: string[];
+        };
+        origin_cover?: {
+            url_list?: string[];
+        };
     };
 }
 
 interface TikHubApiResponse {
     code?: number;
     msg?: string;
-    data?: TikHubVideoData;
+    data?: {
+        aweme_details?: TikHubVideoData[];
+        aweme_list?: TikHubVideoData[];
+    } & TikHubVideoData;
     message?: string;
 }
 
@@ -152,8 +163,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         const apiResponse: TikHubApiResponse = await response.json();
         console.log('📦 Raw TikHub API response:', JSON.stringify(apiResponse, null, 2));
 
-        // Check API response status
-        if (apiResponse.code && apiResponse.code !== 0) {
+        // Check API response status (TikHub returns 200 for success)
+        if (apiResponse.code && apiResponse.code !== 200) {
             console.error('❌ TikHub API returned error code:', apiResponse.code, apiResponse.msg);
             return {
                 success: false,
@@ -162,43 +173,41 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             };
         }
 
-        if (!apiResponse.data) {
-            console.log('❌ No data returned from TikHub API');
+        // Check if we have data (TikHub returns nested structure: data.aweme_details[0])
+        const videoData = apiResponse.data?.aweme_details?.[0];
+
+        if (!videoData) {
+            console.log('❌ No video data returned from TikHub API');
             return {
                 success: false,
-                error: 'No data returned from TikHub API',
+                error: 'No video data returned from TikHub API',
                 debugInfo: { apiResponse, url: cleanUrl }
             };
         }
 
-        const rawData = apiResponse.data;
-        console.log('🔍 Processing TikHub raw data:', JSON.stringify(rawData, null, 2));
+        console.log('🔍 Processing TikHub video data:', JSON.stringify(videoData, null, 2));
 
         // Transform TikHub data to our standard format
         const transformedData: TikTokVideoData = {
-            id: rawData.id || rawData.aweme_id || videoId || 'unknown',
-            url: rawData.url || rawData.video_url || cleanUrl,
-            username: rawData.author?.unique_id || rawData.author?.nickname || 'unknown',
-            description: rawData.desc || rawData.content || '',
-            views: rawData.statistics?.play_count || rawData.stats?.play_count || 0,
-            likes: rawData.statistics?.digg_count || rawData.stats?.digg_count || 0,
-            comments: rawData.statistics?.comment_count || rawData.stats?.comment_count || 0,
-            shares: rawData.statistics?.share_count || rawData.stats?.share_count || 0,
-            timestamp: rawData.create_time
-                ? new Date(rawData.create_time * 1000).toISOString()
-                : rawData.created_at
-                    ? new Date(rawData.created_at * 1000).toISOString()
-                    : new Date().toISOString(),
-            hashtags: Array.isArray(rawData.text_extra)
-                ? rawData.text_extra
+            id: videoData.aweme_id || videoData.group_id || 'N/A',
+            username: videoData.author?.unique_id || 'N/A',
+            description: videoData.desc || 'N/A',
+            views: videoData.statistics?.play_count || videoData.stats?.play_count || 0,
+            likes: videoData.statistics?.digg_count || videoData.stats?.digg_count || 0,
+            comments: videoData.statistics?.comment_count || videoData.stats?.comment_count || 0,
+            shares: videoData.statistics?.share_count || videoData.stats?.share_count || 0,
+            timestamp: videoData.create_time ? new Date(videoData.create_time * 1000).toISOString() : new Date().toISOString(),
+            hashtags: Array.isArray(videoData.text_extra)
+                ? videoData.text_extra
+                    .filter((item: { type?: number; hashtag_name?: string }) => item.type === 1 && item.hashtag_name)
                     .map((item: { hashtag_name?: string }) => item.hashtag_name || '')
-                    .filter((tag: string) => tag && tag.trim() !== '')
                 : [],
-            music: rawData.music ? {
-                name: rawData.music.title || 'Unknown',
-                author: rawData.music.author || 'Unknown'
+            music: videoData.music ? {
+                name: videoData.music.title || 'N/A',
+                author: videoData.music.author || 'N/A'
             } : undefined,
-            thumbnailUrl: rawData.video?.cover || rawData.video?.origin_cover || undefined
+            thumbnailUrl: videoData.video?.cover?.url_list?.[0] || undefined,
+            url: cleanUrl
         };
 
         console.log('✨ Transformed data:', JSON.stringify(transformedData, null, 2));
@@ -224,7 +233,7 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
                 debugInfo: {
                     originalUrl: cleanUrl,
                     scrapedUrl: scrapedUrl,
-                    rawData: rawData,
+                    rawData: videoData,
                     transformedData: transformedData
                 }
             };
@@ -234,7 +243,7 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             success: true,
             data: transformedData,
             debugInfo: {
-                rawData: rawData,
+                rawData: videoData,
                 urlValidation: {
                     originalUrl: cleanUrl,
                     scrapedUrl: scrapedUrl,
