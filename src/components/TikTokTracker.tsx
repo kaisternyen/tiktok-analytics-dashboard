@@ -80,7 +80,10 @@ interface HealthStatus {
     tikHub: {
         status: string;
         error: string | null;
-        response: any;
+        response: {
+            status: number;
+            statusText: string;
+        } | null;
     };
     database: {
         configured: boolean;
@@ -419,13 +422,13 @@ export default function TikTokTracker() {
                             {healthStatus && (
                                 <div className="flex items-center gap-2">
                                     <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${healthStatus.tikHub.status === 'CONNECTED'
-                                            ? 'bg-green-100 text-green-800'
-                                            : healthStatus.tikHub.status === 'NO_API_KEY'
-                                                ? 'bg-red-100 text-red-800'
-                                                : 'bg-yellow-100 text-yellow-800'
+                                        ? 'bg-green-100 text-green-800'
+                                        : healthStatus.tikHub.status === 'NO_API_KEY'
+                                            ? 'bg-red-100 text-red-800'
+                                            : 'bg-yellow-100 text-yellow-800'
                                         }`}>
                                         <span className={`w-2 h-2 rounded-full ${healthStatus.tikHub.status === 'CONNECTED' ? 'bg-green-500' :
-                                                healthStatus.tikHub.status === 'NO_API_KEY' ? 'bg-red-500' : 'bg-yellow-500'
+                                            healthStatus.tikHub.status === 'NO_API_KEY' ? 'bg-red-500' : 'bg-yellow-500'
                                             }`} />
                                         TikHub {healthStatus.tikHub.status === 'CONNECTED' ? 'Connected' :
                                             healthStatus.tikHub.status === 'NO_API_KEY' ? 'No API Key' :
