@@ -1025,6 +1025,7 @@ export default function TikTokTracker() {
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-3">
                                                                 {video.thumbnailUrl ? (
+                                                                    /* eslint-disable-next-line @next/next/no-img-element */
                                                                     <img
                                                                         src={video.thumbnailUrl}
                                                                         alt={`${video.username} thumbnail`}

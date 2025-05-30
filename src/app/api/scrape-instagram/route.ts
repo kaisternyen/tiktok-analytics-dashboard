@@ -2,6 +2,30 @@ import { NextRequest, NextResponse } from 'next/server';
 import { scrapeInstagramVideo } from '@/lib/instagram';
 import { prisma } from '@/lib/prisma';
 
+interface UpdateData {
+    currentViews: number;
+    currentLikes: number;
+    currentComments: number;
+    currentShares: number;
+    lastScrapedAt: Date;
+    isActive: boolean;
+    platform?: string;
+}
+
+interface CreateData {
+    url: string;
+    username: string;
+    description: string;
+    thumbnailUrl?: string;
+    currentViews: number;
+    currentLikes: number;
+    currentComments: number;
+    currentShares: number;
+    hashtags?: string;
+    isActive: boolean;
+    platform?: string;
+}
+
 export async function POST(request: NextRequest) {
     console.log('📸 /api/scrape-instagram endpoint hit');
     console.log('🔍 Environment check:', {
@@ -93,7 +117,7 @@ export async function POST(request: NextRequest) {
                 console.log('📋 Instagram post already exists, updating with latest data...');
 
                 // Update existing Instagram post with latest data
-                const updateData: any = {
+                const updateData: UpdateData = {
                     currentViews: result.data.views,
                     currentLikes: result.data.likes,
                     currentComments: result.data.comments,
@@ -105,7 +129,7 @@ export async function POST(request: NextRequest) {
                 // Only update Instagram-specific fields if they exist in the schema
                 try {
                     // Test if platform field exists by checking schema
-                    const videoWithPlatform = await prisma.video.findFirst({
+                    await prisma.video.findFirst({
                         select: { id: true, platform: true }
                     });
                     console.log('✅ Platform field exists in schema');
@@ -147,7 +171,7 @@ export async function POST(request: NextRequest) {
             console.log('📝 Creating new Instagram post record in database...');
 
             // Create new Instagram post record with fallback for missing fields
-            const createData: any = {
+            const createData: CreateData = {
                 url: result.data.url,
                 username: result.data.username,
                 description: result.data.description,
@@ -156,13 +180,13 @@ export async function POST(request: NextRequest) {
                 currentLikes: result.data.likes,
                 currentComments: result.data.comments,
                 currentShares: result.data.shares,
-                hashtags: result.data.hashtags ? JSON.stringify(result.data.hashtags) : null,
+                hashtags: result.data.hashtags ? JSON.stringify(result.data.hashtags) : undefined,
                 isActive: true
             };
 
             // Test if new fields exist in schema and add them if available
             try {
-                const videoWithPlatform = await prisma.video.findFirst({
+                await prisma.video.findFirst({
                     select: { id: true, platform: true }
                 });
                 console.log('✅ Platform field exists, adding Instagram-specific data');

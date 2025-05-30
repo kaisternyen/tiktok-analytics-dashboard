@@ -1,6 +1,33 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+interface VideoWithPlatform {
+    id: string;
+    url: string;
+    username: string;
+    description: string;
+    thumbnailUrl: string;
+    createdAt: Date;
+    lastScrapedAt: Date;
+    isActive: boolean;
+    currentViews: number;
+    currentLikes: number;
+    currentComments: number;
+    currentShares: number;
+    hashtags: string | null;
+    music: string | null;
+    platform?: string;
+    isReel?: boolean;
+    location?: string;
+    metricsHistory: Array<{
+        timestamp: Date;
+        views: number;
+        likes: number;
+        comments: number;
+        shares: number;
+    }>;
+}
+
 export async function GET() {
     try {
         console.log('📋 Fetching videos from database...');
@@ -30,7 +57,7 @@ export async function GET() {
                 console.log(`🔄 Processing video ${index + 1}/${videos.length}:`, {
                     id: video.id,
                     username: video.username,
-                    platform: video.platform || 'unknown',
+                    platform: (video as VideoWithPlatform).platform || 'unknown',
                     hasIsReel: 'isReel' in video,
                     hasLocation: 'location' in video
                 });
@@ -70,7 +97,7 @@ export async function GET() {
                 }
 
                 // Safely access platform field (might not exist in older records)
-                const platform = (video as any).platform || 'tiktok';
+                const platform = (video as VideoWithPlatform).platform || 'tiktok';
                 console.log(`📱 Video platform detected:`, { id: video.id, platform });
 
                 // Base video data
@@ -102,18 +129,19 @@ export async function GET() {
 
                 // Add Instagram-specific fields if it's an Instagram post and fields exist
                 if (platform === 'instagram') {
+                    const videoWithInstagram = video as VideoWithPlatform;
                     console.log(`📸 Processing Instagram video:`, {
                         id: video.id,
                         hasIsReel: 'isReel' in video,
                         hasLocation: 'location' in video,
-                        isReel: (video as any).isReel,
-                        location: (video as any).location
+                        isReel: videoWithInstagram.isReel,
+                        location: videoWithInstagram.location
                     });
 
                     return {
                         ...baseVideo,
-                        isReel: (video as any).isReel || false,
-                        location: (video as any).location || undefined
+                        isReel: videoWithInstagram.isReel || false,
+                        location: videoWithInstagram.location || undefined
                     };
                 }
 

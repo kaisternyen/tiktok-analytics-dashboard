@@ -188,7 +188,7 @@ export async function scrapeInstagramVideo(url: string): Promise<ScrapedInstagra
             try {
                 const errorJson = JSON.parse(errorText);
                 console.error('📋 Parsed error response:', errorJson);
-            } catch (parseError) {
+            } catch {
                 console.log('⚠️ Could not parse error response as JSON');
             }
 
