@@ -413,76 +413,78 @@ export default function TikTokTracker() {
         );
     };
 
-    // Enhanced chart data processing with time periods and delta calculation
-    const getChartData = (): ChartDataPoint[] => {
-        if (tracked.length === 0 || !tracked[0]?.history?.length) return [];
+    // Custom tick formatter for simplified X-axis labels with exactly 3 ticks
+    const formatXAxisTick = (tickItem: string) => {
+        const date = new Date(tickItem);
 
-        const history = tracked[0].history;
-        const now = new Date();
-        let filteredData = [...history];
-
-        // Filter by time period
+        // Format based on selected time period
         switch (selectedTimePeriod) {
             case 'D':
-                filteredData = history.filter(point =>
-                    new Date(point.time) >= new Date(now.getTime() - 24 * 60 * 60 * 1000)
-                );
-                break;
+                // Daily: show time to the minute (12:00 AM)
+                return date.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                });
             case 'W':
-                filteredData = history.filter(point =>
-                    new Date(point.time) >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-                );
-                break;
             case 'M':
-                filteredData = history.filter(point =>
-                    new Date(point.time) >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-                );
-                break;
+                // Weekly/Monthly: show day (JAN 7)
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric'
+                });
             case '3M':
-                filteredData = history.filter(point =>
-                    new Date(point.time) >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-                );
-                break;
             case '1Y':
-                filteredData = history.filter(point =>
-                    new Date(point.time) >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
-                );
-                break;
             case 'ALL':
+                // 3M and higher: show day + year (JAN 7, 2025)
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
             default:
-                // Use all data
-                break;
+                return date.toLocaleDateString();
         }
-
-        // Sort by time
-        filteredData.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-
-        // Calculate delta values
-        const chartData: ChartDataPoint[] = filteredData.map((point, index) => {
-            const previousPoint = index > 0 ? filteredData[index - 1] : point;
-            const delta = point.views - previousPoint.views;
-
-            return {
-                time: point.time,
-                views: showDelta ? delta : point.views,
-                delta,
-                originalTime: new Date(point.time)
-            };
-        });
-
-        return chartData;
     };
 
-    // Custom tick formatter for simplified X-axis labels
-    const formatXAxisTick = (tickItem: string) => {
-        // For now, just format the date - we'll use the interval prop to control which ticks show
-        return new Date(tickItem).toLocaleDateString();
+    // Custom tick formatter for individual video charts
+    const formatVideoXAxisTick = (tickItem: string) => {
+        const date = new Date(tickItem);
+
+        // Format based on selected video time period
+        switch (selectedVideoTimePeriod) {
+            case 'D':
+                // Daily: show time to the minute (12:00 AM)
+                return date.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            case 'W':
+            case 'M':
+                // Weekly/Monthly: show day (JAN 7)
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric'
+                });
+            case '3M':
+            case '1Y':
+            case 'ALL':
+                // 3M and higher: show day + year (JAN 7, 2025)
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+            default:
+                return date.toLocaleDateString();
+        }
     };
 
-    // Calculate interval for showing only 3 ticks (start, middle, end)
+    // Calculate interval for showing exactly 3 ticks
     const getTickInterval = (dataLength: number) => {
         if (dataLength <= 3) return 0; // Show all if 3 or fewer points
-        return Math.floor(dataLength / 2); // Show approximately every half of the data
+        return Math.floor((dataLength - 1) / 2); // Calculate interval to show start, middle, end
     };
 
     // Dynamic Y-axis domain for meaningful scaling
@@ -515,7 +517,7 @@ export default function TikTokTracker() {
                                 Delta: {formatNumber(data.delta)} views
                             </p>
                             <p className="text-gray-600 text-sm">
-                                Total: {formatNumber(tracked[0]?.views || 0)} views
+                                Total: {formatNumber(totalMetrics.totalViews)} views
                             </p>
                         </>
                     ) : (
@@ -534,6 +536,94 @@ export default function TikTokTracker() {
             );
         }
         return null;
+    };
+
+    // Enhanced chart data processing with aggregate data across ALL videos
+    const getChartData = (): ChartDataPoint[] => {
+        if (tracked.length === 0) return [];
+
+        // Aggregate all video histories into timeline
+        const timelineMap: { [time: string]: { views: number; likes: number; comments: number; shares: number; count: number } } = {};
+
+        tracked.forEach(video => {
+            if (!video.history?.length) return;
+
+            video.history.forEach(point => {
+                const timeKey = point.time;
+                if (!timelineMap[timeKey]) {
+                    timelineMap[timeKey] = { views: 0, likes: 0, comments: 0, shares: 0, count: 0 };
+                }
+                timelineMap[timeKey].views += point.views;
+                timelineMap[timeKey].likes += point.likes;
+                timelineMap[timeKey].comments += point.comments;
+                timelineMap[timeKey].shares += point.shares;
+                timelineMap[timeKey].count++;
+            });
+        });
+
+        // Convert to array and filter by time period
+        const allData = Object.entries(timelineMap).map(([time, data]) => ({
+            time,
+            views: data.views,
+            likes: data.likes,
+            comments: data.comments,
+            shares: data.shares,
+            originalTime: new Date(time)
+        }));
+
+        const now = new Date();
+        let filteredData = [...allData];
+
+        // Filter by time period
+        switch (selectedTimePeriod) {
+            case 'D':
+                filteredData = allData.filter(point =>
+                    new Date(point.time) >= new Date(now.getTime() - 24 * 60 * 60 * 1000)
+                );
+                break;
+            case 'W':
+                filteredData = allData.filter(point =>
+                    new Date(point.time) >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+                );
+                break;
+            case 'M':
+                filteredData = allData.filter(point =>
+                    new Date(point.time) >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+                );
+                break;
+            case '3M':
+                filteredData = allData.filter(point =>
+                    new Date(point.time) >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+                );
+                break;
+            case '1Y':
+                filteredData = allData.filter(point =>
+                    new Date(point.time) >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+                );
+                break;
+            case 'ALL':
+            default:
+                // Use all data
+                break;
+        }
+
+        // Sort by time
+        filteredData.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+        // Calculate delta values
+        const chartData: ChartDataPoint[] = filteredData.map((point, index) => {
+            const previousPoint = index > 0 ? filteredData[index - 1] : point;
+            const delta = point.views - previousPoint.views;
+
+            return {
+                time: point.time,
+                views: showDelta ? delta : point.views,
+                delta,
+                originalTime: new Date(point.time)
+            };
+        });
+
+        return chartData;
     };
 
     const chartData = getChartData();
@@ -792,7 +882,7 @@ export default function TikTokTracker() {
                                     <CardContent className="p-6">
                                         <div className="flex items-center justify-between mb-4">
                                             <h3 className="text-lg font-semibold">
-                                                Performance Overview - {tracked[0]?.username || 'No Data'}
+                                                Performance Overview - Aggregate Stats ({tracked.length} videos)
                                             </h3>
                                             <div className="flex items-center gap-2">
                                                 {/* Time Period Selector */}
@@ -1086,7 +1176,7 @@ export default function TikTokTracker() {
                                                     <LineChart data={viewsChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                                                         <XAxis
                                                             dataKey="time"
-                                                            tickFormatter={formatXAxisTick}
+                                                            tickFormatter={formatVideoXAxisTick}
                                                             className="text-xs"
                                                             tick={{ fontSize: 10 }}
                                                             interval={getTickInterval(viewsChartData.length)}
@@ -1138,7 +1228,7 @@ export default function TikTokTracker() {
                                                     <LineChart data={likesChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                                                         <XAxis
                                                             dataKey="time"
-                                                            tickFormatter={formatXAxisTick}
+                                                            tickFormatter={formatVideoXAxisTick}
                                                             className="text-xs"
                                                             tick={{ fontSize: 10 }}
                                                             interval={getTickInterval(likesChartData.length)}
@@ -1190,7 +1280,7 @@ export default function TikTokTracker() {
                                                     <LineChart data={commentsChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                                                         <XAxis
                                                             dataKey="time"
-                                                            tickFormatter={formatXAxisTick}
+                                                            tickFormatter={formatVideoXAxisTick}
                                                             className="text-xs"
                                                             tick={{ fontSize: 10 }}
                                                             interval={getTickInterval(commentsChartData.length)}
@@ -1242,7 +1332,7 @@ export default function TikTokTracker() {
                                                     <LineChart data={sharesChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                                                         <XAxis
                                                             dataKey="time"
-                                                            tickFormatter={formatXAxisTick}
+                                                            tickFormatter={formatVideoXAxisTick}
                                                             className="text-xs"
                                                             tick={{ fontSize: 10 }}
                                                             interval={getTickInterval(sharesChartData.length)}
