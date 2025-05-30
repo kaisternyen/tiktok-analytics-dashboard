@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { scrapeTikTokVideo } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 
+// Force dynamic rendering for cron jobs
+export const dynamic = 'force-dynamic';
+
 interface VideoResult {
     status: 'success' | 'failed' | 'skipped';
     username: string;
