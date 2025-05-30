@@ -5,8 +5,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, ComposedChart, Bar, BarChart } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ComposedChart, Bar, BarChart, Area } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
+import Image from "next/image";
 
 interface VideoHistory {
     time: string;
@@ -397,7 +398,16 @@ export default function TikTokTracker() {
     // Enhanced data processing for better graphs
     const getOverallTrendsData = () => {
         // Combine all video histories into a timeline
-        const timelineData: { [key: string]: any } = {};
+        const timelineData: {
+            [key: string]: {
+                time: string;
+                totalViews: number;
+                totalLikes: number;
+                totalComments: number;
+                totalShares: number;
+                videos: number;
+            }
+        } = {};
 
         tracked.forEach(video => {
             video.history.forEach(point => {
@@ -420,7 +430,7 @@ export default function TikTokTracker() {
             });
         });
 
-        return Object.values(timelineData).sort((a: any, b: any) =>
+        return Object.values(timelineData).sort((a, b) =>
             new Date(a.time).getTime() - new Date(b.time).getTime()
         ).slice(-20); // Last 20 data points
     };
@@ -769,9 +779,11 @@ export default function TikTokTracker() {
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-3">
                                                                 {video.thumbnailUrl && (
-                                                                    <img
+                                                                    <Image
                                                                         src={video.thumbnailUrl}
                                                                         alt={`${video.username} thumbnail`}
+                                                                        width={40}
+                                                                        height={56}
                                                                         className="w-10 h-14 object-cover rounded bg-gray-200"
                                                                         onError={(e) => {
                                                                             e.currentTarget.style.display = 'none';
