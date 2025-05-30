@@ -1008,23 +1008,35 @@ export default function TikTokTracker() {
                                                     >
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-3">
-                                                                {video.thumbnailUrl && (
-                                                                    <Image
-                                                                        src={video.thumbnailUrl}
-                                                                        alt={`${video.username} thumbnail`}
-                                                                        width={40}
-                                                                        height={56}
-                                                                        className="w-10 h-14 object-cover rounded bg-gray-200"
-                                                                        onError={(e) => {
-                                                                            e.currentTarget.style.display = 'none';
-                                                                        }}
-                                                                    />
-                                                                )}
+                                                                <div className="flex-shrink-0">
+                                                                    {video.thumbnailUrl ? (
+                                                                        <Image
+                                                                            src={video.thumbnailUrl}
+                                                                            alt={`${video.username} thumbnail`}
+                                                                            width={40}
+                                                                            height={56}
+                                                                            className="w-10 h-14 object-cover rounded-md bg-gray-200 border border-gray-300"
+                                                                            onError={(e) => {
+                                                                                e.currentTarget.style.display = 'none';
+                                                                                console.log('❌ Thumbnail failed to load:', video.thumbnailUrl);
+                                                                            }}
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="w-10 h-14 bg-gray-200 border border-gray-300 rounded-md flex items-center justify-center">
+                                                                            <Play className="w-4 h-4 text-gray-400" />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                                 <div>
                                                                     <div className="font-medium text-gray-900">@{video.username}</div>
                                                                     <div className="text-sm text-gray-500 max-w-xs truncate">
                                                                         {video.description}
                                                                     </div>
+                                                                    {video.thumbnailUrl && (
+                                                                        <div className="text-xs text-green-600 mt-1">
+                                                                            📸 Thumbnail available
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </td>
