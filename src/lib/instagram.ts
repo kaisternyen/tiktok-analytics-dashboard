@@ -145,7 +145,7 @@ export async function scrapeInstagramVideo(url: string): Promise<ScrapedInstagra
         console.log('✅ Instagram ID extracted:', postId);
 
         // Prepare TikHub Instagram API request
-        const tikHubUrl = `https://api.tikhub.io/api/v1/instagram/web/fetch_post_detail?url=${encodeURIComponent(cleanUrl)}`;
+        const tikHubUrl = `https://api.tikhub.io/api/v1/instagram/web/fetch_post_detail_by_url?url=${encodeURIComponent(cleanUrl)}`;
 
         console.log('📋 TikHub Instagram API request prepared for URL:', tikHubUrl);
         console.log('🌐 Making API request...');
