@@ -82,7 +82,6 @@ export async function POST(request: NextRequest) {
                     currentLikes: result.data.likes,
                     currentComments: result.data.comments,
                     currentShares: result.data.shares,
-                    thumbnailUrl: result.data.thumbnailUrl,
                     lastScrapedAt: new Date(),
                     isActive: true
                 }

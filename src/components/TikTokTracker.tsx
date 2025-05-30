@@ -1008,33 +1008,46 @@ export default function TikTokTracker() {
                                                     >
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-3">
-                                                                <div className="flex-shrink-0">
-                                                                    {video.thumbnailUrl ? (
+                                                                {video.thumbnailUrl ? (
+                                                                    <div className="relative group">
                                                                         <Image
                                                                             src={video.thumbnailUrl}
                                                                             alt={`${video.username} thumbnail`}
                                                                             width={40}
                                                                             height={56}
-                                                                            className="w-10 h-14 object-cover rounded-md bg-gray-200 border border-gray-300"
+                                                                            className="w-10 h-14 object-cover rounded bg-gray-200"
+                                                                            unoptimized={true}
                                                                             onError={(e) => {
-                                                                                e.currentTarget.style.display = 'none';
-                                                                                console.log('❌ Thumbnail failed to load:', video.thumbnailUrl);
+                                                                                console.log(`❌ Thumbnail failed to load for @${video.username}:`, video.thumbnailUrl);
+                                                                                // Replace with fallback SVG
+                                                                                const target = e.currentTarget;
+                                                                                target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNTYiIHZpZXdCb3g9IjAgMCA0MCA1NiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjU2IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyOEwyNiAzMkgyMEwxNCAzMkwyMCAyOFoiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+';
+                                                                                target.alt = 'Thumbnail failed to load';
+                                                                            }}
+                                                                            onLoad={() => {
+                                                                                console.log(`✅ Thumbnail loaded successfully for @${video.username}`);
                                                                             }}
                                                                         />
-                                                                    ) : (
-                                                                        <div className="w-10 h-14 bg-gray-200 border border-gray-300 rounded-md flex items-center justify-center">
-                                                                            <Play className="w-4 h-4 text-gray-400" />
+                                                                        {/* Debug: Show URL on hover */}
+                                                                        <div className="absolute -top-2 left-0 bg-black text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 max-w-xs truncate">
+                                                                            {video.thumbnailUrl}
                                                                         </div>
-                                                                    )}
-                                                                </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    /* Fallback when no thumbnail URL */
+                                                                    <div className="w-10 h-14 bg-gray-200 rounded flex items-center justify-center">
+                                                                        <Play className="w-4 h-4 text-gray-400" />
+                                                                    </div>
+                                                                )}
                                                                 <div>
                                                                     <div className="font-medium text-gray-900">@{video.username}</div>
                                                                     <div className="text-sm text-gray-500 max-w-xs truncate">
                                                                         {video.description}
                                                                     </div>
+                                                                    {/* Debug: Show thumbnail status */}
                                                                     {video.thumbnailUrl && (
-                                                                        <div className="text-xs text-green-600 mt-1">
-                                                                            📸 Thumbnail available
+                                                                        <div className="text-xs text-green-600 flex items-center gap-1">
+                                                                            <span>🖼️ Thumbnail available</span>
                                                                         </div>
                                                                     )}
                                                                 </div>
