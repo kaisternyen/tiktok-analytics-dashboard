@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1008,13 +1009,12 @@ export default function TikTokTracker() {
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-3">
                                                                 {video.thumbnailUrl ? (
-                                                                    <img
+                                                                    <Image
                                                                         src={video.thumbnailUrl}
                                                                         alt={`${video.username} thumbnail`}
                                                                         className="w-10 h-14 object-cover rounded bg-gray-200"
-                                                                        onError={(e) => {
-                                                                            e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNTYiIHZpZXdCb3g9IjAgMCA0MCA1NiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjU2IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyOEwyNiAzMkgyMEwxNCAzMkwyMCAyOFoiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+';
-                                                                        }}
+                                                                        width={40}
+                                                                        height={56}
                                                                     />
                                                                 ) : (
                                                                     <div className="w-10 h-14 bg-gray-200 rounded flex items-center justify-center">

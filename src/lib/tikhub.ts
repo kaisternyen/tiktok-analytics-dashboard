@@ -765,7 +765,14 @@ export async function scrapeInstagramPost(url: string): Promise<ScrapedInstagram
                 usesOriginalAudio: postData.clips_music_attribution_info.uses_original_audio || false,
                 audioId: postData.clips_music_attribution_info.audio_id
             } : undefined,
-            recentComments: postData.edge_media_to_parent_comment?.edges?.slice(0, 5).map((edge: any) => ({
+            recentComments: postData.edge_media_to_parent_comment?.edges?.slice(0, 5).map((edge: {
+                node: {
+                    owner: { username: string };
+                    text: string;
+                    edge_liked_by?: { count: number };
+                    created_at: number;
+                };
+            }) => ({
                 username: edge.node.owner.username || 'unknown',
                 text: edge.node.text || '',
                 likes: edge.node.edge_liked_by?.count || 0,
