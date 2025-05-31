@@ -193,3 +193,4 @@ See `DEPLOYMENT.md` for detailed manual deployment instructions.
 MIT License - see LICENSE file for details.
 
 **Built with ❤️ using Next.js, TypeScript, and TikHub API**
+# Trigger deployment to fix Prisma schema sync
