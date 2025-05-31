@@ -36,7 +36,7 @@ interface TrackedVideo {
         name: string;
         author: string;
     };
-    platform: 'tiktok' | 'instagram';
+    platform: 'tiktok' | 'instagram' | 'youtube';
     growth: {
         views: number;
         likes: number;
@@ -204,7 +204,7 @@ export default function TikTokTracker() {
                     hashtags: string[];
                     thumbnailUrl?: string;
                     music?: { name: string; author: string };
-                    platform: 'tiktok' | 'instagram';
+                    platform: 'tiktok' | 'instagram' | 'youtube';
                     history: VideoHistory[];
                     growth: { views: number; likes: number; comments: number; shares: number };
                 }) => ({
@@ -322,7 +322,7 @@ export default function TikTokTracker() {
                 }
             }
         } catch (err) {
-            console.error('💥 Exception occurred during fetch:', err);
+            console.error('�� Exception occurred during fetch:', err);
             console.error('Error details:', {
                 name: err instanceof Error ? err.name : 'Unknown',
                 message: err instanceof Error ? err.message : String(err),
@@ -1094,13 +1094,18 @@ export default function TikTokTracker() {
                                                                     <div className="w-5 h-5 bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 rounded flex items-center justify-center">
                                                                         <div className="w-3 h-3 bg-white rounded-full border border-gray-200"></div>
                                                                     </div>
+                                                                ) : video.platform === 'youtube' ? (
+                                                                    <div className="w-5 h-5 bg-red-600 rounded flex items-center justify-center">
+                                                                        <Play className="w-3 h-3 text-white" />
+                                                                    </div>
                                                                 ) : (
                                                                     <div className="w-5 h-5 bg-black rounded flex items-center justify-center">
                                                                         <Play className="w-3 h-3 text-white" />
                                                                     </div>
                                                                 )}
                                                                 <span className="text-sm font-medium">
-                                                                    {video.platform === 'instagram' ? 'Instagram' : 'TikTok'}
+                                                                    {video.platform === 'instagram' ? 'Instagram' : 
+                                                                     video.platform === 'youtube' ? 'YouTube' : 'TikTok'}
                                                                 </span>
                                                             </div>
                                                         </td>
@@ -1108,7 +1113,7 @@ export default function TikTokTracker() {
                                                         <td className="p-4 font-medium">{formatNumber(video.likes)}</td>
                                                         <td className="p-4 font-medium">{formatNumber(video.comments)}</td>
                                                         <td className="p-4 font-medium">
-                                                            {video.platform === 'instagram' ? 'N/A' : formatNumber(video.shares)}
+                                                            {video.platform === 'instagram' || video.platform === 'youtube' ? 'N/A' : formatNumber(video.shares)}
                                                         </td>
                                                         <td className="p-4">{formatGrowth(video.growth.views)}</td>
                                                         <td className="p-4">
@@ -1191,14 +1196,14 @@ export default function TikTokTracker() {
                                 <Card>
                                     <CardContent className="p-4 text-center">
                                         <div className="text-3xl font-bold text-gray-900">
-                                            {selectedVideo.platform === 'instagram' ? 'N/A' : formatNumber(selectedVideo.shares)}
+                                            {selectedVideo.platform === 'instagram' || selectedVideo.platform === 'youtube' ? 'N/A' : formatNumber(selectedVideo.shares)}
                                         </div>
                                         <div className="text-sm text-gray-500 flex items-center justify-center gap-1 mt-1">
                                             <Share className="w-3 h-3" />
                                             Shares
                                         </div>
                                         <div className="text-xs mt-1">
-                                            {selectedVideo.platform === 'instagram' ? 'Not tracked' : formatGrowth(selectedVideo.growth.shares)}
+                                            {selectedVideo.platform === 'instagram' || selectedVideo.platform === 'youtube' ? 'Not tracked' : formatGrowth(selectedVideo.growth.shares)}
                                         </div>
                                     </CardContent>
                                 </Card>
