@@ -1100,11 +1100,17 @@ export interface YouTubeVideoData {
     };
 }
 
+interface YouTubeDebugInfo {
+    url: string;
+    timestamp: string;
+    error?: unknown;
+}
+
 export interface ScrapedYouTubeResult {
     success: boolean;
     data?: YouTubeVideoData;
     error?: string;
-    debugInfo?: any;
+    debugInfo?: YouTubeDebugInfo;
 }
 
 // Extract YouTube video ID from URL

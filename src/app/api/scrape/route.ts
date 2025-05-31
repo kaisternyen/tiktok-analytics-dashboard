@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { scrapeTikTokVideo, scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
+import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
 
         // Detect platform and scrape accordingly
         const cleanUrl = url.trim().toLowerCase();
-        let result;
         let platform: string;
         
         if (cleanUrl.includes('instagram.com')) {
@@ -51,7 +50,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Use unified scraper
-        result = await scrapeMediaPost(url);
+        const result = await scrapeMediaPost(url);
 
         console.log('📦 Media scraping result:', {
             success: result.success,
@@ -183,8 +182,8 @@ export async function POST(request: NextRequest) {
                 currentLikes: likes,
                 currentComments: comments,
                 currentShares: shares,
-                hashtags: (mediaData as any).hashtags ? JSON.stringify((mediaData as any).hashtags) : null,
-                music: (mediaData as any).music ? JSON.stringify((mediaData as any).music) : null,
+                hashtags: (mediaData as TikTokVideoData | InstagramPostData).hashtags ? JSON.stringify((mediaData as TikTokVideoData | InstagramPostData).hashtags) : null,
+                music: (mediaData as TikTokVideoData | InstagramPostData).music ? JSON.stringify((mediaData as TikTokVideoData | InstagramPostData).music) : null,
                 isActive: true
             }
         });
