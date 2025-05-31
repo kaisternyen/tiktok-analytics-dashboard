@@ -55,7 +55,7 @@ export async function GET() {
                 shares: video.currentShares,
                 hashtags,
                 music,
-                platform: 'tiktok' as const,
+                platform: video.platform || 'tiktok',
                 growth,
                 history: history.map(h => ({
                     time: h.timestamp.toISOString(),

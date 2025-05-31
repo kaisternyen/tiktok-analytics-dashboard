@@ -36,7 +36,7 @@ interface TrackedVideo {
         name: string;
         author: string;
     };
-    platform: 'tiktok';
+    platform: 'tiktok' | 'instagram';
     growth: {
         views: number;
         likes: number;
@@ -707,7 +707,7 @@ export default function TikTokTracker() {
                             <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
                                 <Play className="w-4 h-4 text-white" />
                             </div>
-                            <h1 className="text-xl font-semibold text-gray-900">TikTok Analytics</h1>
+                            <h1 className="text-xl font-semibold text-gray-900">Social Media Analytics</h1>
                             <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded-full">
                                 ● {tracked.length} videos tracked
                             </span>
@@ -770,14 +770,14 @@ export default function TikTokTracker() {
                                 {isRefreshing ? 'Refreshing...' : 'Refresh All'}
                             </Button>
                             <Input
-                                placeholder="Paste TikTok video URL"
+                                placeholder="Paste TikTok or Instagram URL"
                                 value={videoUrl}
                                 onChange={(e) => setVideoUrl(e.target.value)}
                                 disabled={isLoading}
                                 className="w-80"
                             />
                             <Button onClick={handleSubmit} disabled={isLoading || !videoUrl}>
-                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Track Video"}
+                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Track Post"}
                             </Button>
                         </div>
                     </div>
@@ -1031,16 +1031,26 @@ export default function TikTokTracker() {
                                                         </td>
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-2">
-                                                                <div className="w-5 h-5 bg-black rounded flex items-center justify-center">
-                                                                    <Play className="w-3 h-3 text-white" />
-                                                                </div>
-                                                                <span className="text-sm font-medium">TikTok</span>
+                                                                {video.platform === 'instagram' ? (
+                                                                    <div className="w-5 h-5 bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 rounded flex items-center justify-center">
+                                                                        <div className="w-3 h-3 bg-white rounded-full border border-gray-200"></div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="w-5 h-5 bg-black rounded flex items-center justify-center">
+                                                                        <Play className="w-3 h-3 text-white" />
+                                                                    </div>
+                                                                )}
+                                                                <span className="text-sm font-medium">
+                                                                    {video.platform === 'instagram' ? 'Instagram' : 'TikTok'}
+                                                                </span>
                                                             </div>
                                                         </td>
                                                         <td className="p-4 font-medium">{formatNumber(video.views)}</td>
                                                         <td className="p-4 font-medium">{formatNumber(video.likes)}</td>
                                                         <td className="p-4 font-medium">{formatNumber(video.comments)}</td>
-                                                        <td className="p-4 font-medium">{formatNumber(video.shares)}</td>
+                                                        <td className="p-4 font-medium">
+                                                            {video.platform === 'instagram' ? 'N/A' : formatNumber(video.shares)}
+                                                        </td>
                                                         <td className="p-4">{formatGrowth(video.growth.views)}</td>
                                                         <td className="p-4">
                                                             <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded-full">
@@ -1121,12 +1131,16 @@ export default function TikTokTracker() {
                                 </Card>
                                 <Card>
                                     <CardContent className="p-4 text-center">
-                                        <div className="text-3xl font-bold text-gray-900">{formatNumber(selectedVideo.shares)}</div>
+                                        <div className="text-3xl font-bold text-gray-900">
+                                            {selectedVideo.platform === 'instagram' ? 'N/A' : formatNumber(selectedVideo.shares)}
+                                        </div>
                                         <div className="text-sm text-gray-500 flex items-center justify-center gap-1 mt-1">
                                             <Share className="w-3 h-3" />
                                             Shares
                                         </div>
-                                        <div className="text-xs mt-1">{formatGrowth(selectedVideo.growth.shares)}</div>
+                                        <div className="text-xs mt-1">
+                                            {selectedVideo.platform === 'instagram' ? 'Not tracked' : formatGrowth(selectedVideo.growth.shares)}
+                                        </div>
                                     </CardContent>
                                 </Card>
                             </div>

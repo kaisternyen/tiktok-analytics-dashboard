@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { scrapeTikTokVideo } from '@/lib/tikhub';
+import { scrapeTikTokVideo, scrapeMediaPost } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
@@ -26,12 +26,27 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
-        console.log('🚀 Starting TikHub scraping process for URL:', url);
+        console.log('🚀 Starting media scraping process for URL:', url);
 
-        // Scrape the video using TikHub API
-        const result = await scrapeTikTokVideo(url);
+        // Detect platform and scrape accordingly
+        const cleanUrl = url.trim();
+        let result;
+        
+        if (cleanUrl.includes('instagram.com')) {
+            console.log('📸 Detected Instagram URL, using Instagram scraper');
+            result = await scrapeMediaPost(url);
+        } else if (cleanUrl.includes('tiktok.com')) {
+            console.log('🎵 Detected TikTok URL, using TikTok scraper');
+            result = await scrapeTikTokVideo(url);
+        } else {
+            console.error('❌ Unsupported platform URL:', url);
+            return NextResponse.json({
+                success: false,
+                error: 'URL must be from TikTok or Instagram'
+            }, { status: 400 });
+        }
 
-        console.log('📦 TikHub scraping result:', {
+        console.log('📦 Media scraping result:', {
             success: result.success,
             hasData: result.success && !!result.data,
             hasError: !!result.error,
@@ -40,13 +55,13 @@ export async function POST(request: NextRequest) {
             dataPreview: result.success && result.data ? {
                 id: result.data.id,
                 username: result.data.username,
-                views: result.data.views,
+                platform: cleanUrl.includes('instagram.com') ? 'Instagram' : 'TikTok',
                 url: result.data.url
             } : null
         });
 
         if (!result.success) {
-            console.error('❌ TikHub scraping failed:', result.error);
+            console.error('❌ Media scraping failed:', result.error);
             return NextResponse.json({
                 success: false,
                 error: result.error,
@@ -55,42 +70,48 @@ export async function POST(request: NextRequest) {
         }
 
         if (!result.data) {
-            console.error('❌ No data returned from TikHub');
+            console.error('❌ No data returned from media scraper');
             return NextResponse.json({
                 success: false,
-                error: 'No video data returned',
+                error: 'No media data returned',
                 debugInfo: result.debugInfo
             }, { status: 400 });
         }
 
-        console.log('✅ TikHub scraping successful, proceeding to database operations...');
+        console.log('✅ Media scraping successful, proceeding to database operations...');
 
         // Check if video already exists in database
-        console.log('🔍 Checking if video already exists in database...');
+        console.log('🔍 Checking if media already exists in database...');
         const existingVideo = await prisma.video.findUnique({
             where: { url: result.data.url }
         });
 
+        // Handle different data structures for TikTok vs Instagram
+        const isInstagram = cleanUrl.includes('instagram.com');
+        const mediaData = result.data as any; // We'll handle both types
+        const platform = isInstagram ? 'instagram' : 'tiktok';
+
         if (existingVideo) {
-            console.log('📋 Video already exists, updating with latest data...');
+            console.log('📋 Media already exists, updating with latest data...');
 
             // Update existing video with latest data
             const updatedVideo = await prisma.video.update({
                 where: { url: result.data.url },
                 data: {
-                    currentViews: result.data.views,
-                    currentLikes: result.data.likes,
-                    currentComments: result.data.comments,
-                    currentShares: result.data.shares,
+                    platform: platform,
+                    currentViews: isInstagram ? (mediaData.plays || mediaData.views || 0) : mediaData.views,
+                    currentLikes: mediaData.likes,
+                    currentComments: mediaData.comments,
+                    currentShares: isInstagram ? 0 : (mediaData.shares || 0), // Instagram doesn't have shares
                     lastScrapedAt: new Date(),
                     isActive: true
                 }
             });
 
-            console.log('✅ Video updated successfully:', {
+            console.log('✅ Media updated successfully:', {
                 id: result.data.id,
                 username: updatedVideo.username,
-                views: updatedVideo.currentViews,
+                platform: platform,
                 url: updatedVideo.url
             });
 
@@ -104,34 +125,36 @@ export async function POST(request: NextRequest) {
                     views: updatedVideo.currentViews,
                     likes: updatedVideo.currentLikes,
                     comments: updatedVideo.currentComments,
-                    shares: updatedVideo.currentShares
+                    shares: updatedVideo.currentShares,
+                    platform: platform
                 }
             });
         }
 
-        console.log('📝 Creating new video record in database...');
+        console.log('📝 Creating new media record in database...');
 
         // Create new video record
         const newVideo = await prisma.video.create({
             data: {
                 url: result.data.url,
-                username: result.data.username,
-                description: result.data.description,
-                thumbnailUrl: result.data.thumbnailUrl,
-                currentViews: result.data.views,
-                currentLikes: result.data.likes,
-                currentComments: result.data.comments,
-                currentShares: result.data.shares,
-                hashtags: result.data.hashtags ? JSON.stringify(result.data.hashtags) : null,
-                music: result.data.music ? JSON.stringify(result.data.music) : null,
+                username: mediaData.username,
+                description: mediaData.description,
+                thumbnailUrl: mediaData.thumbnailUrl || mediaData.displayUrl,
+                platform: platform,
+                currentViews: isInstagram ? (mediaData.plays || mediaData.views || 0) : mediaData.views,
+                currentLikes: mediaData.likes,
+                currentComments: mediaData.comments,
+                currentShares: isInstagram ? 0 : (mediaData.shares || 0), // Instagram doesn't have shares
+                hashtags: mediaData.hashtags ? JSON.stringify(mediaData.hashtags) : null,
+                music: mediaData.music ? JSON.stringify(mediaData.music) : null,
                 isActive: true
             }
         });
 
-        console.log('✅ New video created successfully:', {
+        console.log('✅ New media created successfully:', {
             id: result.data.id,
             username: newVideo.username,
-            views: newVideo.currentViews,
+            platform: platform,
             dbId: newVideo.id
         });
 
@@ -145,7 +168,8 @@ export async function POST(request: NextRequest) {
                 views: newVideo.currentViews,
                 likes: newVideo.currentLikes,
                 comments: newVideo.currentComments,
-                shares: newVideo.currentShares
+                shares: newVideo.currentShares,
+                platform: platform
             }
         });
 

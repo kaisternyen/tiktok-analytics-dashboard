@@ -16,6 +16,7 @@ model Video {
   username    String
   description String
   thumbnailUrl String?
+  platform    String   @default("tiktok") // "tiktok" or "instagram"
   
   // Current metrics (latest values)
   currentViews    Int      @default(0)
