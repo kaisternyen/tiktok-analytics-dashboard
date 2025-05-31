@@ -383,26 +383,52 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
                 author: videoData.music.author || videoData.music.owner_nickname || 'N/A'
             } : undefined,
             thumbnailUrl: (() => {
-                // Try multiple thumbnail sources in order of preference
-                const sources = [
-                    videoData.video?.cover?.url_list?.[0],
-                    videoData.video?.cover?.url_list?.[1],
-                    videoData.video?.origin_cover?.url_list?.[0],
-                    videoData.video?.origin_cover?.url_list?.[1],
-                    videoData.video?.dynamic_cover?.url_list?.[0],
-                    videoData.video?.animated_cover?.url_list?.[0]
+                // Collect all available thumbnail URLs from different sources
+                const allSources = [
+                    ...(videoData.video?.cover?.url_list || []),
+                    ...(videoData.video?.origin_cover?.url_list || []),
+                    ...(videoData.video?.dynamic_cover?.url_list || []),
+                    ...(videoData.video?.animated_cover?.url_list || [])
                 ];
                 
-                // Return the first valid URL
-                for (const url of sources) {
-                    if (url && typeof url === 'string' && url.trim() !== '') {
-                        console.log('✅ Found thumbnail URL:', url);
-                        return url;
+                // Filter out invalid URLs
+                const validUrls = allSources.filter(url => 
+                    url && typeof url === 'string' && url.trim() !== ''
+                );
+                
+                if (validUrls.length === 0) {
+                    console.log('⚠️ No thumbnail URLs found in video data');
+                    return undefined;
+                }
+                
+                console.log(`🖼️ Found ${validUrls.length} potential thumbnail URLs`);
+                
+                // Prefer browser-compatible formats (JPEG, PNG, WebP) over HEIC
+                const compatibleFormats = ['.jpeg', '.jpg', '.png', '.webp'];
+                const heicFormat = ['.heic'];
+                
+                // First, try to find URLs with browser-compatible formats
+                for (const format of compatibleFormats) {
+                    const compatibleUrl = validUrls.find(url => url.toLowerCase().includes(format));
+                    if (compatibleUrl) {
+                        console.log(`✅ Selected browser-compatible thumbnail (${format}):`, compatibleUrl);
+                        return compatibleUrl;
                     }
                 }
                 
-                console.log('⚠️ No thumbnail URL found in video data');
-                return undefined;
+                // If no compatible format found, use the first HEIC URL (will be handled by image proxy)
+                const heicUrl = validUrls.find(url => 
+                    heicFormat.some(format => url.toLowerCase().includes(format))
+                );
+                if (heicUrl) {
+                    console.log('⚠️ Using HEIC format thumbnail (will convert via proxy):', heicUrl);
+                    return heicUrl;
+                }
+                
+                // Last resort: use the first available URL
+                const fallbackUrl = validUrls[0];
+                console.log('📷 Using fallback thumbnail URL:', fallbackUrl);
+                return fallbackUrl;
             })(),
             url: cleanUrl // Always use the original cleaned URL
         };
@@ -571,26 +597,52 @@ async function scrapeTikTokVideosBatch(urls: string[]): Promise<ScrapedVideoResu
                         author: rawData.data.music.author || 'Unknown'
                     } : undefined,
                     thumbnailUrl: (() => {
-                        // Try multiple thumbnail sources in order of preference
-                        const sources = [
-                            rawData.data?.video?.cover?.url_list?.[0],
-                            rawData.data?.video?.cover?.url_list?.[1],
-                            rawData.data?.video?.origin_cover?.url_list?.[0],
-                            rawData.data?.video?.origin_cover?.url_list?.[1],
-                            rawData.data?.video?.dynamic_cover?.url_list?.[0],
-                            rawData.data?.video?.animated_cover?.url_list?.[0]
+                        // Collect all available thumbnail URLs from different sources
+                        const allSources = [
+                            ...(rawData.data?.video?.cover?.url_list || []),
+                            ...(rawData.data?.video?.origin_cover?.url_list || []),
+                            ...(rawData.data?.video?.dynamic_cover?.url_list || []),
+                            ...(rawData.data?.video?.animated_cover?.url_list || [])
                         ];
                         
-                        // Return the first valid URL
-                        for (const url of sources) {
-                            if (url && typeof url === 'string' && url.trim() !== '') {
-                                console.log('✅ Found thumbnail URL:', url);
-                                return url;
+                        // Filter out invalid URLs
+                        const validUrls = allSources.filter(url => 
+                            url && typeof url === 'string' && url.trim() !== ''
+                        );
+                        
+                        if (validUrls.length === 0) {
+                            console.log('⚠️ No thumbnail URLs found in video data');
+                            return undefined;
+                        }
+                        
+                        console.log(`🖼️ Found ${validUrls.length} potential thumbnail URLs`);
+                        
+                        // Prefer browser-compatible formats (JPEG, PNG, WebP) over HEIC
+                        const compatibleFormats = ['.jpeg', '.jpg', '.png', '.webp'];
+                        const heicFormat = ['.heic'];
+                        
+                        // First, try to find URLs with browser-compatible formats
+                        for (const format of compatibleFormats) {
+                            const compatibleUrl = validUrls.find(url => url.toLowerCase().includes(format));
+                            if (compatibleUrl) {
+                                console.log(`✅ Selected browser-compatible thumbnail (${format}):`, compatibleUrl);
+                                return compatibleUrl;
                             }
                         }
                         
-                        console.log('⚠️ No thumbnail URL found in video data');
-                        return undefined;
+                        // If no compatible format found, use the first HEIC URL (will be handled by image proxy)
+                        const heicUrl = validUrls.find(url => 
+                            heicFormat.some(format => url.toLowerCase().includes(format))
+                        );
+                        if (heicUrl) {
+                            console.log('⚠️ Using HEIC format thumbnail (will convert via proxy):', heicUrl);
+                            return heicUrl;
+                        }
+                        
+                        // Last resort: use the first available URL
+                        const fallbackUrl = validUrls[0];
+                        console.log('📷 Using fallback thumbnail URL:', fallbackUrl);
+                        return fallbackUrl;
                     })()
                 };
 
