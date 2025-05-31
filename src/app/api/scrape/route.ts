@@ -145,6 +145,17 @@ export async function POST(request: NextRequest) {
                 }
             });
 
+            // Add new metrics history entry (for charts and growth tracking)
+            await prisma.metricsHistory.create({
+                data: {
+                    videoId: existingVideo.id,
+                    views: views,
+                    likes: likes,
+                    comments: comments,
+                    shares: shares,
+                }
+            });
+
             console.log('✅ Media updated successfully:', {
                 id: result.data.id,
                 username: updatedVideo.username,
