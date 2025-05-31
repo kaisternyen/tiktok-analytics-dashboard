@@ -926,20 +926,26 @@ function extractHashtagsFromCaption(caption: string): string[] {
     return hashtags;
 }
 
-// Combined function to detect URL type and scrape accordingly
-export async function scrapeMediaPost(url: string): Promise<ScrapedVideoResult | ScrapedInstagramResult> {
-    const cleanUrl = url.trim();
+// Generic function to scrape any media post (TikTok, Instagram, or YouTube)
+export async function scrapeMediaPost(url: string): Promise<ScrapedVideoResult | ScrapedInstagramResult | ScrapedYouTubeResult> {
+    console.log('🔗 Detected platform, using appropriate scraper for:', url);
+    
+    const cleanUrl = url.trim().toLowerCase();
     
     if (cleanUrl.includes('instagram.com')) {
-        console.log('🔗 Detected Instagram URL, using Instagram scraper');
-        return await scrapeInstagramPost(cleanUrl);
+        console.log('📸 Detected Instagram URL, using Instagram scraper');
+        return await scrapeInstagramPost(url);
     } else if (cleanUrl.includes('tiktok.com')) {
-        console.log('🔗 Detected TikTok URL, using TikTok scraper');
-        return await scrapeTikTokVideo(cleanUrl);
+        console.log('🎵 Detected TikTok URL, using TikTok scraper');
+        return await scrapeTikTokVideo(url);
+    } else if (cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be')) {
+        console.log('🎬 Detected YouTube URL, using YouTube scraper');
+        return await scrapeYouTubeVideo(url);
     } else {
+        console.error('❌ Unsupported platform URL:', url);
         return {
             success: false,
-            error: 'URL must be either a TikTok or Instagram URL'
+            error: 'Unsupported platform. Please provide a TikTok, Instagram, or YouTube URL.'
         };
     }
 }
@@ -1061,4 +1067,234 @@ export async function scrapeInstagramPosts(urls: string[]): Promise<ScrapedInsta
 
     console.log('✅ Instagram batch processing completed');
     return results;
+}
+
+// YouTube interfaces
+export interface YouTubeVideoData {
+    id: string;
+    url: string;
+    title: string;
+    description: string;
+    channelTitle: string;
+    channelId: string;
+    views: number;
+    likes: number;
+    comments: number;
+    shares: number; // Note: YouTube API doesn't provide share count directly
+    duration: string;
+    publishedAt: string;
+    thumbnails: {
+        default?: { url: string; width: number; height: number };
+        medium?: { url: string; width: number; height: number };
+        high?: { url: string; width: number; height: number };
+        standard?: { url: string; width: number; height: number };
+        maxres?: { url: string; width: number; height: number };
+    };
+    tags?: string[];
+    categoryId: string;
+    defaultLanguage?: string;
+    statistics: {
+        viewCount: string;
+        likeCount?: string;
+        commentCount?: string;
+    };
+}
+
+export interface ScrapedYouTubeResult {
+    success: boolean;
+    data?: YouTubeVideoData;
+    error?: string;
+    debugInfo?: any;
+}
+
+// Extract YouTube video ID from URL
+export function extractYouTubeVideoId(url: string): string | null {
+    console.log('🔍 Extracting YouTube video ID from URL:', url);
+
+    try {
+        const cleanUrl = url.trim();
+
+        // YouTube URL patterns
+        const patterns = [
+            // Standard video URLs
+            /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+            // YouTube Shorts
+            /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+            // Embedded URLs
+            /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+            // Mobile URLs
+            /m\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+        ];
+
+        for (let i = 0; i < patterns.length; i++) {
+            const pattern = patterns[i];
+            const match = cleanUrl.match(pattern);
+            if (match && match[1]) {
+                const videoId = match[1];
+                console.log(`✅ Video ID extracted using pattern ${i + 1}:`, videoId);
+                return videoId;
+            }
+        }
+
+        console.log('❌ Could not extract video ID from URL');
+        return null;
+    } catch (error) {
+        console.error('💥 Error in extractYouTubeVideoId:', error);
+        return null;
+    }
+}
+
+// Scrape YouTube video using YouTube Data API v3
+export async function scrapeYouTubeVideo(url: string): Promise<ScrapedYouTubeResult> {
+    console.log('🚀 Starting YouTube video scrape for URL:', url);
+
+    try {
+        // Validate URL
+        if (!url || typeof url !== 'string') {
+            console.error('❌ INVALID URL:', { url, type: typeof url });
+            throw new Error('Invalid URL provided');
+        }
+
+        const cleanUrl = url.trim();
+        console.log('🧹 URL cleaning:', { original: url, cleaned: cleanUrl });
+
+        if (!cleanUrl.includes('youtube.com') && !cleanUrl.includes('youtu.be')) {
+            console.error('❌ NOT A YOUTUBE URL:', cleanUrl);
+            throw new Error('URL must be a valid YouTube URL');
+        }
+
+        // Extract video ID
+        const videoId = extractYouTubeVideoId(cleanUrl);
+        if (!videoId) {
+            throw new Error('Could not extract video ID from YouTube URL');
+        }
+
+        console.log('🎯 Extracted video ID:', videoId);
+
+        // Check if YouTube API key is configured
+        const apiKey = process.env.YOUTUBE_API_KEY;
+        if (!apiKey) {
+            console.error('❌ NO YOUTUBE API KEY FOUND');
+            throw new Error('YOUTUBE_API_KEY environment variable is not configured');
+        }
+
+        console.log('🔑 YouTube API Key configured:', `${apiKey.substring(0, 10)}...`);
+
+        // YouTube Data API v3 endpoint
+        const endpoint = 'https://www.googleapis.com/youtube/v3/videos';
+        const params = new URLSearchParams({
+            part: 'snippet,statistics,contentDetails',
+            id: videoId,
+            key: apiKey
+        });
+        const fullUrl = `${endpoint}?${params.toString()}`;
+
+        console.log('📡 Making request to YouTube Data API v3...');
+        console.log('🎯 Video ID:', videoId);
+
+        const response = await fetch(fullUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'TikTok-Analytics-Dashboard/1.0'
+            }
+        });
+
+        console.log('📥 Response status:', response.status);
+
+        if (!response.ok) {
+            console.error('❌ YouTube API request failed:', {
+                status: response.status,
+                statusText: response.statusText
+            });
+            throw new Error(`YouTube API request failed: ${response.status} ${response.statusText}`);
+        }
+
+        const responseText = await response.text();
+        console.log('📄 Response length:', responseText.length);
+
+        let apiResponse;
+        try {
+            apiResponse = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('❌ Failed to parse YouTube API response as JSON:', parseError);
+            throw new Error('Invalid JSON response from YouTube API');
+        }
+
+        console.log('✅ Parsed YouTube API response successfully');
+
+        // Check if we got video data
+        if (!apiResponse.items || apiResponse.items.length === 0) {
+            console.error('❌ No video data found in YouTube API response');
+            throw new Error('Video not found or is private/unavailable');
+        }
+
+        const videoData = apiResponse.items[0];
+        console.log('🎯 Found YouTube video data');
+        console.log('📊 Video info:', {
+            id: videoData.id,
+            title: videoData.snippet?.title?.substring(0, 50) + '...',
+            channel: videoData.snippet?.channelTitle,
+            views: videoData.statistics?.viewCount
+        });
+
+        // Parse duration (PT format to seconds)
+        const duration = videoData.contentDetails?.duration || 'PT0S';
+        
+        // Map YouTube API response to our interface
+        const youtubeData: YouTubeVideoData = {
+            id: videoData.id,
+            url: cleanUrl,
+            title: videoData.snippet?.title || 'Unknown Title',
+            description: videoData.snippet?.description || '',
+            channelTitle: videoData.snippet?.channelTitle || 'Unknown Channel',
+            channelId: videoData.snippet?.channelId || '',
+            views: parseInt(videoData.statistics?.viewCount || '0'),
+            likes: parseInt(videoData.statistics?.likeCount || '0'),
+            comments: parseInt(videoData.statistics?.commentCount || '0'),
+            shares: 0, // YouTube API doesn't provide share count
+            duration: duration,
+            publishedAt: videoData.snippet?.publishedAt || new Date().toISOString(),
+            thumbnails: videoData.snippet?.thumbnails || {},
+            tags: videoData.snippet?.tags || [],
+            categoryId: videoData.snippet?.categoryId || '',
+            defaultLanguage: videoData.snippet?.defaultLanguage,
+            statistics: {
+                viewCount: videoData.statistics?.viewCount || '0',
+                likeCount: videoData.statistics?.likeCount || '0',
+                commentCount: videoData.statistics?.commentCount || '0'
+            }
+        };
+
+        console.log('✅ Successfully parsed YouTube video data');
+        console.log('📊 Final data summary:', {
+            title: youtubeData.title.substring(0, 50) + '...',
+            channel: youtubeData.channelTitle,
+            views: youtubeData.views.toLocaleString(),
+            likes: youtubeData.likes.toLocaleString(),
+            comments: youtubeData.comments.toLocaleString(),
+            duration: youtubeData.duration
+        });
+
+        return {
+            success: true,
+            data: youtubeData
+        };
+
+    } catch (error) {
+        console.error('💥 YouTube scraping failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error occurred',
+            debugInfo: {
+                url,
+                timestamp: new Date().toISOString(),
+                error: error instanceof Error ? {
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack
+                } : error
+            }
+        };
+    }
 } 

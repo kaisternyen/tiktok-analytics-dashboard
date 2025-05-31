@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { scrapeTikTokVideo, scrapeMediaPost, TikTokVideoData, InstagramPostData } from '@/lib/tikhub';
+import { scrapeTikTokVideo, scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
@@ -29,22 +29,29 @@ export async function POST(request: NextRequest) {
         console.log('🚀 Starting media scraping process for URL:', url);
 
         // Detect platform and scrape accordingly
-        const cleanUrl = url.trim();
+        const cleanUrl = url.trim().toLowerCase();
         let result;
+        let platform: string;
         
         if (cleanUrl.includes('instagram.com')) {
             console.log('📸 Detected Instagram URL, using Instagram scraper');
-            result = await scrapeMediaPost(url);
+            platform = 'instagram';
         } else if (cleanUrl.includes('tiktok.com')) {
             console.log('🎵 Detected TikTok URL, using TikTok scraper');
-            result = await scrapeTikTokVideo(url);
+            platform = 'tiktok';
+        } else if (cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be')) {
+            console.log('🎬 Detected YouTube URL, using YouTube scraper');
+            platform = 'youtube';
         } else {
             console.error('❌ Unsupported platform URL:', url);
             return NextResponse.json({
                 success: false,
-                error: 'URL must be from TikTok or Instagram'
+                error: 'URL must be from TikTok, Instagram, or YouTube'
             }, { status: 400 });
         }
+
+        // Use unified scraper
+        result = await scrapeMediaPost(url);
 
         console.log('📦 Media scraping result:', {
             success: result.success,
@@ -52,11 +59,11 @@ export async function POST(request: NextRequest) {
             hasError: !!result.error,
             hasDebugInfo: !!result.debugInfo,
             errorMessage: result.error,
+            platform: platform,
             dataPreview: result.success && result.data ? {
                 id: result.data.id,
-                username: result.data.username,
-                platform: cleanUrl.includes('instagram.com') ? 'Instagram' : 'TikTok',
-                url: result.data.url
+                platform: platform,
+                url: result.data.url || url
             } : null
         });
 
@@ -83,28 +90,57 @@ export async function POST(request: NextRequest) {
         // Check if video already exists in database
         console.log('🔍 Checking if media already exists in database...');
         const existingVideo = await prisma.video.findUnique({
-            where: { url: result.data.url }
+            where: { url: result.data.url || url }
         });
 
-        // Handle different data structures for TikTok vs Instagram
-        const isInstagram = cleanUrl.includes('instagram.com');
-        const mediaData = result.data as TikTokVideoData | InstagramPostData;
-        const platform = isInstagram ? 'instagram' : 'tiktok';
+        // Handle different data structures for each platform
+        const mediaData = result.data as TikTokVideoData | InstagramPostData | YouTubeVideoData;
+        
+        // Get platform-specific data
+        let views: number, likes: number, comments: number, shares: number;
+        let username: string, description: string, thumbnailUrl: string | undefined;
+
+        if (platform === 'instagram') {
+            const instaData = mediaData as InstagramPostData;
+            views = instaData.plays || instaData.views || 0;
+            likes = instaData.likes;
+            comments = instaData.comments;
+            shares = 0; // Instagram doesn't track shares
+            username = instaData.username;
+            description = instaData.description;
+            thumbnailUrl = instaData.thumbnailUrl || instaData.displayUrl;
+        } else if (platform === 'youtube') {
+            const ytData = mediaData as YouTubeVideoData;
+            views = ytData.views;
+            likes = ytData.likes;
+            comments = ytData.comments;
+            shares = 0; // YouTube API doesn't provide share count
+            username = ytData.channelTitle;
+            description = ytData.description;
+            thumbnailUrl = ytData.thumbnails?.medium?.url || ytData.thumbnails?.high?.url;
+        } else { // tiktok
+            const tikData = mediaData as TikTokVideoData;
+            views = tikData.views;
+            likes = tikData.likes;
+            comments = tikData.comments;
+            shares = tikData.shares || 0;
+            username = tikData.username;
+            description = tikData.description;
+            thumbnailUrl = tikData.thumbnailUrl;
+        }
 
         if (existingVideo) {
             console.log('📋 Media already exists, updating with latest data...');
 
             // Update existing video with latest data
             const updatedVideo = await prisma.video.update({
-                where: { url: result.data.url },
+                where: { url: result.data.url || url },
                 data: {
                     platform: platform,
-                    currentViews: isInstagram ? 
-                        ((mediaData as InstagramPostData).plays || (mediaData as InstagramPostData).views || 0) : 
-                        (mediaData as TikTokVideoData).views,
-                    currentLikes: mediaData.likes,
-                    currentComments: mediaData.comments,
-                    currentShares: isInstagram ? 0 : ((mediaData as TikTokVideoData).shares || 0),
+                    currentViews: views,
+                    currentLikes: likes,
+                    currentComments: comments,
+                    currentShares: shares,
                     lastScrapedAt: new Date(),
                     isActive: true
                 }
@@ -138,19 +174,17 @@ export async function POST(request: NextRequest) {
         // Create new video record
         const newVideo = await prisma.video.create({
             data: {
-                url: result.data.url,
-                username: mediaData.username,
-                description: mediaData.description,
-                thumbnailUrl: mediaData.thumbnailUrl || (mediaData as InstagramPostData).displayUrl,
+                url: result.data.url || url,
+                username: username,
+                description: description,
+                thumbnailUrl: thumbnailUrl,
                 platform: platform,
-                currentViews: isInstagram ? 
-                    ((mediaData as InstagramPostData).plays || (mediaData as InstagramPostData).views || 0) : 
-                    (mediaData as TikTokVideoData).views,
-                currentLikes: mediaData.likes,
-                currentComments: mediaData.comments,
-                currentShares: isInstagram ? 0 : ((mediaData as TikTokVideoData).shares || 0),
-                hashtags: mediaData.hashtags ? JSON.stringify(mediaData.hashtags) : null,
-                music: mediaData.music ? JSON.stringify(mediaData.music) : null,
+                currentViews: views,
+                currentLikes: likes,
+                currentComments: comments,
+                currentShares: shares,
+                hashtags: (mediaData as any).hashtags ? JSON.stringify((mediaData as any).hashtags) : null,
+                music: (mediaData as any).music ? JSON.stringify((mediaData as any).music) : null,
                 isActive: true
             }
         });
@@ -178,20 +212,14 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (error) {
-        console.error('💥 Unexpected error in /api/scrape:', error);
-        console.error('Error details:', {
-            name: error instanceof Error ? error.name : 'Unknown',
-            message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined
-        });
-
-        return NextResponse.json({
-            success: false,
-            error: error instanceof Error ? error.message : 'Internal server error',
-            debugInfo: {
-                errorType: error instanceof Error ? error.name : typeof error,
-                timestamp: new Date().toISOString()
-            }
-        }, { status: 500 });
+        console.error('💥 Scraping endpoint crashed:', error);
+        return NextResponse.json(
+            {
+                success: false,
+                error: 'Internal server error',
+                details: error instanceof Error ? error.message : 'Unknown error'
+            },
+            { status: 500 }
+        );
     }
 } 
