@@ -124,6 +124,12 @@ interface TikHubVideoData {
         origin_cover?: {
             url_list?: string[];
         };
+        dynamic_cover?: {
+            url_list?: string[];
+        };
+        animated_cover?: {
+            url_list?: string[];
+        };
     };
 }
 
@@ -376,9 +382,28 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
                 name: videoData.music.title || videoData.music.owner_nickname || 'N/A',
                 author: videoData.music.author || videoData.music.owner_nickname || 'N/A'
             } : undefined,
-            thumbnailUrl: videoData.video?.cover?.url_list?.[0] ||
-                videoData.video?.origin_cover?.url_list?.[0] ||
-                undefined,
+            thumbnailUrl: (() => {
+                // Try multiple thumbnail sources in order of preference
+                const sources = [
+                    videoData.video?.cover?.url_list?.[0],
+                    videoData.video?.cover?.url_list?.[1],
+                    videoData.video?.origin_cover?.url_list?.[0],
+                    videoData.video?.origin_cover?.url_list?.[1],
+                    videoData.video?.dynamic_cover?.url_list?.[0],
+                    videoData.video?.animated_cover?.url_list?.[0]
+                ];
+                
+                // Return the first valid URL
+                for (const url of sources) {
+                    if (url && typeof url === 'string' && url.trim() !== '') {
+                        console.log('✅ Found thumbnail URL:', url);
+                        return url;
+                    }
+                }
+                
+                console.log('⚠️ No thumbnail URL found in video data');
+                return undefined;
+            })(),
             url: cleanUrl // Always use the original cleaned URL
         };
 
@@ -545,7 +570,28 @@ async function scrapeTikTokVideosBatch(urls: string[]): Promise<ScrapedVideoResu
                         name: rawData.data.music.title || 'Unknown',
                         author: rawData.data.music.author || 'Unknown'
                     } : undefined,
-                    thumbnailUrl: rawData.data?.video?.cover || rawData.data?.video?.origin_cover || undefined
+                    thumbnailUrl: (() => {
+                        // Try multiple thumbnail sources in order of preference
+                        const sources = [
+                            rawData.data?.video?.cover?.url_list?.[0],
+                            rawData.data?.video?.cover?.url_list?.[1],
+                            rawData.data?.video?.origin_cover?.url_list?.[0],
+                            rawData.data?.video?.origin_cover?.url_list?.[1],
+                            rawData.data?.video?.dynamic_cover?.url_list?.[0],
+                            rawData.data?.video?.animated_cover?.url_list?.[0]
+                        ];
+                        
+                        // Return the first valid URL
+                        for (const url of sources) {
+                            if (url && typeof url === 'string' && url.trim() !== '') {
+                                console.log('✅ Found thumbnail URL:', url);
+                                return url;
+                            }
+                        }
+                        
+                        console.log('⚠️ No thumbnail URL found in video data');
+                        return undefined;
+                    })()
                 };
 
                 results.push({

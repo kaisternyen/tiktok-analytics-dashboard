@@ -189,8 +189,43 @@ export default function TikTokTracker() {
             const result = await response.json();
 
             if (result.success) {
-                setTracked(result.videos);
-                console.log(`✅ Loaded ${result.videos.length} videos from database`);
+                const transformedVideos = result.videos.map((video: {
+                    id: string;
+                    url: string;
+                    username: string;
+                    description: string;
+                    posted: string;
+                    lastUpdate: string;
+                    status: string;
+                    views: number;
+                    likes: number;
+                    comments: number;
+                    shares: number;
+                    hashtags: string[];
+                    thumbnailUrl?: string;
+                    music?: { name: string; author: string };
+                    platform: 'tiktok' | 'instagram';
+                    history: VideoHistory[];
+                    growth: { views: number; likes: number; comments: number; shares: number };
+                }) => ({
+                    ...video,
+                    growth: {
+                        views: video.growth?.views || 0,
+                        likes: video.growth?.likes || 0,
+                        comments: video.growth?.comments || 0,
+                        shares: video.growth?.shares || 0,
+                    }
+                }));
+
+                console.log('📊 Transformed videos with thumbnail info:', transformedVideos.map((v: TrackedVideo) => ({
+                    username: v.username,
+                    platform: v.platform,
+                    hasThumbnail: !!v.thumbnailUrl,
+                    thumbnailUrl: v.thumbnailUrl ? v.thumbnailUrl.substring(0, 50) + '...' : null
+                })));
+
+                setTracked(transformedVideos);
+                console.log(`✅ Loaded ${transformedVideos.length} videos from database`);
             } else {
                 console.error('❌ Failed to fetch videos:', result.error);
             }
@@ -1009,13 +1044,32 @@ export default function TikTokTracker() {
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-3">
                                                                 {video.thumbnailUrl ? (
-                                                                    <Image
-                                                                        src={video.thumbnailUrl}
-                                                                        alt={`${video.username} thumbnail`}
-                                                                        className="w-10 h-14 object-cover rounded bg-gray-200"
-                                                                        width={40}
-                                                                        height={56}
-                                                                    />
+                                                                    <div className="relative w-10 h-14">
+                                                                        <Image
+                                                                            src={`/api/image-proxy?url=${encodeURIComponent(video.thumbnailUrl)}`}
+                                                                            alt={`${video.username} thumbnail`}
+                                                                            className="w-10 h-14 object-cover rounded bg-gray-200"
+                                                                            width={40}
+                                                                            height={56}
+                                                                            onError={(e) => {
+                                                                                console.log('❌ Thumbnail failed to load for:', video.username, video.thumbnailUrl);
+                                                                                // Hide the image and show fallback
+                                                                                const img = e.target as HTMLImageElement;
+                                                                                img.style.display = 'none';
+                                                                                const fallback = img.parentElement?.querySelector('.thumbnail-fallback') as HTMLElement;
+                                                                                if (fallback) {
+                                                                                    fallback.style.display = 'flex';
+                                                                                }
+                                                                            }}
+                                                                            onLoad={() => {
+                                                                                console.log('✅ Thumbnail loaded successfully for:', video.username);
+                                                                            }}
+                                                                        />
+                                                                        {/* Fallback div for failed images */}
+                                                                        <div className="thumbnail-fallback absolute inset-0 bg-gray-200 rounded flex items-center justify-center" style={{ display: 'none' }}>
+                                                                            <Play className="w-4 h-4 text-gray-400" />
+                                                                        </div>
+                                                                    </div>
                                                                 ) : (
                                                                     <div className="w-10 h-14 bg-gray-200 rounded flex items-center justify-center">
                                                                         <Play className="w-4 h-4 text-gray-400" />
