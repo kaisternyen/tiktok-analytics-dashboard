@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { scrapeTikTokVideo, scrapeMediaPost } from '@/lib/tikhub';
+import { scrapeTikTokVideo, scrapeMediaPost, TikTokVideoData, InstagramPostData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
 
         // Handle different data structures for TikTok vs Instagram
         const isInstagram = cleanUrl.includes('instagram.com');
-        const mediaData = result.data as any; // We'll handle both types
+        const mediaData = result.data as TikTokVideoData | InstagramPostData;
         const platform = isInstagram ? 'instagram' : 'tiktok';
 
         if (existingVideo) {
@@ -99,10 +99,12 @@ export async function POST(request: NextRequest) {
                 where: { url: result.data.url },
                 data: {
                     platform: platform,
-                    currentViews: isInstagram ? (mediaData.plays || mediaData.views || 0) : mediaData.views,
+                    currentViews: isInstagram ? 
+                        ((mediaData as InstagramPostData).plays || (mediaData as InstagramPostData).views || 0) : 
+                        (mediaData as TikTokVideoData).views,
                     currentLikes: mediaData.likes,
                     currentComments: mediaData.comments,
-                    currentShares: isInstagram ? 0 : (mediaData.shares || 0), // Instagram doesn't have shares
+                    currentShares: isInstagram ? 0 : ((mediaData as TikTokVideoData).shares || 0),
                     lastScrapedAt: new Date(),
                     isActive: true
                 }
@@ -139,12 +141,14 @@ export async function POST(request: NextRequest) {
                 url: result.data.url,
                 username: mediaData.username,
                 description: mediaData.description,
-                thumbnailUrl: mediaData.thumbnailUrl || mediaData.displayUrl,
+                thumbnailUrl: mediaData.thumbnailUrl || (mediaData as InstagramPostData).displayUrl,
                 platform: platform,
-                currentViews: isInstagram ? (mediaData.plays || mediaData.views || 0) : mediaData.views,
+                currentViews: isInstagram ? 
+                    ((mediaData as InstagramPostData).plays || (mediaData as InstagramPostData).views || 0) : 
+                    (mediaData as TikTokVideoData).views,
                 currentLikes: mediaData.likes,
                 currentComments: mediaData.comments,
-                currentShares: isInstagram ? 0 : (mediaData.shares || 0), // Instagram doesn't have shares
+                currentShares: isInstagram ? 0 : ((mediaData as TikTokVideoData).shares || 0),
                 hashtags: mediaData.hashtags ? JSON.stringify(mediaData.hashtags) : null,
                 music: mediaData.music ? JSON.stringify(mediaData.music) : null,
                 isActive: true
