@@ -16,6 +16,62 @@ export interface TikTokVideoData {
     };
 }
 
+// Instagram interfaces - Updated to match TikHub API response
+export interface InstagramPostData {
+    id: string;
+    url: string;
+    username: string;
+    fullName: string;
+    description: string;
+    views?: number;
+    plays?: number;
+    likes: number;
+    comments: number;
+    timestamp: string;
+    hashtags: string[];
+    thumbnailUrl?: string;
+    displayUrl?: string;
+    videoUrl?: string;
+    type: 'photo' | 'video' | 'carousel' | 'clips';
+    isVideo: boolean;
+    hasAudio?: boolean;
+    duration?: number;
+    dimensions?: {
+        width: number;
+        height: number;
+    };
+    owner: {
+        username: string;
+        fullName: string;
+        followers: number;
+        following?: number;
+        totalPosts: number;
+        isVerified: boolean;
+        isPrivate: boolean;
+        profilePicUrl?: string;
+    };
+    music?: {
+        artistName: string;
+        songName: string;
+        usesOriginalAudio: boolean;
+        audioId?: string;
+    };
+    recentComments?: Array<{
+        username: string;
+        text: string;
+        likes: number;
+        createdAt: number;
+    }>;
+}
+
+export interface ScrapedInstagramResult {
+    success: boolean;
+    data?: InstagramPostData;
+    error?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    debugInfo?: any;
+}
+
 export interface ScrapedVideoResult {
     success: boolean;
     data?: TikTokVideoData;
@@ -522,4 +578,382 @@ async function scrapeTikTokVideosBatch(urls: string[]): Promise<ScrapedVideoResu
 // Check if TikHub is properly configured
 export function isTikHubConfigured(): boolean {
     return !!process.env.TIKHUB_API_KEY;
+}
+
+// Instagram-specific functions
+
+// Extract Instagram post ID from URL
+export function extractInstagramPostId(url: string): string | null {
+    console.log('🔍 Extracting Instagram post ID from URL:', url);
+
+    try {
+        const cleanUrl = url.trim();
+
+        // Instagram URL patterns
+        const patterns = [
+            // Standard post URLs
+            /instagram\.com\/p\/([A-Za-z0-9_-]+)/,
+            // Reel URLs  
+            /instagram\.com\/reel\/([A-Za-z0-9_-]+)/,
+            // TV URLs
+            /instagram\.com\/tv\/([A-Za-z0-9_-]+)/,
+            // Share URLs
+            /instagram\.com\/.*\/p\/([A-Za-z0-9_-]+)/,
+        ];
+
+        for (let i = 0; i < patterns.length; i++) {
+            const pattern = patterns[i];
+            const match = cleanUrl.match(pattern);
+            if (match && match[1]) {
+                const postId = match[1];
+                console.log(`✅ Post ID extracted using pattern ${i + 1}:`, postId);
+                return postId;
+            }
+        }
+
+        console.log('❌ Could not extract post ID from URL');
+        return null;
+    } catch (error) {
+        console.error('💥 Error in extractInstagramPostId:', error);
+        return null;
+    }
+}
+
+// Scrape Instagram post using TikHub API
+export async function scrapeInstagramPost(url: string): Promise<ScrapedInstagramResult> {
+    console.log('🚀 Starting Instagram post scrape for URL:', url);
+    console.log('🌍 Environment check at start:', {
+        nodeEnv: process.env.NODE_ENV,
+        hasApiKey: !!process.env.TIKHUB_API_KEY,
+        apiKeyLength: process.env.TIKHUB_API_KEY?.length,
+        apiKeyStart: process.env.TIKHUB_API_KEY?.substring(0, 10) + '...'
+    });
+
+    try {
+        // Validate URL
+        if (!url || typeof url !== 'string') {
+            console.error('❌ INVALID URL:', { url, type: typeof url });
+            throw new Error('Invalid URL provided');
+        }
+
+        const cleanUrl = url.trim();
+        console.log('🧹 URL cleaning:', { original: url, cleaned: cleanUrl });
+
+        if (!cleanUrl.includes('instagram.com')) {
+            console.error('❌ NOT AN INSTAGRAM URL:', cleanUrl);
+            throw new Error('URL must be a valid Instagram URL');
+        }
+
+        // Check if TikHub API key is configured
+        const apiKey = process.env.TIKHUB_API_KEY;
+        if (!apiKey) {
+            console.error('❌ NO API KEY FOUND');
+            throw new Error('TIKHUB_API_KEY environment variable is not configured');
+        }
+
+        console.log('🔑 API Key configured:', `${apiKey.substring(0, 10)}...`);
+
+        // Use the working TikHub Instagram endpoint
+        const endpoint = 'https://api.tikhub.io/api/v1/instagram/web_app/fetch_post_info_by_url';
+        const fullUrl = `${endpoint}?url=${encodeURIComponent(cleanUrl)}`;
+
+        console.log('📡 Making request to TikHub Instagram API...');
+        console.log('🎯 Endpoint:', endpoint);
+
+        const response = await fetch(fullUrl, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'User-Agent': 'TikHub-Analytics-Dashboard/1.0'
+            }
+        });
+
+        console.log('📥 Response status:', response.status);
+
+        if (!response.ok) {
+            console.error('❌ API request failed:', {
+                status: response.status,
+                statusText: response.statusText
+            });
+            throw new Error(`TikHub API request failed: ${response.status} ${response.statusText}`);
+        }
+
+        const responseText = await response.text();
+        console.log('📄 Response length:', responseText.length);
+
+        let apiResponse;
+        try {
+            apiResponse = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('❌ Failed to parse API response as JSON:', parseError);
+            throw new Error('Invalid JSON response from TikHub API');
+        }
+
+        console.log('✅ Parsed API response successfully');
+        console.log('📊 Response code:', apiResponse.code);
+
+        // Check if API response indicates success
+        if (apiResponse.code !== 200) {
+            console.error('❌ TikHub API returned error:', {
+                code: apiResponse.code,
+                message: apiResponse.message,
+                router: apiResponse.router
+            });
+            throw new Error(`TikHub API error: ${apiResponse.message || 'Unknown error'}`);
+        }
+
+        const postData = apiResponse.data;
+        if (!postData) {
+            console.error('❌ No data in API response');
+            throw new Error('No Instagram post data found');
+        }
+
+        console.log('🎯 Found Instagram post data');
+        console.log('📊 Post info:', {
+            id: postData.id,
+            shortcode: postData.shortcode,
+            owner: postData.owner?.username,
+            type: postData.product_type,
+            isVideo: postData.is_video
+        });
+
+        // Extract caption and hashtags
+        const caption = postData.edge_media_to_caption?.edges?.[0]?.node?.text || '';
+        const hashtags = extractHashtagsFromCaption(caption);
+
+        // Map TikHub Instagram response to our interface
+        const instagramData: InstagramPostData = {
+            id: postData.id || postData.shortcode || 'unknown',
+            url: cleanUrl,
+            username: postData.owner?.username || 'unknown',
+            fullName: postData.owner?.full_name || '',
+            description: caption,
+            views: postData.video_view_count || undefined,
+            plays: postData.video_play_count || undefined,
+            likes: postData.edge_media_preview_like?.count || 0,
+            comments: postData.edge_media_to_parent_comment?.count || 0,
+            timestamp: postData.taken_at_timestamp 
+                ? new Date(postData.taken_at_timestamp * 1000).toISOString()
+                : new Date().toISOString(),
+            hashtags,
+            thumbnailUrl: postData.thumbnail_src || postData.display_url,
+            displayUrl: postData.display_url,
+            videoUrl: postData.is_video ? postData.video_url : undefined,
+            type: postData.product_type === 'clips' ? 'clips' :
+                  postData.is_video ? 'video' : 'photo',
+            isVideo: postData.is_video || false,
+            hasAudio: postData.has_audio || false,
+            duration: postData.video_duration || undefined,
+            dimensions: {
+                width: postData.dimensions?.width || 0,
+                height: postData.dimensions?.height || 0
+            },
+            owner: {
+                username: postData.owner?.username || 'unknown',
+                fullName: postData.owner?.full_name || '',
+                followers: postData.owner?.edge_followed_by?.count || 0,
+                following: postData.owner?.edge_follow?.count || 0,
+                totalPosts: postData.owner?.edge_owner_to_timeline_media?.count || 0,
+                isVerified: postData.owner?.is_verified || false,
+                isPrivate: postData.owner?.is_private || false,
+                profilePicUrl: postData.owner?.profile_pic_url
+            },
+            music: postData.clips_music_attribution_info ? {
+                artistName: postData.clips_music_attribution_info.artist_name || 'Unknown',
+                songName: postData.clips_music_attribution_info.song_name || 'Unknown',
+                usesOriginalAudio: postData.clips_music_attribution_info.uses_original_audio || false,
+                audioId: postData.clips_music_attribution_info.audio_id
+            } : undefined,
+            recentComments: postData.edge_media_to_parent_comment?.edges?.slice(0, 5).map((edge: any) => ({
+                username: edge.node.owner.username || 'unknown',
+                text: edge.node.text || '',
+                likes: edge.node.edge_liked_by?.count || 0,
+                createdAt: edge.node.created_at || 0
+            })) || []
+        };
+
+        console.log('✅ Successfully parsed Instagram post data');
+        console.log('📊 Final data summary:', {
+            username: instagramData.username,
+            likes: instagramData.likes,
+            comments: instagramData.comments,
+            plays: instagramData.plays,
+            hasVideo: instagramData.isVideo,
+            hasThumbnail: !!instagramData.thumbnailUrl
+        });
+
+        return {
+            success: true,
+            data: instagramData
+        };
+
+    } catch (error) {
+        console.error('💥 Instagram scraping failed:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error occurred',
+            debugInfo: {
+                url,
+                timestamp: new Date().toISOString(),
+                error: error instanceof Error ? {
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack
+                } : error
+            }
+        };
+    }
+}
+
+// Helper function to extract hashtags from Instagram caption
+function extractHashtagsFromCaption(caption: string): string[] {
+    if (!caption) return [];
+    
+    const hashtagRegex = /#([A-Za-z0-9_]+)/g;
+    const hashtags: string[] = [];
+    let match;
+    
+    while ((match = hashtagRegex.exec(caption)) !== null) {
+        hashtags.push(match[1]);
+    }
+    
+    return hashtags;
+}
+
+// Combined function to detect URL type and scrape accordingly
+export async function scrapeMediaPost(url: string): Promise<ScrapedVideoResult | ScrapedInstagramResult> {
+    const cleanUrl = url.trim();
+    
+    if (cleanUrl.includes('instagram.com')) {
+        console.log('🔗 Detected Instagram URL, using Instagram scraper');
+        return await scrapeInstagramPost(cleanUrl);
+    } else if (cleanUrl.includes('tiktok.com')) {
+        console.log('🔗 Detected TikTok URL, using TikTok scraper');
+        return await scrapeTikTokVideo(cleanUrl);
+    } else {
+        return {
+            success: false,
+            error: 'URL must be either a TikTok or Instagram URL'
+        };
+    }
+}
+
+// Batch process both TikTok and Instagram URLs
+export async function scrapeMediaPosts(urls: string[]): Promise<(ScrapedVideoResult | ScrapedInstagramResult)[]> {
+    console.log('🚀 Starting batch scraping for', urls.length, 'URLs');
+    
+    if (!urls || urls.length === 0) {
+        console.log('⚠️ No URLs provided for batch scraping');
+        return [];
+    }
+
+    if (urls.length > 50) {
+        console.log('⚠️ Too many URLs provided (max 50), limiting to first 50');
+        urls = urls.slice(0, 50);
+    }
+
+    // Group URLs by platform for more efficient processing
+    const tikTokUrls: string[] = [];
+    const instagramUrls: string[] = [];
+    const urlIndexMap: { [index: number]: { platform: 'tiktok' | 'instagram', originalIndex: number } } = {};
+
+    urls.forEach((url, index) => {
+        const cleanUrl = url.trim();
+        if (cleanUrl.includes('instagram.com')) {
+            urlIndexMap[instagramUrls.length] = { platform: 'instagram', originalIndex: index };
+            instagramUrls.push(cleanUrl);
+        } else if (cleanUrl.includes('tiktok.com')) {
+            urlIndexMap[tikTokUrls.length] = { platform: 'tiktok', originalIndex: index };
+            tikTokUrls.push(cleanUrl);
+        }
+    });
+
+    console.log(`📊 Batch processing: ${tikTokUrls.length} TikTok URLs, ${instagramUrls.length} Instagram URLs`);
+
+    // Process each platform in parallel
+    const [tikTokResults, instagramResults] = await Promise.all([
+        tikTokUrls.length > 0 ? scrapeTikTokVideos(tikTokUrls) : Promise.resolve([]),
+        instagramUrls.length > 0 ? scrapeInstagramPosts(instagramUrls) : Promise.resolve([])
+    ]);
+
+    // Reconstruct results in original order
+    const results: (ScrapedVideoResult | ScrapedInstagramResult)[] = new Array(urls.length);
+    
+    // Fill TikTok results
+    tikTokResults.forEach((result, index) => {
+        const mapping = Object.entries(urlIndexMap).find(([key, value]) => 
+            value.platform === 'tiktok' && parseInt(key) === index
+        );
+        if (mapping) {
+            results[mapping[1].originalIndex] = result;
+        }
+    });
+
+    // Fill Instagram results
+    instagramResults.forEach((result, index) => {
+        const mapping = Object.entries(urlIndexMap).find(([key, value]) => 
+            value.platform === 'instagram' && parseInt(key) === index
+        );
+        if (mapping) {
+            results[mapping[1].originalIndex] = result;
+        }
+    });
+
+    // Fill any remaining slots with error results
+    results.forEach((result, index) => {
+        if (!result) {
+            results[index] = {
+                success: false,
+                error: `Unable to process URL: ${urls[index]}`
+            };
+        }
+    });
+
+    console.log('✅ Batch processing completed');
+    return results;
+}
+
+// Batch process Instagram posts specifically
+export async function scrapeInstagramPosts(urls: string[]): Promise<ScrapedInstagramResult[]> {
+    console.log('🚀 Starting Instagram batch scraping for', urls.length, 'URLs');
+    
+    if (!urls || urls.length === 0) {
+        console.log('⚠️ No URLs provided for Instagram batch scraping');
+        return [];
+    }
+
+    // Rate limiting: process in smaller batches to avoid overwhelming the API
+    const batchSize = 5;
+    const results: ScrapedInstagramResult[] = [];
+
+    for (let i = 0; i < urls.length; i += batchSize) {
+        const batch = urls.slice(i, i + batchSize);
+        console.log(`📦 Processing Instagram batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(urls.length / batchSize)}`);
+
+        const batchPromises = batch.map(url => scrapeInstagramPost(url));
+        const batchResults = await Promise.allSettled(batchPromises);
+
+        const processedResults = batchResults.map((result, index) => {
+            if (result.status === 'fulfilled') {
+                return result.value;
+            } else {
+                console.error(`❌ Failed to process Instagram URL ${batch[index]}:`, result.reason);
+                return {
+                    success: false,
+                    error: `Failed to process: ${result.reason?.message || 'Unknown error'}`
+                };
+            }
+        });
+
+        results.push(...processedResults);
+
+        // Small delay between batches to be respectful to the API
+        if (i + batchSize < urls.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+
+    console.log('✅ Instagram batch processing completed');
+    return results;
 } 

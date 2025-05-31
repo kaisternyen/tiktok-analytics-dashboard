@@ -35,16 +35,13 @@ interface TrackedVideo {
         name: string;
         author: string;
     };
-    platform: 'tiktok' | 'instagram';
+    platform: 'tiktok';
     growth: {
         views: number;
         likes: number;
         comments: number;
         shares: number;
     };
-    // Instagram-specific fields
-    isReel?: boolean;
-    location?: string;
 }
 
 interface CronStatus {
@@ -201,15 +198,6 @@ export default function TikTokTracker() {
         }
     };
 
-    // Helper function to detect platform from URL
-    const detectPlatform = (url: string): 'tiktok' | 'instagram' => {
-        const cleanUrl = url.trim().toLowerCase();
-        if (cleanUrl.includes('instagram.com') || cleanUrl.includes('instagr.am')) {
-            return 'instagram';
-        }
-        return 'tiktok'; // Default to TikTok
-    };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -217,7 +205,7 @@ export default function TikTokTracker() {
 
         if (!videoUrl.trim()) {
             console.warn('⚠️ Empty URL submitted');
-            setError('Please enter a TikTok or Instagram URL');
+            setError('Please enter a TikTok URL');
             return;
         }
 
@@ -226,22 +214,16 @@ export default function TikTokTracker() {
             return;
         }
 
-        // Detect platform from URL
-        const platform = detectPlatform(videoUrl);
-        console.log('🔍 Detected platform:', platform);
-
         console.log('🚀 Processing URL:', videoUrl.trim());
         setIsLoading(true);
         setError(null);
         setSuccess(null);
 
         try {
-            // Choose the appropriate API endpoint based on platform
-            const apiEndpoint = platform === 'instagram' ? '/api/scrape-instagram' : '/api/scrape';
-            console.log(`📡 Making API call to ${apiEndpoint}...`);
+            console.log('📡 Making API call to /api/scrape...');
             const startTime = Date.now();
 
-            const response = await fetch(apiEndpoint, {
+            const response = await fetch('/api/scrape', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -284,12 +266,10 @@ export default function TikTokTracker() {
                     id: data.data.id,
                     username: data.data.username,
                     views: data.data.views,
-                    likes: data.data.likes,
-                    platform: data.data.platform || platform
+                    likes: data.data.likes
                 });
                 setVideoUrl("");
-                const platformEmoji = platform === 'instagram' ? '📸' : '🎬';
-                setSuccess(`✅ Successfully ${data.message || 'added'} ${platform} ${data.data.isReel ? 'reel' : 'video'} by @${data.data.username}! ${platformEmoji}`);
+                setSuccess(`✅ Successfully ${data.message || 'added'} video by @${data.data.username}!`);
 
                 // Refresh the videos list
                 await fetchVideos();
@@ -298,21 +278,24 @@ export default function TikTokTracker() {
                     error: data.error,
                     debugInfo: data.debugInfo
                 });
-                setError(data.error || `Failed to scrape ${platform} content`);
+                setError(data.error || 'Failed to scrape video');
 
                 // Log debug info if available for troubleshooting
                 if (data.debugInfo) {
                     console.log('🐛 Debug information:', data.debugInfo);
                 }
             }
-
-        } catch (error) {
-            console.error('💥 Unexpected error in handleSubmit:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            setError(`Failed to process ${platform} URL: ${errorMessage}`);
+        } catch (err) {
+            console.error('💥 Exception occurred during fetch:', err);
+            console.error('Error details:', {
+                name: err instanceof Error ? err.name : 'Unknown',
+                message: err instanceof Error ? err.message : String(err),
+                stack: err instanceof Error ? err.stack : undefined
+            });
+            setError(err instanceof Error ? err.message : 'An unexpected error occurred');
         } finally {
+            console.log('🏁 Request completed, setting loading to false');
             setIsLoading(false);
-            console.log('🏁 Form submission completed');
         }
     };
 
@@ -786,14 +769,14 @@ export default function TikTokTracker() {
                                 {isRefreshing ? 'Refreshing...' : 'Refresh All'}
                             </Button>
                             <Input
-                                placeholder="Paste TikTok or Instagram URL"
+                                placeholder="Paste TikTok video URL"
                                 value={videoUrl}
                                 onChange={(e) => setVideoUrl(e.target.value)}
                                 disabled={isLoading}
                                 className="w-80"
                             />
                             <Button onClick={handleSubmit} disabled={isLoading || !videoUrl}>
-                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Track Content"}
+                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Track Video"}
                             </Button>
                         </div>
                     </div>
@@ -836,7 +819,7 @@ export default function TikTokTracker() {
                                     <div className="text-gray-500 mb-4">
                                         <Play className="w-16 h-16 mx-auto mb-4 opacity-50" />
                                         <h3 className="text-lg font-medium mb-2">No videos tracked yet</h3>
-                                        <p>Add your first TikTok or Instagram URL above to get started with analytics!</p>
+                                        <p>Add your first TikTok video URL above to get started with analytics!</p>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -994,7 +977,7 @@ export default function TikTokTracker() {
                                     <div className="p-12 text-center text-gray-500">
                                         <Play className="w-16 h-16 mx-auto mb-4 opacity-50" />
                                         <h3 className="text-lg font-medium mb-2">No videos to display</h3>
-                                        <p>Track your first TikTok or Instagram content to see it appear here!</p>
+                                        <p>Track your first TikTok video to see it appear here!</p>
                                     </div>
                                 ) : (
                                     <div className="overflow-x-auto">
@@ -1025,7 +1008,6 @@ export default function TikTokTracker() {
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-3">
                                                                 {video.thumbnailUrl ? (
-                                                                    /* eslint-disable-next-line @next/next/no-img-element */
                                                                     <img
                                                                         src={video.thumbnailUrl}
                                                                         alt={`${video.username} thumbnail`}
@@ -1044,41 +1026,15 @@ export default function TikTokTracker() {
                                                                     <div className="text-sm text-gray-500 max-w-xs truncate">
                                                                         {video.description}
                                                                     </div>
-                                                                    {/* Instagram-specific indicators */}
-                                                                    {video.platform === 'instagram' && (
-                                                                        <div className="flex items-center gap-2 mt-1">
-                                                                            {video.isReel && (
-                                                                                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">
-                                                                                    Reel
-                                                                                </span>
-                                                                            )}
-                                                                            {video.location && (
-                                                                                <span className="text-xs text-gray-500 truncate max-w-24" title={video.location}>
-                                                                                    📍 {video.location}
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </td>
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-2">
-                                                                {video.platform === 'instagram' ? (
-                                                                    <>
-                                                                        <div className="w-5 h-5 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 rounded flex items-center justify-center">
-                                                                            <span className="text-white text-xs font-bold">IG</span>
-                                                                        </div>
-                                                                        <span className="text-sm font-medium">Instagram</span>
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <div className="w-5 h-5 bg-black rounded flex items-center justify-center">
-                                                                            <Play className="w-3 h-3 text-white" />
-                                                                        </div>
-                                                                        <span className="text-sm font-medium">TikTok</span>
-                                                                    </>
-                                                                )}
+                                                                <div className="w-5 h-5 bg-black rounded flex items-center justify-center">
+                                                                    <Play className="w-3 h-3 text-white" />
+                                                                </div>
+                                                                <span className="text-sm font-medium">TikTok</span>
                                                             </div>
                                                         </td>
                                                         <td className="p-4 font-medium">{formatNumber(video.views)}</td>

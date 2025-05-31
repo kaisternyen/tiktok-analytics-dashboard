@@ -17,9 +17,6 @@ model Video {
   description String
   thumbnailUrl String?
   
-  // Platform identification
-  platform    String   @default("tiktok") // "tiktok" | "instagram"
-  
   // Current metrics (latest values)
   currentViews    Int      @default(0)
   currentLikes    Int      @default(0)
@@ -29,10 +26,6 @@ model Video {
   // Metadata
   hashtags      String?  // JSON string for MVP simplicity
   music         String?  // JSON string for MVP simplicity
-  
-  // Instagram-specific fields
-  isReel        Boolean? // null for TikTok, true/false for Instagram
-  location      String?  // Instagram location
   
   // Tracking info
   isActive      Boolean  @default(true)
