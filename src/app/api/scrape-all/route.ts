@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { scrapeTikTokVideo } from '@/lib/tikhub';
+import { scrapeTikTokVideo, scrapeMediaPost, TikTokVideoData, InstagramPostData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 
 // Force dynamic rendering for cron jobs
@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 interface VideoResult {
     status: 'success' | 'failed' | 'skipped';
     username: string;
+    platform?: string;
     views?: number;
     likes?: number;
     comments?: number;
@@ -22,10 +23,18 @@ interface VideoResult {
     reason?: string;
 }
 
+interface ProcessingResult {
+    results: VideoResult[];
+    successful: number;
+    failed: number;
+    skipped: number;
+}
+
 interface VideoRecord {
     id: string;
     url: string;
     username: string;
+    platform: string;
     currentViews: number;
     currentLikes: number;
     currentComments: number;
@@ -33,82 +42,88 @@ interface VideoRecord {
     lastScrapedAt: Date;
 }
 
-// Smart processing: Only scrape videos that need updates
+// Smart filter: only scrape videos that need updating
 function shouldScrapeVideo(video: VideoRecord): boolean {
     const now = new Date();
-    const lastScraped = new Date(video.lastScrapedAt);
-    const minutesSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60);
-
-    // Only scrape if it's been more than 1 minute since last scrape
-    return minutesSinceLastScrape >= 1;
+    const minutesSinceLastScrape = (now.getTime() - video.lastScrapedAt.getTime()) / (1000 * 60);
+    
+    // Skip if scraped within last 30 minutes to avoid overloading
+    return minutesSinceLastScrape >= 30;
 }
 
-// Process videos with smart batching and rate limiting
-async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 10) {
+// Smart processing with rate limiting and error handling
+async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 10): Promise<ProcessingResult> {
     const results: VideoResult[] = [];
     let successful = 0;
     let failed = 0;
     let skipped = 0;
 
     // Filter videos that need scraping
-    const videosToScrape = videos.filter(shouldScrapeVideo);
-
-    // Limit to maxPerRun to avoid overwhelming TikHub and stay under 60s timeout
-    const videosToProcess = videosToScrape.slice(0, maxPerRun);
-
-    console.log(`📊 ===== SMART PROCESSING ANALYSIS =====`);
-    console.log(`📹 Total videos in DB: ${videos.length}`);
-    console.log(`🔄 Videos needing scrape: ${videosToScrape.length}`);
-    console.log(`⚡ Videos to process this run: ${videosToProcess.length}`);
-    console.log(`🚫 Videos to skip: ${videos.length - videosToScrape.length}`);
-
-    // Skip videos that don't need updates
-    for (const video of videos) {
-        if (!videosToScrape.includes(video)) {
-            const minutesAgo = Math.floor((Date.now() - video.lastScrapedAt.getTime()) / (1000 * 60));
-            console.log(`⏭️ Skipping @${video.username} (scraped ${minutesAgo} min ago)`);
+    const videosToProcess = videos.filter(video => {
+        if (shouldScrapeVideo(video)) {
+            return true;
+        } else {
+            const minutesAgo = Math.floor((new Date().getTime() - video.lastScrapedAt.getTime()) / (1000 * 60));
+            console.log(`⏭️ Skipping @${video.username} (${video.platform}) (scraped ${minutesAgo} min ago)`);
             results.push({
                 status: 'skipped',
                 username: video.username,
-                reason: 'Recently updated'
+                platform: video.platform,
+                reason: `Scraped ${minutesAgo} minutes ago`
             });
             skipped++;
+            return false;
         }
-    }
+    });
 
     if (videosToProcess.length === 0) {
-        console.log(`🏁 No videos need processing - all recently updated`);
+        console.log(`⚠️ No videos need scraping (all recently updated)`);
         return { results, successful, failed, skipped };
     }
 
-    // Process videos in parallel batches of 3 to speed up while respecting rate limits
+    // Limit processing to avoid timeouts
+    const limitedVideos = videosToProcess.slice(0, maxPerRun);
+    console.log(`🎯 Processing ${limitedVideos.length}/${videosToProcess.length} videos (max ${maxPerRun} per run)`);
+
+    // Process in smaller batches
     const batchSize = 3;
     console.log(`🚀 Starting batch processing with batch size: ${batchSize}`);
 
-    for (let i = 0; i < videosToProcess.length; i += batchSize) {
-        const batch = videosToProcess.slice(i, i + batchSize);
+    for (let i = 0; i < limitedVideos.length; i += batchSize) {
+        const batch = limitedVideos.slice(i, i + batchSize);
         const batchNum = Math.floor(i / batchSize) + 1;
-        const totalBatches = Math.ceil(videosToProcess.length / batchSize);
+        const totalBatches = Math.ceil(limitedVideos.length / batchSize);
 
         console.log(`📦 ===== BATCH ${batchNum}/${totalBatches} =====`);
-        console.log(`🎬 Processing: ${batch.map(v => '@' + v.username).join(', ')}`);
+        console.log(`🎬 Processing: ${batch.map(v => `@${v.username} (${v.platform})`).join(', ')}`);
 
         // Process batch in parallel
         const batchPromises = batch.map(async (video, index) => {
             try {
-                console.log(`🎬 [${i + index + 1}/${videosToProcess.length}] Starting @${video.username}...`);
+                console.log(`🎬 [${i + index + 1}/${limitedVideos.length}] Starting @${video.username} (${video.platform})...`);
 
-                const result = await scrapeTikTokVideo(video.url);
+                // Use the generic scrapeMediaPost function that handles both platforms
+                const result = await scrapeMediaPost(video.url);
 
                 if (result.success && result.data) {
+                    const mediaData = result.data as TikTokVideoData | InstagramPostData;
+                    const isInstagram = video.platform === 'instagram';
+                    
+                    // Get views based on platform
+                    const views = isInstagram ? 
+                        ((mediaData as InstagramPostData).plays || (mediaData as InstagramPostData).views || 0) : 
+                        (mediaData as TikTokVideoData).views;
+                    
+                    const shares = isInstagram ? 0 : ((mediaData as TikTokVideoData).shares || 0);
+
                     // Update video metrics
                     await prisma.video.update({
                         where: { id: video.id },
                         data: {
-                            currentViews: result.data.views,
-                            currentLikes: result.data.likes,
-                            currentComments: result.data.comments,
-                            currentShares: result.data.shares,
+                            currentViews: views,
+                            currentLikes: mediaData.likes,
+                            currentComments: mediaData.comments,
+                            currentShares: shares,
                             lastScrapedAt: new Date(),
                         }
                     });
@@ -117,45 +132,48 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                     await prisma.metricsHistory.create({
                         data: {
                             videoId: video.id,
-                            views: result.data.views,
-                            likes: result.data.likes,
-                            comments: result.data.comments,
-                            shares: result.data.shares,
+                            views: views,
+                            likes: mediaData.likes,
+                            comments: mediaData.comments,
+                            shares: shares,
                         }
                     });
 
-                    const viewsChange = result.data.views - video.currentViews;
-                    const likesChange = result.data.likes - video.currentLikes;
-                    console.log(`✅ [${i + index + 1}] @${video.username}: ${result.data.views.toLocaleString()} views (+${viewsChange.toLocaleString()}), ${result.data.likes.toLocaleString()} likes (+${likesChange.toLocaleString()})`);
+                    const viewsChange = views - video.currentViews;
+                    const likesChange = mediaData.likes - video.currentLikes;
+                    console.log(`✅ [${i + index + 1}] @${video.username} (${video.platform}): ${views.toLocaleString()} views (+${viewsChange.toLocaleString()}), ${mediaData.likes.toLocaleString()} likes (+${likesChange.toLocaleString()})`);
 
                     return {
                         status: 'success' as const,
                         username: video.username,
-                        views: result.data.views,
-                        likes: result.data.likes,
-                        comments: result.data.comments,
-                        shares: result.data.shares,
+                        platform: video.platform,
+                        views: views,
+                        likes: mediaData.likes,
+                        comments: mediaData.comments,
+                        shares: shares,
                         changes: {
                             views: viewsChange,
                             likes: likesChange,
-                            comments: result.data.comments - video.currentComments,
-                            shares: result.data.shares - video.currentShares,
+                            comments: mediaData.comments - video.currentComments,
+                            shares: shares - video.currentShares,
                         }
                     };
                 } else {
-                    console.log(`❌ [${i + index + 1}] @${video.username} failed: ${result.error}`);
+                    console.log(`❌ [${i + index + 1}] @${video.username} (${video.platform}) failed: ${result.error}`);
                     return {
                         status: 'failed' as const,
                         username: video.username,
+                        platform: video.platform,
                         error: result.error || 'Unknown error'
                     };
                 }
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                console.error(`💥 [${i + index + 1}] @${video.username} crashed: ${errorMessage}`);
+                console.error(`💥 [${i + index + 1}] @${video.username} (${video.platform}) crashed: ${errorMessage}`);
                 return {
                     status: 'failed' as const,
                     username: video.username,
+                    platform: video.platform,
                     error: errorMessage
                 };
             }
@@ -176,8 +194,8 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
         const batchFailed = batchResults.filter(r => r.status === 'failed').length;
         console.log(`📊 Batch ${batchNum} complete: ${batchSuccess} success, ${batchFailed} failed`);
 
-        // Rate limiting: wait 1 second between batches to be nice to TikHub
-        if (i + batchSize < videosToProcess.length) {
+        // Rate limiting: wait 1 second between batches to be nice to APIs
+        if (i + batchSize < limitedVideos.length) {
             console.log(`⏱️ Rate limiting: waiting 1 second before next batch...`);
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
@@ -201,7 +219,18 @@ export async function GET() {
         console.log(`📋 Fetching active videos from database...`);
         const videos = await prisma.video.findMany({
             where: { isActive: true },
-            orderBy: { lastScrapedAt: 'asc' }
+            orderBy: { lastScrapedAt: 'asc' },
+            select: {
+                id: true,
+                url: true,
+                username: true,
+                platform: true,
+                currentViews: true,
+                currentLikes: true,
+                currentComments: true,
+                currentShares: true,
+                lastScrapedAt: true
+            }
         });
 
         console.log(`📊 Found ${videos.length} active videos in database`);
@@ -226,7 +255,7 @@ export async function GET() {
         const now = new Date();
         videos.forEach((video, index) => {
             const minutesAgo = Math.floor((now.getTime() - video.lastScrapedAt.getTime()) / (1000 * 60));
-            console.log(`📹 [${index + 1}/${videos.length}] @${video.username} - last scraped ${minutesAgo} minutes ago`);
+            console.log(`📹 [${index + 1}/${videos.length}] @${video.username} (${video.platform}) - last scraped ${minutesAgo} minutes ago`);
         });
 
         console.log(`⚡ Starting smart processing...`);
