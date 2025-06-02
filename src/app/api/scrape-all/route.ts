@@ -461,9 +461,10 @@ export async function GET() {
                 lastScrapedAt: Date;
                 createdAt: Date;
             }) => {
+                const ageInDays = (new Date().getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
                 return {
                     ...video,
-                    scrapingCadence: 'testing', // Temporarily set all to testing for cron activation test
+                    scrapingCadence: ageInDays < 7 ? 'hourly' : 'hourly', // Default all to hourly, evaluation will adjust
                     lastDailyViews: null,
                     dailyViewsGrowth: null,
                     needsCadenceCheck: false,
