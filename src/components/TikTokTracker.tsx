@@ -1064,25 +1064,6 @@ export default function TikTokTracker() {
 
                     {/* Videos Tab */}
                     <TabsContent value="videos">
-                        {/* Cadence Info Card */}
-                        <Card className="mb-4">
-                            <CardContent className="p-4">
-                                <div className="flex items-start gap-3">
-                                    <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
-                                        <span className="text-xs font-medium text-blue-600">i</span>
-                                    </div>
-                                    <div className="flex-1">
-                                        <h4 className="font-medium text-gray-900 mb-1">Adaptive Scraping Cadence</h4>
-                                        <div className="text-sm text-gray-600 space-y-1">
-                                            <p>• <span className="text-blue-600 font-medium">Hourly</span>: New videos (first week) and high-performance videos (10k+ daily views)</p>
-                                            <p>• <span className="text-orange-600 font-medium">Daily</span>: Older videos with low views - scraped at 12:00 AM EST</p>
-                                            <p>• <span className="text-purple-600 font-medium">Testing</span>: Development mode - scraped every minute</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                        
                         <Card>
                             <CardContent className="p-0">
                                 {tracked.length === 0 ? (
@@ -1206,7 +1187,7 @@ export default function TikTokTracker() {
                                                             }`}>
                                                                 {video.scrapingCadence === 'hourly' ? '⏰ Hourly' : 
                                                                  video.scrapingCadence === 'daily' ? '🌙 Daily' : 
-                                                                 '🧪 Testing'}
+                                                                 '🧪 Test'}
                                                             </span>
                                                         </td>
                                                         <td className="p-4">
