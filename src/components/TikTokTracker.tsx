@@ -583,9 +583,31 @@ export default function TikTokTracker() {
     const getChartData = (): ChartDataPoint[] => {
         if (tracked.length === 0) return [];
 
-        // Collect all unique timestamps from all videos
+        // Filter out videos on daily cadence that haven't been scraped today for live charts
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        const eligibleVideos = tracked.filter(video => {
+            // Always include hourly videos 
+            if (video.platform && (video as any).scrapingCadence === 'hourly') {
+                return true;
+            }
+            
+            // For daily videos, only include if they've been scraped today
+            if (video.platform && (video as any).scrapingCadence === 'daily') {
+                const lastScraped = new Date(video.lastUpdate);
+                return lastScraped >= todayStart;
+            }
+            
+            // Default: include video if cadence is unknown (backward compatibility)
+            return true;
+        });
+
+        console.log(`📊 Chart data: Including ${eligibleVideos.length}/${tracked.length} videos (excluding stale daily-cadence videos)`);
+
+        // Collect all unique timestamps from eligible videos
         const allTimestamps = new Set<string>();
-        tracked.forEach(video => {
+        eligibleVideos.forEach(video => {
             if (video.history?.length) {
                 video.history.forEach(point => {
                     allTimestamps.add(point.time);
@@ -599,7 +621,6 @@ export default function TikTokTracker() {
         );
 
         // Filter timestamps by selected time period
-        const now = new Date();
         let filteredTimestamps = sortedTimestamps;
 
         switch (selectedTimePeriod) {
@@ -638,8 +659,8 @@ export default function TikTokTracker() {
         const aggregateData: ChartDataPoint[] = [];
         const lastKnownValues: { [videoId: string]: VideoHistory } = {};
 
-        // Initialize with first known values for each video
-        tracked.forEach(video => {
+        // Initialize with first known values for each eligible video
+        eligibleVideos.forEach(video => {
             if (video.history?.length) {
                 const firstPoint = video.history
                     .filter(h => filteredTimestamps.includes(h.time))
@@ -654,7 +675,7 @@ export default function TikTokTracker() {
         // Process each timestamp and build aggregate
         filteredTimestamps.forEach(timestamp => {
             // Update last known values for videos that have data at this timestamp
-            tracked.forEach(video => {
+            eligibleVideos.forEach(video => {
                 const pointAtTime = video.history?.find(h => h.time === timestamp);
                 if (pointAtTime) {
                     lastKnownValues[video.id] = pointAtTime;
