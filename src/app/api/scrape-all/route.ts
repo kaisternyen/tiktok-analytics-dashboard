@@ -198,8 +198,6 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                     }
 
                     // Calculate daily growth for cadence evaluation
-                    const now = new Date();
-                    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
                     let dailyGrowth: number | null = null;
                     
                     if (video.lastDailyViews !== null) {

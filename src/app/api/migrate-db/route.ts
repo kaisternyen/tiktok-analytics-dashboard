@@ -19,7 +19,7 @@ export async function POST() {
         console.log('✅ Successfully added adaptive cadence fields to database');
 
         // Update existing videos to have default cadence using raw SQL
-        const updateResult = await prisma.$executeRaw`
+        await prisma.$executeRaw`
             UPDATE videos 
             SET "scrapingCadence" = 'hourly', "needsCadenceCheck" = false 
             WHERE "scrapingCadence" IS NULL

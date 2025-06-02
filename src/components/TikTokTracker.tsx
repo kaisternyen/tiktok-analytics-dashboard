@@ -37,6 +37,7 @@ interface TrackedVideo {
         author: string;
     };
     platform: 'tiktok' | 'instagram' | 'youtube';
+    scrapingCadence?: string; // 'hourly' | 'daily'
     growth: {
         views: number;
         likes: number;
@@ -589,12 +590,12 @@ export default function TikTokTracker() {
         
         const eligibleVideos = tracked.filter(video => {
             // Always include hourly videos 
-            if (video.platform && (video as any).scrapingCadence === 'hourly') {
+            if (video.platform && video.scrapingCadence === 'hourly') {
                 return true;
             }
             
             // For daily videos, only include if they've been scraped today
-            if (video.platform && (video as any).scrapingCadence === 'daily') {
+            if (video.platform && video.scrapingCadence === 'daily') {
                 const lastScraped = new Date(video.lastUpdate);
                 return lastScraped >= todayStart;
             }
@@ -684,9 +685,6 @@ export default function TikTokTracker() {
 
             // Calculate aggregate values using last known values
             const aggregateViews = Object.values(lastKnownValues).reduce((sum, point) => sum + point.views, 0);
-            const aggregateLikes = Object.values(lastKnownValues).reduce((sum, point) => sum + point.likes, 0);
-            const aggregateComments = Object.values(lastKnownValues).reduce((sum, point) => sum + point.comments, 0);
-            const aggregateShares = Object.values(lastKnownValues).reduce((sum, point) => sum + point.shares, 0);
 
             // Only add if we have data for at least one video at this point
             if (Object.keys(lastKnownValues).length > 0) {
