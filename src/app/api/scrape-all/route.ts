@@ -225,11 +225,10 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                             currentComments: mediaData.comments,
                             currentShares: shares,
                             lastScrapedAt: new Date(),
-                            // TODO: Uncomment after migration
-                            // scrapingCadence: newCadence,
-                            // lastDailyViews: video.currentViews,
-                            // dailyViewsGrowth: dailyGrowth,
-                            // needsCadenceCheck: false,
+                            scrapingCadence: newCadence,
+                            lastDailyViews: video.currentViews,
+                            dailyViewsGrowth: dailyGrowth,
+                            needsCadenceCheck: false,
                         }
                     });
 
@@ -319,13 +318,13 @@ export async function GET() {
     console.log(`⏰ Standardized timing: Running at minute :00`);
 
     try {
-        // Fetch all active videos (with backward compatibility for missing cadence fields)
+        // Fetch all active videos (with new cadence fields after migration)
         console.log('📋 Fetching active videos from database...');
         
         let videos: VideoRecord[] = [];
         
         try {
-            // Try to fetch with new cadence fields
+            // Fetch with both old and new fields
             const rawVideos = await prisma.video.findMany({
                 where: { isActive: true },
                 select: {
@@ -339,16 +338,20 @@ export async function GET() {
                     currentShares: true,
                     lastScrapedAt: true,
                     createdAt: true,
+                    scrapingCadence: true,
+                    lastDailyViews: true,
+                    dailyViewsGrowth: true,
+                    needsCadenceCheck: true,
                 }
             });
 
-            // Add default cadence values for backward compatibility
+            // Map to VideoRecord format
             videos = rawVideos.map(video => ({
                 ...video,
-                scrapingCadence: 'hourly', // Default all to hourly until migration
-                lastDailyViews: null,
-                dailyViewsGrowth: null,
-                needsCadenceCheck: false,
+                scrapingCadence: video.scrapingCadence || 'hourly',
+                lastDailyViews: video.lastDailyViews,
+                dailyViewsGrowth: video.dailyViewsGrowth,
+                needsCadenceCheck: video.needsCadenceCheck || false,
             }));
             
         } catch (error) {

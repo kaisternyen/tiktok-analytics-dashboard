@@ -1,8 +1,45 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Migration flag to run only once
+let migrationRun = false;
+
+async function runMigrationIfNeeded() {
+    if (migrationRun) return;
+    
+    try {
+        console.log('🔧 Running adaptive cadence migration...');
+        
+        // Add the new columns to the videos table
+        await prisma.$executeRaw`
+            ALTER TABLE videos 
+            ADD COLUMN IF NOT EXISTS "scrapingCadence" TEXT DEFAULT 'hourly',
+            ADD COLUMN IF NOT EXISTS "lastDailyViews" INTEGER,
+            ADD COLUMN IF NOT EXISTS "dailyViewsGrowth" INTEGER,
+            ADD COLUMN IF NOT EXISTS "needsCadenceCheck" BOOLEAN DEFAULT false
+        `;
+
+        // Update existing videos to have default cadence
+        await prisma.$executeRaw`
+            UPDATE videos 
+            SET "scrapingCadence" = 'hourly', "needsCadenceCheck" = false 
+            WHERE "scrapingCadence" IS NULL
+        `;
+
+        console.log('✅ Adaptive cadence migration completed');
+        migrationRun = true;
+        
+    } catch (error) {
+        console.log('Migration may already be applied or failed:', error);
+        migrationRun = true; // Prevent retry loops
+    }
+}
+
 export async function GET() {
     try {
+        // Run migration if needed
+        await runMigrationIfNeeded();
+        
         console.log('📋 Fetching videos from database...');
 
         const videos = await prisma.video.findMany({
