@@ -62,18 +62,33 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
     const currentHour = estTime.getHours();
     
-    // For testing mode (every minute), always scrape
+    // For testing mode (every minute), check if at least 1 minute has passed
     if (video.scrapingCadence === 'testing') {
-        return { shouldScrape: true, reason: 'Testing mode - always scrape' };
+        const minutesSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60);
+        if (minutesSinceLastScrape >= 1) {
+            return { shouldScrape: true, reason: 'Testing mode - every minute' };
+        } else {
+            return { shouldScrape: false, reason: `Testing mode - recently scraped ${Math.floor(minutesSinceLastScrape * 60)} seconds ago` };
+        }
     }
     
-    // All videos under 7 days old: scrape every hour
+    // All videos under 7 days old: scrape every hour (at the start of each new hour)
     if (videoAgeInDays < 7) {
-        const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
-        if (hoursSinceLastScrape >= 1) {
-            return { shouldScrape: true, reason: `Video ${videoAgeInDays.toFixed(1)} days old - hourly tracking` };
+        const now = new Date();
+        const lastScraped = new Date(video.lastScrapedAt);
+        
+        // Check if we're in a different hour than when last scraped
+        const currentHour = now.getHours();
+        const lastScrapedHour = lastScraped.getHours();
+        const currentDate = now.toDateString();
+        const lastScrapedDate = lastScraped.toDateString();
+        
+        // Scrape if it's a different hour OR a different day
+        if (currentDate !== lastScrapedDate || currentHour !== lastScrapedHour) {
+            return { shouldScrape: true, reason: `Video ${videoAgeInDays.toFixed(1)} days old - new hour (${currentHour}:00)` };
         } else {
-            return { shouldScrape: false, reason: `Recently scraped ${Math.floor(hoursSinceLastScrape * 60)} minutes ago` };
+            const minutesIntoHour = now.getMinutes();
+            return { shouldScrape: false, reason: `Same hour as last scrape - wait for next hour (${60 - minutesIntoHour}m remaining)` };
         }
     }
     
@@ -92,14 +107,24 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
         }
     }
     
-    // Videos 7+ days old with hourly cadence: scrape every hour (high-performance videos)
+    // Videos 7+ days old with hourly cadence: scrape every hour (at the start of each new hour)
     if (video.scrapingCadence === 'hourly') {
-        const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
-        if (hoursSinceLastScrape >= 1) {
+        const now = new Date();
+        const lastScraped = new Date(video.lastScrapedAt);
+        
+        // Check if we're in a different hour than when last scraped
+        const currentHour = now.getHours();
+        const lastScrapedHour = lastScraped.getHours();
+        const currentDate = now.toDateString();
+        const lastScrapedDate = lastScraped.toDateString();
+        
+        // Scrape if it's a different hour OR a different day
+        if (currentDate !== lastScrapedDate || currentHour !== lastScrapedHour) {
             const isEvaluationHour = currentHour === 0 ? ' (+ cadence evaluation)' : '';
-            return { shouldScrape: true, reason: `High-performance video - hourly tracking${isEvaluationHour}` };
+            return { shouldScrape: true, reason: `High-performance video - new hour (${currentHour}:00)${isEvaluationHour}` };
         } else {
-            return { shouldScrape: false, reason: `Recently scraped ${Math.floor(hoursSinceLastScrape * 60)} minutes ago` };
+            const minutesIntoHour = now.getMinutes();
+            return { shouldScrape: false, reason: `Same hour as last scrape - wait for next hour (${60 - minutesIntoHour}m remaining)` };
         }
     }
     
@@ -113,8 +138,8 @@ async function evaluateCadenceChange(video: VideoRecord, newViews: number): Prom
     // Videos under 7 days old always stay on hourly tracking
     if (videoAgeInDays < 7) {
         return null; // No cadence changes for new videos - always hourly first week
-}
-
+    }
+    
     // Check if we're at 12:00 AM EST (cadence evaluation window)
     const now = new Date();
     const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
@@ -330,8 +355,8 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                                 likes: mediaData.likes,
                                 comments: mediaData.comments,
                                 shares: shares,
-                        }
-                    });
+                            }
+                        });
                         console.log(`📊 [${i + index + 1}] Updated existing metrics entry at ${normalizedTimestamp} (${videoInterval} interval)`);
                     }
 
@@ -433,7 +458,7 @@ export async function GET() {
         try {
             // Try to fetch with new cadence fields
             const rawVideos = await prisma.video.findMany({
-            where: { isActive: true },
+                where: { isActive: true },
                 select: {
                     id: true,
                     url: true,
@@ -474,10 +499,8 @@ export async function GET() {
                 // Determine proper cadence based on age and current setting
                 let cadence = video.scrapingCadence || 'hourly';
                 
-                // Reset any testing cadence back to proper logic
-                if (cadence === 'testing') {
-                    cadence = ageInDays < 7 ? 'hourly' : 'hourly'; // Default to hourly, evaluation will adjust
-                }
+                // Keep testing cadence as is - don't override it
+                // Other cadences can be adjusted based on age/performance logic
                 
                 return {
                     ...video,
@@ -499,7 +522,7 @@ export async function GET() {
         const newVideos = videos.filter(v => (new Date().getTime() - v.createdAt.getTime()) / (1000 * 60 * 60 * 24) < 7);
         const oldVideos = videos.filter(v => (new Date().getTime() - v.createdAt.getTime()) / (1000 * 60 * 60 * 24) >= 7);
         console.log(`📊 Age distribution: ${newVideos.length} videos <7 days (hourly), ${oldVideos.length} videos 7+ days (10k threshold)`);
-
+        
         if (videos.length === 0) {
             console.log('⚠️ No videos found in database');
             return NextResponse.json({
@@ -570,7 +593,7 @@ export async function GET() {
         const duration = Date.now() - startTime;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('💥 CRON JOB CRASHED:', errorMessage);
-
+        
         return NextResponse.json({
             success: false,
             error: errorMessage,

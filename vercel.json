@@ -23,16 +23,5 @@
             "path": "/api/scrape-all",
             "schedule": "0 * * * *"
         }
-    ],
-    "headers": [
-        {
-            "source": "/api/scrape-all",
-            "headers": [
-                {
-                    "key": "X-Robots-Tag",
-                    "value": "noindex"
-                }
-            ]
-        }
     ]
 }
