@@ -58,6 +58,10 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     const lastScraped = new Date(video.lastScrapedAt);
     const videoAgeInDays = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
     
+    // Get current EST time for daily video scheduling
+    const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const currentHour = estTime.getHours();
+    
     // For testing mode (every minute), always scrape
     if (video.scrapingCadence === 'testing') {
         return { shouldScrape: true, reason: 'Testing mode - always scrape' };
@@ -73,14 +77,18 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
         }
     }
     
-    // Videos 7+ days old with daily cadence: scrape once per day (24 hour spacing)
+    // Videos 7+ days old with daily cadence: scrape only at 12:00 AM EST
     if (video.scrapingCadence === 'daily') {
-        const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
-        if (hoursSinceLastScrape >= 24) {
-            return { shouldScrape: true, reason: `Daily video - ${Math.floor(hoursSinceLastScrape)} hours since last scrape` };
+        if (currentHour === 0) {
+            const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+            if (hoursSinceLastScrape >= 20) { // Allow some flexibility (20+ hours since last scrape)
+                return { shouldScrape: true, reason: `Daily video - midnight EST scraping window` };
+            } else {
+                return { shouldScrape: false, reason: `Daily video - already scraped recently (${Math.floor(hoursSinceLastScrape)}h ago)` };
+            }
         } else {
-            const hoursUntilNext = Math.ceil(24 - hoursSinceLastScrape);
-            return { shouldScrape: false, reason: `Daily video - next scrape in ${hoursUntilNext}h` };
+            const hoursUntilMidnight = currentHour >= 12 ? (24 - currentHour) : (24 - currentHour);
+            return { shouldScrape: false, reason: `Daily video - waiting for midnight EST (in ${hoursUntilMidnight}h)` };
         }
     }
     
@@ -88,7 +96,8 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     if (video.scrapingCadence === 'hourly') {
         const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
         if (hoursSinceLastScrape >= 1) {
-            return { shouldScrape: true, reason: `High-performance video - hourly tracking` };
+            const isEvaluationHour = currentHour === 0 ? ' (+ cadence evaluation)' : '';
+            return { shouldScrape: true, reason: `High-performance video - hourly tracking${isEvaluationHour}` };
         } else {
             return { shouldScrape: false, reason: `Recently scraped ${Math.floor(hoursSinceLastScrape * 60)} minutes ago` };
         }
@@ -98,7 +107,7 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
 }
 
 // Calculate if video should change cadence based on performance and age
-function evaluateCadenceChange(video: VideoRecord, newViews: number): { newCadence: string; reason: string } | null {
+async function evaluateCadenceChange(video: VideoRecord, newViews: number): Promise<{ newCadence: string; reason: string } | null> {
     const videoAgeInDays = (new Date().getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
     
     // Videos under 7 days old always stay on hourly tracking
@@ -106,29 +115,68 @@ function evaluateCadenceChange(video: VideoRecord, newViews: number): { newCaden
         return null; // No cadence changes for new videos - always hourly first week
     }
     
-    // For videos 7+ days old, calculate daily views from last known data point
-    const dailyViews = video.lastDailyViews ? Math.max(0, newViews - video.lastDailyViews) : 0;
+    // Check if we're at 12:00 AM EST (cadence evaluation window)
+    const now = new Date();
+    const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const currentHour = estTime.getHours();
     
-    // Threshold: 10,000 daily views
-    const DAILY_VIEWS_THRESHOLD = 10000;
-    
-    // Switch from hourly to daily if views drop below threshold
-    if (video.scrapingCadence === 'hourly' && dailyViews < DAILY_VIEWS_THRESHOLD) {
-        return {
-            newCadence: 'daily',
-            reason: `Daily views dropped to ${dailyViews.toLocaleString()} < ${DAILY_VIEWS_THRESHOLD.toLocaleString()} → switching to daily tracking`
-        };
-    } 
-    
-    // Switch from daily to hourly if views exceed threshold
-    if (video.scrapingCadence === 'daily' && dailyViews >= DAILY_VIEWS_THRESHOLD) {
-        return {
-            newCadence: 'hourly',
-            reason: `Daily views spiked to ${dailyViews.toLocaleString()} ≥ ${DAILY_VIEWS_THRESHOLD.toLocaleString()} → switching to hourly tracking`
-        };
+    // Only evaluate cadence changes at midnight EST (12:00 AM)
+    if (currentHour !== 0) {
+        return null; // Not midnight EST - no cadence changes
     }
     
-    return null; // No change needed
+    // Calculate true daily views by looking back 24 hours in metrics history
+    const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+    
+    try {
+        // Find the closest metrics entry from 24 hours ago
+        const historicalMetric = await prisma.metricsHistory.findFirst({
+            where: {
+                videoId: video.id,
+                timestamp: {
+                    gte: new Date(twentyFourHoursAgo.getTime() - (2 * 60 * 60 * 1000)), // 2 hour buffer
+                    lte: new Date(twentyFourHoursAgo.getTime() + (2 * 60 * 60 * 1000))  // 2 hour buffer
+                }
+            },
+            orderBy: {
+                timestamp: 'desc'
+            }
+        });
+        
+        if (!historicalMetric) {
+            console.log(`⚠️ No historical data found for @${video.username} - skipping cadence evaluation`);
+            return null;
+        }
+        
+        // Calculate true daily views (views gained in past 24 hours)
+        const dailyViews = Math.max(0, newViews - historicalMetric.views);
+        
+        // Threshold: 10,000 daily views
+        const DAILY_VIEWS_THRESHOLD = 10000;
+        
+        // Switch from hourly to daily if views drop below threshold
+        if (video.scrapingCadence === 'hourly' && dailyViews < DAILY_VIEWS_THRESHOLD) {
+            return {
+                newCadence: 'daily',
+                reason: `Midnight EST evaluation: Daily views ${dailyViews.toLocaleString()} < ${DAILY_VIEWS_THRESHOLD.toLocaleString()} → switching to daily tracking`
+            };
+        } 
+        
+        // Switch from daily to hourly if views exceed threshold
+        if (video.scrapingCadence === 'daily' && dailyViews >= DAILY_VIEWS_THRESHOLD) {
+            return {
+                newCadence: 'hourly',
+                reason: `Midnight EST evaluation: Daily views ${dailyViews.toLocaleString()} ≥ ${DAILY_VIEWS_THRESHOLD.toLocaleString()} → switching to hourly tracking`
+            };
+        }
+        
+        console.log(`📊 @${video.username}: Daily views ${dailyViews.toLocaleString()} - staying on ${video.scrapingCadence} cadence`);
+        return null; // No change needed
+        
+    } catch (error) {
+        console.error(`❌ Error calculating daily views for @${video.username}:`, error);
+        return null;
+    }
 }
 
 // Smart processing with standardized timing and adaptive frequency
@@ -221,7 +269,7 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                     }
 
                     // Evaluate cadence change based on user's 10k threshold logic
-                    const cadenceEvaluation = evaluateCadenceChange(video, views);
+                    const cadenceEvaluation = await evaluateCadenceChange(video, views);
                     let newCadence = video.scrapingCadence;
                     let cadenceAction = '';
                     
@@ -359,9 +407,22 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
 export async function GET() {
     const startTime = Date.now();
     console.log(`🚀 ===== CRON JOB STARTED (${new Date().toISOString()}) =====`);
-    console.log(`⏰ Hourly scraping: Running at :00 minutes of each hour`);
+    console.log(`⏰ Hourly scraping: Running every hour for high-performance videos`);
+    console.log(`🌙 Daily scraping: Running at 12:00 AM EST for lower-performance videos`);
     console.log(`📋 Strategy: First week = hourly, After week 1 = 10k daily views threshold`);
-    console.log(`🔄 Dynamic switching: >10k daily views = hourly, <10k daily views = daily`);
+    console.log(`🔄 Cadence switching: Only at midnight EST for synchronized daily tracking`);
+    
+    // Get current EST time for logging
+    const now = new Date();
+    const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const currentHour = estTime.getHours();
+    console.log(`🕐 Current EST time: ${estTime.toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} (Hour ${currentHour})`);
+    
+    if (currentHour === 0) {
+        console.log(`🌙 MIDNIGHT EST: Cadence evaluation window active`);
+    } else {
+        console.log(`⏰ Non-midnight hour: Only hourly videos will be scraped`);
+    }
 
     try {
         // Fetch all active videos (with backward compatibility for missing cadence fields)
@@ -388,7 +449,7 @@ export async function GET() {
             });
 
             // Add default cadence values for backward compatibility
-            videos = rawVideos.map(video => {
+            videos = rawVideos.map((video: any) => {
                 const ageInDays = (new Date().getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
                 return {
                     ...video,
