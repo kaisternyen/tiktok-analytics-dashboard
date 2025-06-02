@@ -683,6 +683,9 @@ export default function TikTokTracker() {
 
             // Calculate aggregate values using last known values
             const aggregateViews = Object.values(lastKnownValues).reduce((sum, point) => sum + point.views, 0);
+            const aggregateLikes = Object.values(lastKnownValues).reduce((sum, point) => sum + point.likes, 0);
+            const aggregateComments = Object.values(lastKnownValues).reduce((sum, point) => sum + point.comments, 0);
+            const aggregateShares = Object.values(lastKnownValues).reduce((sum, point) => sum + point.shares, 0);
 
             // Only add if we have data for at least one video at this point
             if (Object.keys(lastKnownValues).length > 0) {
