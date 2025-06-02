@@ -322,7 +322,7 @@ export default function TikTokTracker() {
                 }
             }
         } catch (err) {
-            console.error('�� Exception occurred during fetch:', err);
+            console.error('💥 Exception occurred during fetch:', err);
             console.error('Error details:', {
                 name: err instanceof Error ? err.name : 'Unknown',
                 message: err instanceof Error ? err.message : String(err),
@@ -421,6 +421,12 @@ export default function TikTokTracker() {
         } finally {
             setDeletingVideoId(null);
         }
+    };
+
+    // Helper function to open video URL in new tab
+    const openVideoInNewTab = (url: string, event: React.MouseEvent) => {
+        event.stopPropagation();
+        window.open(url, '_blank', 'noopener,noreferrer');
     };
 
     const totalMetrics = {
@@ -1049,7 +1055,11 @@ export default function TikTokTracker() {
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-3">
                                                                 {video.thumbnailUrl ? (
-                                                                    <div className="relative w-10 h-14">
+                                                                    <div 
+                                                                        className="relative w-10 h-14 cursor-pointer hover:opacity-80 transition-opacity"
+                                                                        onClick={(e) => openVideoInNewTab(video.url, e)}
+                                                                        title="Click to open video in new tab"
+                                                                    >
                                                                         <Image
                                                                             src={`/api/image-proxy?url=${encodeURIComponent(video.thumbnailUrl)}`}
                                                                             alt={`${video.username} thumbnail`}
@@ -1076,7 +1086,11 @@ export default function TikTokTracker() {
                                                                         </div>
                                                                     </div>
                                                                 ) : (
-                                                                    <div className="w-10 h-14 bg-gray-200 rounded flex items-center justify-center">
+                                                                    <div 
+                                                                        className="w-10 h-14 bg-gray-200 rounded flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                                                                        onClick={(e) => openVideoInNewTab(video.url, e)}
+                                                                        title="Click to open video in new tab"
+                                                                    >
                                                                         <Play className="w-4 h-4 text-gray-400" />
                                                                     </div>
                                                                 )}
@@ -1152,7 +1166,11 @@ export default function TikTokTracker() {
                     {selectedVideo && (
                         <TabsContent value="insights" className="space-y-6">
                             <div className="flex items-center justify-between">
-                                <div>
+                                <div 
+                                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                                    onClick={(e) => openVideoInNewTab(selectedVideo.url, e)}
+                                    title="Click to open video in new tab"
+                                >
                                     <h2 className="text-2xl font-bold text-gray-900">@{selectedVideo.username}</h2>
                                     <p className="text-gray-600">{selectedVideo.description}</p>
                                 </div>
