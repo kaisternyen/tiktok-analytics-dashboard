@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
+import { getCurrentNormalizedTimestamp, getIntervalForCadence, isCurrentInterval } from '@/lib/timestamp-utils';
 
 // Force dynamic rendering for cron jobs
 export const dynamic = 'force-dynamic';
@@ -53,14 +54,35 @@ interface VideoRecord {
 // Determine if video should be scraped based on standardized timing and cadence
 function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?: string } {
     const now = new Date();
-    const minutesSinceLastScrape = (now.getTime() - video.lastScrapedAt.getTime()) / (1000 * 60);
+    const interval = getIntervalForCadence(video.scrapingCadence);
+    const normalizedTimestamp = getCurrentNormalizedTimestamp(interval);
     
-    // For testing: All videos scrape every minute (regardless of age)
-    if (minutesSinceLastScrape >= 1) {
-        return { shouldScrape: true, reason: 'Testing mode - minutely tracking' };
-    } else {
-        return { shouldScrape: false, reason: `Testing - scraped ${Math.floor(minutesSinceLastScrape * 60)} sec ago` };
+    // For testing mode (every minute), always scrape
+    if (video.scrapingCadence === 'testing') {
+        return { shouldScrape: true, reason: 'Testing mode - always scrape' };
     }
+    
+    // Check if we already have recent data for this timestamp interval
+    // Note: This will be checked again in the actual scraping logic, but this helps us skip early
+    const lastScraped = new Date(video.lastScrapedAt);
+    
+    // Simple time-based check - if we've scraped recently and the video is on a daily cadence
+    if (video.scrapingCadence === 'daily') {
+        const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+        if (hoursSinceLastScrape < 1) {
+            return { shouldScrape: false, reason: 'Daily video scraped within last hour' };
+        }
+    }
+    
+    // For hourly videos, check if we're in a new 5-minute interval
+    if (video.scrapingCadence === 'hourly') {
+        const minutesSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60);
+        if (minutesSinceLastScrape < 3) { // Allow some buffer
+            return { shouldScrape: false, reason: 'Hourly video scraped within last 3 minutes' };
+        }
+    }
+    
+    return { shouldScrape: true, reason: `Ready to scrape (${interval} interval)` };
 }
 
 // Calculate if video should change cadence based on performance
@@ -212,15 +234,42 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                     });
 
                     // Add new metrics history entry
-                    await prisma.metricsHistory.create({
-                        data: {
+                    const videoInterval = getIntervalForCadence(video.scrapingCadence);
+                    const normalizedTimestamp = getCurrentNormalizedTimestamp(videoInterval);
+                    
+                    // Check if we already have a metric entry at this normalized timestamp
+                    const existingMetric = await prisma.metricsHistory.findFirst({
+                        where: {
                             videoId: video.id,
-                            views: views,
-                            likes: mediaData.likes,
-                            comments: mediaData.comments,
-                            shares: shares,
+                            timestamp: new Date(normalizedTimestamp)
                         }
                     });
+                    
+                    if (!existingMetric) {
+                        await prisma.metricsHistory.create({
+                            data: {
+                                videoId: video.id,
+                                views: views,
+                                likes: mediaData.likes,
+                                comments: mediaData.comments,
+                                shares: shares,
+                                timestamp: new Date(normalizedTimestamp)
+                            }
+                        });
+                        console.log(`📊 [${i + index + 1}] Created new metrics entry at ${normalizedTimestamp} (${videoInterval} interval)`);
+                    } else {
+                        // Update existing entry with latest values
+                        await prisma.metricsHistory.update({
+                            where: { id: existingMetric.id },
+                            data: {
+                                views: views,
+                                likes: mediaData.likes,
+                                comments: mediaData.comments,
+                                shares: shares,
+                            }
+                        });
+                        console.log(`📊 [${i + index + 1}] Updated existing metrics entry at ${normalizedTimestamp} (${videoInterval} interval)`);
+                    }
 
                     const viewsChange = views - video.currentViews;
                     const likesChange = mediaData.likes - video.currentLikes;

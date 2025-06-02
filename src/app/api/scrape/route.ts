@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
+import { getCurrentNormalizedTimestamp, getIntervalForCadence } from '@/lib/timestamp-utils';
 
 export async function POST(request: NextRequest) {
     console.log('🎬 /api/scrape endpoint hit');
@@ -146,15 +147,41 @@ export async function POST(request: NextRequest) {
             });
 
             // Add metrics history entry for manual scrapes to appear on graph
-            await prisma.metricsHistory.create({
-                data: {
+            const normalizedTimestamp = getCurrentNormalizedTimestamp(getIntervalForCadence('manual'));
+            
+            // Check if we already have a metric entry at this normalized timestamp
+            const existingMetric = await prisma.metricsHistory.findFirst({
+                where: {
                     videoId: updatedVideo.id,
-                    views: views,
-                    likes: likes,
-                    comments: comments,
-                    shares: shares,
+                    timestamp: new Date(normalizedTimestamp)
                 }
             });
+            
+            if (!existingMetric) {
+                await prisma.metricsHistory.create({
+                    data: {
+                        videoId: updatedVideo.id,
+                        views: views,
+                        likes: likes,
+                        comments: comments,
+                        shares: shares,
+                        timestamp: new Date(normalizedTimestamp)
+                    }
+                });
+                console.log(`📊 Created new metrics entry at normalized timestamp: ${normalizedTimestamp}`);
+            } else {
+                // Update existing entry with latest values (this handles multiple scrapes within the same interval)
+                await prisma.metricsHistory.update({
+                    where: { id: existingMetric.id },
+                    data: {
+                        views: views,
+                        likes: likes,
+                        comments: comments,
+                        shares: shares,
+                    }
+                });
+                console.log(`📊 Updated existing metrics entry at normalized timestamp: ${normalizedTimestamp}`);
+            }
 
             console.log('✅ Media updated successfully with new metrics history:', {
                 id: result.data.id,
@@ -202,6 +229,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Create initial metrics history entry so the first scrape appears on the graph
+        const normalizedTimestamp = getCurrentNormalizedTimestamp(getIntervalForCadence('manual'));
         await prisma.metricsHistory.create({
             data: {
                 videoId: newVideo.id,
@@ -209,10 +237,11 @@ export async function POST(request: NextRequest) {
                 likes: likes,
                 comments: comments,
                 shares: shares,
+                timestamp: new Date(normalizedTimestamp)
             }
         });
 
-        console.log('✅ New media created successfully with initial metrics history:', {
+        console.log(`✅ New media created successfully with initial metrics history at ${normalizedTimestamp}:`, {
             id: result.data.id,
             username: newVideo.username,
             platform: platform,
