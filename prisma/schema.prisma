@@ -29,9 +29,12 @@ model Video {
   music         String?  // JSON string for MVP simplicity
   
   // Tracking info
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  lastScrapedAt DateTime @default(now())
+  isActive         Boolean  @default(true)
+  trackingMode     String   @default("active")     // "active" (hourly) or "dormant" (daily)
+  lastModeChange   DateTime @default(now())        // When tracking mode last changed
+  lastDailyViews   Int      @default(0)            // Views from yesterday for growth calculation
+  createdAt        DateTime @default(now())
+  lastScrapedAt    DateTime @default(now())
   
   // Relationship
   metricsHistory MetricsHistory[]

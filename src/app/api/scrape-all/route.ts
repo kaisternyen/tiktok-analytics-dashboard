@@ -39,16 +39,119 @@ interface VideoRecord {
     currentLikes: number;
     currentComments: number;
     currentShares: number;
+    trackingMode: string;
+    lastModeChange: Date;
+    lastDailyViews: number;
+    createdAt: Date;
     lastScrapedAt: Date;
+    isActive: boolean;
 }
 
-// Smart filter: only scrape videos that need updating
+interface CronStatusResponse {
+    success: boolean;
+    message: string;
+    status: {
+        system: {
+            status: string;
+            totalVideos: number;
+            activeVideos: number;
+            dormantVideos: number;
+            videosNeedingScrape: number;
+        };
+        cron: {
+            lastActivity: string;
+            minutesSinceLastActivity: number | null;
+            isHealthy: boolean;
+        };
+        recentActivity: Array<{
+            username: string;
+            views: number;
+            minutesAgo: number;
+        }>;
+    };
+}
+
+// Smart filter: adaptive tracking based on video age and performance
 function shouldScrapeVideo(video: VideoRecord): boolean {
     const now = new Date();
     const minutesSinceLastScrape = (now.getTime() - video.lastScrapedAt.getTime()) / (1000 * 60);
+    const daysSinceCreated = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
     
-    // Skip if scraped within last 1 minute for rapid testing (will change to 60 minutes for production)
-    return minutesSinceLastScrape >= 1;
+    // Always use rapid testing interval (1 minute) for now during testing
+    const testingInterval = 1;
+    
+    // Check if video needs tracking mode evaluation
+    const needsModeEvaluation = shouldEvaluateTrackingMode(video);
+    
+    if (video.trackingMode === 'active') {
+        // Active videos (hourly in production, 1 min for testing)
+        return minutesSinceLastScrape >= testingInterval || needsModeEvaluation;
+    } else {
+        // Dormant videos (daily in production, but still 1 min for testing)
+        return minutesSinceLastScrape >= testingInterval || needsModeEvaluation;
+    }
+}
+
+// Determine if a video needs tracking mode evaluation
+function shouldEvaluateTrackingMode(video: VideoRecord): boolean {
+    const now = new Date();
+    const daysSinceCreated = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+    const hoursSinceLastModeChange = (now.getTime() - video.lastModeChange.getTime()) / (1000 * 60 * 60);
+    
+    // Only evaluate if it's been at least 1 hour since last mode change
+    if (hoursSinceLastModeChange < 1) return false;
+    
+    // Videos older than 7 days should be evaluated for dormant mode
+    if (daysSinceCreated >= 7 && video.trackingMode === 'active') {
+        return true;
+    }
+    
+    // Dormant videos should be evaluated if they might be gaining traction
+    if (video.trackingMode === 'dormant') {
+        return true;
+    }
+    
+    return false;
+}
+
+// Determine the appropriate tracking mode for a video
+async function evaluateTrackingMode(video: VideoRecord): Promise<'active' | 'dormant'> {
+    const now = new Date();
+    const daysSinceCreated = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+    
+    // Videos less than 7 days old are always active
+    if (daysSinceCreated < 7) {
+        return 'active';
+    }
+    
+    // For videos older than 7 days, check daily growth
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    
+    // Get views from 24 hours ago
+    const viewsYesterday = video.lastDailyViews || video.currentViews;
+    const dailyGrowth = video.currentViews - viewsYesterday;
+    
+    console.log(`📊 Evaluating tracking mode for @${video.username}:`, {
+        age: `${daysSinceCreated.toFixed(1)} days`,
+        currentViews: video.currentViews,
+        viewsYesterday,
+        dailyGrowth,
+        threshold: 10000
+    });
+    
+    // If daily growth is > 10,000 views, switch to active
+    if (dailyGrowth > 10000) {
+        console.log(`🚀 @${video.username} gained ${dailyGrowth} views in 24h - switching to ACTIVE tracking`);
+        return 'active';
+    }
+    
+    // Otherwise, keep as dormant for older videos
+    if (daysSinceCreated >= 7) {
+        console.log(`💤 @${video.username} gained ${dailyGrowth} views in 24h - keeping DORMANT tracking`);
+        return 'dormant';
+    }
+    
+    return 'active';
 }
 
 // Smart processing with rate limiting and error handling
@@ -208,18 +311,12 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
 }
 
 export async function GET() {
-    const startTime = Date.now();
-    const timestamp = new Date().toISOString();
-    console.log(`🚀 [${timestamp}] ===== CRON SCRAPE STARTING =====`);
-    console.log(`🕐 Execution time: ${timestamp}`);
-    console.log(`💾 Database connection: ${prisma ? 'Connected' : 'Failed'}`);
+    console.log('🔄 Cron job /api/scrape-all triggered at:', new Date().toISOString());
 
     try {
-        // Fetch all active videos, prioritizing oldest scraped first
-        console.log(`📋 Fetching active videos from database...`);
+        // Get all active videos from database
         const videos = await prisma.video.findMany({
             where: { isActive: true },
-            orderBy: { lastScrapedAt: 'asc' },
             select: {
                 id: true,
                 url: true,
@@ -229,81 +326,223 @@ export async function GET() {
                 currentLikes: true,
                 currentComments: true,
                 currentShares: true,
-                lastScrapedAt: true
+                trackingMode: true,
+                lastModeChange: true,
+                lastDailyViews: true,
+                createdAt: true,
+                lastScrapedAt: true,
+                isActive: true
             }
         });
 
-        console.log(`📊 Found ${videos.length} active videos in database`);
+        console.log(`📊 Found ${videos.length} total videos in database`);
 
-        if (videos.length === 0) {
-            console.log(`⚠️ No videos found - database might be empty`);
-            console.log(`🏁 Exiting early - nothing to scrape`);
-            return NextResponse.json({
+        // Filter videos that need scraping (adaptive scheduling)
+        const videosToScrape = videos.filter(shouldScrapeVideo);
+        const activeVideos = videos.filter(v => v.trackingMode === 'active');
+        const dormantVideos = videos.filter(v => v.trackingMode === 'dormant');
+
+        console.log(`🎯 Adaptive tracking status:`, {
+            total: videos.length,
+            active: activeVideos.length,
+            dormant: dormantVideos.length,
+            needingScrape: videosToScrape.length
+        });
+
+        if (videosToScrape.length === 0) {
+            console.log('✅ No videos need scraping at this time');
+            
+            const response: CronStatusResponse = {
                 success: true,
-                message: 'No videos to scrape',
-                summary: {
-                    totalVideos: 0,
-                    successful: 0,
-                    failed: 0,
-                    skipped: 0,
-                    results: []
+                message: `All ${videos.length} videos are up to date`,
+                status: {
+                    system: {
+                        status: 'healthy',
+                        totalVideos: videos.length,
+                        activeVideos: activeVideos.length,
+                        dormantVideos: dormantVideos.length,
+                        videosNeedingScrape: 0
+                    },
+                    cron: {
+                        lastActivity: new Date().toISOString(),
+                        minutesSinceLastActivity: 0,
+                        isHealthy: true
+                    },
+                    recentActivity: []
                 }
-            });
+            };
+
+            return NextResponse.json(response);
         }
 
-        // Log video ages
-        const now = new Date();
-        videos.forEach((video, index) => {
-            const minutesAgo = Math.floor((now.getTime() - video.lastScrapedAt.getTime()) / (1000 * 60));
-            console.log(`📹 [${index + 1}/${videos.length}] @${video.username} (${video.platform}) - last scraped ${minutesAgo} minutes ago`);
+        console.log(`🚀 Starting to scrape ${videosToScrape.length} videos...`);
+
+        const results = [];
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Process each video
+        for (const video of videosToScrape) {
+            try {
+                console.log(`🎬 Processing @${video.username} (${video.platform}, ${video.trackingMode} mode)...`);
+
+                // Evaluate tracking mode if needed
+                const needsModeEvaluation = shouldEvaluateTrackingMode(video);
+                let newTrackingMode = video.trackingMode;
+                
+                if (needsModeEvaluation) {
+                    newTrackingMode = await evaluateTrackingMode(video);
+                    
+                    if (newTrackingMode !== video.trackingMode) {
+                        console.log(`🔄 @${video.username} tracking mode: ${video.trackingMode} → ${newTrackingMode}`);
+                        
+                        // Update tracking mode in database
+                        await prisma.video.update({
+                            where: { id: video.id },
+                            data: {
+                                trackingMode: newTrackingMode,
+                                lastModeChange: new Date(),
+                                lastDailyViews: video.currentViews // Store current views for next evaluation
+                            }
+                        });
+                    }
+                }
+
+                // Scrape the video
+                const result = await scrapeMediaPost(video.url);
+
+                if (result.success && result.data) {
+                    const data = result.data as TikTokVideoData | InstagramPostData;
+
+                    // Extract metrics
+                    const views = data.plays || data.views || 0;
+                    const likes = data.likes || 0;
+                    const comments = data.comments || 0;
+                    const shares = (data as TikTokVideoData).shares || 0;
+
+                    // Update video record
+                    await prisma.video.update({
+                        where: { url: video.url },
+                        data: {
+                            currentViews: views,
+                            currentLikes: likes,
+                            currentComments: comments,
+                            currentShares: shares,
+                            lastScrapedAt: new Date()
+                        }
+                    });
+
+                    // Add metrics history entry
+                    await prisma.metricsHistory.create({
+                        data: {
+                            videoId: video.id,
+                            views: views,
+                            likes: likes,
+                            comments: comments,
+                            shares: shares
+                        }
+                    });
+
+                    const viewsChange = views - video.currentViews;
+                    console.log(`✅ @${video.username}: ${views.toLocaleString()} views (+${viewsChange})`);
+
+                    results.push({
+                        username: video.username,
+                        views: views,
+                        change: viewsChange,
+                        status: 'success',
+                        trackingMode: newTrackingMode
+                    });
+
+                    successCount++;
+                } else {
+                    console.error(`❌ Failed to scrape @${video.username}:`, result.error);
+                    errorCount++;
+                    results.push({
+                        username: video.username,
+                        status: 'error',
+                        error: result.error
+                    });
+                }
+
+            } catch (error) {
+                console.error(`💥 Exception scraping @${video.username}:`, error);
+                errorCount++;
+                results.push({
+                    username: video.username,
+                    status: 'error',
+                    error: error instanceof Error ? error.message : String(error)
+                });
+            }
+        }
+
+        console.log(`🏁 Cron job completed: ${successCount} success, ${errorCount} errors`);
+
+        // Build response
+        const recentActivity = results
+            .filter(r => r.status === 'success' && r.views)
+            .slice(0, 5)
+            .map(r => ({
+                username: r.username,
+                views: r.views,
+                minutesAgo: 0
+            }));
+
+        // Refresh counts after processing
+        const finalVideos = await prisma.video.findMany({
+            where: { isActive: true },
+            select: { trackingMode: true }
         });
 
-        console.log(`⚡ Starting smart processing...`);
-        // Smart processing with rate limiting
-        const { results, successful, failed, skipped } = await processVideosSmartly(videos, 10);
+        const finalActiveCount = finalVideos.filter(v => v.trackingMode === 'active').length;
+        const finalDormantCount = finalVideos.filter(v => v.trackingMode === 'dormant').length;
 
-        const endTime = Date.now();
-        const duration = (endTime - startTime) / 1000;
-
-        const summary = {
-            totalVideos: videos.length,
-            successful,
-            failed,
-            skipped,
-            processed: successful + failed,
-            duration: `${duration.toFixed(1)}s`,
-            timestamp: new Date().toISOString(),
-            results: results.slice(0, 10) // Limit response size
+        const response: CronStatusResponse = {
+            success: true,
+            message: `Processed ${videosToScrape.length} videos: ${successCount} success, ${errorCount} errors`,
+            status: {
+                system: {
+                    status: errorCount > 0 ? 'partial' : 'healthy',
+                    totalVideos: finalVideos.length,
+                    activeVideos: finalActiveCount,
+                    dormantVideos: finalDormantCount,
+                    videosNeedingScrape: 0
+                },
+                cron: {
+                    lastActivity: new Date().toISOString(),
+                    minutesSinceLastActivity: 0,
+                    isHealthy: true
+                },
+                recentActivity: recentActivity
+            }
         };
 
-        console.log(`🎉 ===== CRON COMPLETED =====`);
-        console.log(`✅ Success: ${successful} videos updated`);
-        console.log(`⏭️ Skipped: ${skipped} videos (too recent)`);
-        console.log(`❌ Failed: ${failed} videos had errors`);
-        console.log(`⏱️ Duration: ${duration.toFixed(1)} seconds`);
-        console.log(`📈 Total processed: ${successful + failed}/${videos.length}`);
-
-        return NextResponse.json({
-            success: true,
-            message: `Smart cron: ${successful} updated, ${skipped} skipped, ${failed} failed in ${duration.toFixed(1)}s`,
-            summary
-        });
+        return NextResponse.json(response);
 
     } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        console.error('💥 ===== CRON FAILED =====');
-        console.error(`❌ Error: ${errorMsg}`);
-        console.error(`🔍 Stack trace:`, error);
-        console.error(`🕐 Failed at: ${new Date().toISOString()}`);
+        console.error('💥 Cron job failed:', error);
 
-        return NextResponse.json(
-            {
-                error: 'Cron scrape failed',
-                details: errorMsg,
-                timestamp: new Date().toISOString()
-            },
-            { status: 500 }
-        );
+        const response: CronStatusResponse = {
+            success: false,
+            message: `Cron job failed: ${error instanceof Error ? error.message : String(error)}`,
+            status: {
+                system: {
+                    status: 'error',
+                    totalVideos: 0,
+                    activeVideos: 0,
+                    dormantVideos: 0,
+                    videosNeedingScrape: 0
+                },
+                cron: {
+                    lastActivity: new Date().toISOString(),
+                    minutesSinceLastActivity: 0,
+                    isHealthy: false
+                },
+                recentActivity: []
+            }
+        };
+
+        return NextResponse.json(response, { status: 500 });
     }
 }
 

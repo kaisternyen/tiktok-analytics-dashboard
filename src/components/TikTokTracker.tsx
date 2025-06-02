@@ -37,6 +37,7 @@ interface TrackedVideo {
         author: string;
     };
     platform: 'tiktok' | 'instagram' | 'youtube';
+    trackingMode: 'active' | 'dormant';
     growth: {
         views: number;
         likes: number;
@@ -205,10 +206,12 @@ export default function TikTokTracker() {
                     thumbnailUrl?: string;
                     music?: { name: string; author: string };
                     platform: 'tiktok' | 'instagram' | 'youtube';
+                    trackingMode: 'active' | 'dormant';
                     history: VideoHistory[];
                     growth: { views: number; likes: number; comments: number; shares: number };
                 }) => ({
                     ...video,
+                    trackingMode: video.trackingMode || 'active', // Default to active for existing videos
                     growth: {
                         views: video.growth?.views || 0,
                         likes: video.growth?.likes || 0,
@@ -431,6 +434,8 @@ export default function TikTokTracker() {
 
     const totalMetrics = {
         videos: tracked.length,
+        activeVideos: tracked.filter(v => v.trackingMode === 'active').length,
+        dormantVideos: tracked.filter(v => v.trackingMode === 'dormant').length,
         totalViews: tracked.reduce((sum, v) => sum + v.views, 0),
         totalLikes: tracked.reduce((sum, v) => sum + v.likes, 0),
         totalComments: tracked.reduce((sum, v) => sum + v.comments, 0),
@@ -583,9 +588,24 @@ export default function TikTokTracker() {
     const getChartData = (): ChartDataPoint[] => {
         if (tracked.length === 0) return [];
 
-        // Collect all unique timestamps from all videos
+        // Filter videos based on tracking mode - only include active videos for live/recent periods
+        let videosToInclude = tracked;
+        
+        // For daily and weekly views, only show active videos
+        if (selectedTimePeriod === 'D' || selectedTimePeriod === 'W') {
+            videosToInclude = tracked.filter(video => video.trackingMode === 'active');
+            console.log(`📊 Live aggregate: Using ${videosToInclude.length} active videos (${tracked.length - videosToInclude.length} dormant excluded)`);
+        } else {
+            // For longer periods (M, 3M, 1Y, ALL), include all videos
+            videosToInclude = tracked;
+            console.log(`📊 Historical aggregate: Using all ${videosToInclude.length} videos`);
+        }
+
+        if (videosToInclude.length === 0) return [];
+
+        // Collect all unique timestamps from filtered videos
         const allTimestamps = new Set<string>();
-        tracked.forEach(video => {
+        videosToInclude.forEach(video => {
             if (video.history?.length) {
                 video.history.forEach(point => {
                     allTimestamps.add(point.time);
@@ -639,7 +659,7 @@ export default function TikTokTracker() {
         const lastKnownValues: { [videoId: string]: VideoHistory } = {};
 
         // Initialize with first known values for each video
-        tracked.forEach(video => {
+        videosToInclude.forEach(video => {
             if (video.history?.length) {
                 const firstPoint = video.history
                     .filter(h => filteredTimestamps.includes(h.time))
@@ -654,7 +674,7 @@ export default function TikTokTracker() {
         // Process each timestamp and build aggregate
         filteredTimestamps.forEach(timestamp => {
             // Update last known values for videos that have data at this timestamp
-            tracked.forEach(video => {
+            videosToInclude.forEach(video => {
                 const pointAtTime = video.history?.find(h => h.time === timestamp);
                 if (pointAtTime) {
                     lastKnownValues[video.id] = pointAtTime;
@@ -804,7 +824,7 @@ export default function TikTokTracker() {
                     {/* Status Indicators Row */}
                     <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100">
                         <span className="bg-green-100 text-green-800 text-xs font-medium px-3 py-1.5 rounded-full">
-                            ● {tracked.length} videos tracked
+                            ● {totalMetrics.activeVideos} active • {totalMetrics.dormantVideos} dormant • {tracked.length} total
                         </span>
                         {cronStatus && (
                             <div className="flex items-center gap-3">
@@ -945,7 +965,11 @@ export default function TikTokTracker() {
                                         <CardContent className="p-4">
                                             <div className="text-2xl font-bold text-gray-900">{totalMetrics.videos}</div>
                                             <div className="text-sm text-gray-500">Videos Tracked</div>
-                                            <div className="text-xs mt-1 text-green-600">Active</div>
+                                            <div className="text-xs mt-1 flex items-center gap-2">
+                                                <span className="text-green-600">{totalMetrics.activeVideos} Active</span>
+                                                <span className="text-gray-400">•</span>
+                                                <span className="text-orange-600">{totalMetrics.dormantVideos} Dormant</span>
+                                            </div>
                                         </CardContent>
                                     </Card>
                                 </div>
@@ -955,7 +979,11 @@ export default function TikTokTracker() {
                                     <CardContent className="p-6">
                                         <div className="flex items-center justify-between mb-4">
                                             <h3 className="text-lg font-semibold">
-                                                Performance Overview - Aggregate Stats ({tracked.length} videos)
+                                                Performance Overview - {
+                                                    selectedTimePeriod === 'D' || selectedTimePeriod === 'W' 
+                                                        ? `Active Videos (${totalMetrics.activeVideos})`
+                                                        : `All Videos (${tracked.length})`
+                                                }
                                             </h3>
                                             <div className="flex items-center gap-2">
                                                 {/* Time Period Selector */}
@@ -1144,10 +1172,18 @@ export default function TikTokTracker() {
                                                                         <Play className="w-3 h-3 text-white" />
                                                                     </div>
                                                                 )}
-                                                                <span className="text-sm font-medium">
-                                                                    {video.platform === 'instagram' ? 'Instagram' : 
-                                                                     video.platform === 'youtube' ? 'YouTube' : 'TikTok'}
-                                                                </span>
+                                                                <div>
+                                                                    <span className="text-sm font-medium">
+                                                                        {video.platform === 'instagram' ? 'Instagram' : 
+                                                                         video.platform === 'youtube' ? 'YouTube' : 'TikTok'}
+                                                                    </span>
+                                                                    <div className="text-xs text-gray-500 flex items-center gap-1">
+                                                                        <span className={`w-2 h-2 rounded-full ${
+                                                                            video.trackingMode === 'active' ? 'bg-green-500' : 'bg-orange-500'
+                                                                        }`} />
+                                                                        {video.trackingMode === 'active' ? 'Hourly' : 'Daily'}
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </td>
                                                         <td className="p-4 font-medium">{formatNumber(video.views)}</td>
