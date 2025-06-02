@@ -55,59 +55,72 @@ interface VideoRecord {
 function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?: string } {
     const now = new Date();
     const interval = getIntervalForCadence(video.scrapingCadence);
+    const lastScraped = new Date(video.lastScrapedAt);
+    const videoAgeInDays = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
     
     // For testing mode (every minute), always scrape
     if (video.scrapingCadence === 'testing') {
         return { shouldScrape: true, reason: 'Testing mode - always scrape' };
     }
     
-    // Check if we already have recent data for this timestamp interval
-    // Note: This will be checked again in the actual scraping logic, but this helps us skip early
-    const lastScraped = new Date(video.lastScrapedAt);
-    
-    // Simple time-based check - if we've scraped recently and the video is on a daily cadence
-    if (video.scrapingCadence === 'daily') {
+    // All videos under 7 days old: scrape every hour
+    if (videoAgeInDays < 7) {
         const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
-        if (hoursSinceLastScrape < 1) {
-            return { shouldScrape: false, reason: 'Daily video scraped within last hour' };
+        if (hoursSinceLastScrape >= 1) {
+            return { shouldScrape: true, reason: `Video ${videoAgeInDays.toFixed(1)} days old - hourly tracking` };
+        } else {
+            return { shouldScrape: false, reason: `Recently scraped ${Math.floor(hoursSinceLastScrape * 60)} minutes ago` };
         }
     }
     
-    // For hourly videos, check if we're in a new 5-minute interval
+    // Videos 7+ days old with daily cadence: scrape once per day (24 hour spacing)
+    if (video.scrapingCadence === 'daily') {
+        const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+        if (hoursSinceLastScrape >= 24) {
+            return { shouldScrape: true, reason: `Daily video - ${Math.floor(hoursSinceLastScrape)} hours since last scrape` };
+        } else {
+            const hoursUntilNext = Math.ceil(24 - hoursSinceLastScrape);
+            return { shouldScrape: false, reason: `Daily video - next scrape in ${hoursUntilNext}h` };
+        }
+    }
+    
+    // Videos 7+ days old with hourly cadence: scrape every hour (high-performance videos)
     if (video.scrapingCadence === 'hourly') {
-        const minutesSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60);
-        if (minutesSinceLastScrape < 3) { // Allow some buffer
-            return { shouldScrape: false, reason: 'Hourly video scraped within last 3 minutes' };
+        const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+        if (hoursSinceLastScrape >= 1) {
+            return { shouldScrape: true, reason: `High-performance video - hourly tracking` };
+        } else {
+            return { shouldScrape: false, reason: `Recently scraped ${Math.floor(hoursSinceLastScrape * 60)} minutes ago` };
         }
     }
     
     return { shouldScrape: true, reason: `Ready to scrape (${interval} interval)` };
 }
 
-// Calculate if video should change cadence based on performance
+// Calculate if video should change cadence based on performance and age
 function evaluateCadenceChange(video: VideoRecord, newViews: number): { newCadence: string; reason: string } | null {
     const videoAgeInDays = (new Date().getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
     
-    // Only evaluate cadence for videos older than 7 days
+    // Videos under 7 days old always stay on hourly tracking
     if (videoAgeInDays < 7) {
-        return null;
+        return null; // No cadence changes for new videos
     }
     
-    // Calculate daily growth
+    // For videos 7+ days old, evaluate performance
     const dailyGrowth = video.lastDailyViews ? newViews - video.lastDailyViews : 0;
     
-    // Performance thresholds
+    // Performance thresholds for 7+ day old videos
     const HIGH_PERFORMANCE_THRESHOLD = 10000; // Views per day
     
     if (video.scrapingCadence === 'hourly' && dailyGrowth < HIGH_PERFORMANCE_THRESHOLD) {
         return {
             newCadence: 'daily',
-            reason: `Low growth: ${dailyGrowth.toLocaleString()} views/day < ${HIGH_PERFORMANCE_THRESHOLD.toLocaleString()}`
+            reason: `Video ${videoAgeInDays.toFixed(1)} days old, low growth: ${dailyGrowth.toLocaleString()} views/day → daily tracking`
         };
     } else if (video.scrapingCadence === 'daily' && dailyGrowth >= HIGH_PERFORMANCE_THRESHOLD) {
         return {
             newCadence: 'hourly',
-            reason: `High growth detected: ${dailyGrowth.toLocaleString()} views/day >= ${HIGH_PERFORMANCE_THRESHOLD.toLocaleString()}`
+            reason: `High growth detected: ${dailyGrowth.toLocaleString()} views/day → hourly tracking`
         };
     }
     
@@ -342,7 +355,8 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
 export async function GET() {
     const startTime = Date.now();
     console.log(`🚀 ===== CRON JOB STARTED (${new Date().toISOString()}) =====`);
-    console.log(`⏰ Standardized timing: Running at minute :00`);
+    console.log(`⏰ Hourly scraping: Running at :00 minutes of each hour`);
+    console.log(`📋 Strategy: <7 days = hourly, 7+ days = performance-based (hourly/daily)`);
 
     try {
         // Fetch all active videos (with backward compatibility for missing cadence fields)
@@ -369,13 +383,16 @@ export async function GET() {
             });
 
             // Add default cadence values for backward compatibility
-            videos = rawVideos.map(video => ({
-                ...video,
-                scrapingCadence: 'hourly', // Default all to hourly until migration
-                lastDailyViews: null,
-                dailyViewsGrowth: null,
-                needsCadenceCheck: false,
-            }));
+            videos = rawVideos.map(video => {
+                const ageInDays = (new Date().getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+                return {
+                    ...video,
+                    scrapingCadence: ageInDays < 7 ? 'hourly' : 'hourly', // Default all to hourly, evaluation will adjust
+                    lastDailyViews: null,
+                    dailyViewsGrowth: null,
+                    needsCadenceCheck: false,
+                };
+            });
             
         } catch (error) {
             console.error('💥 Error fetching videos:', error);
@@ -383,6 +400,11 @@ export async function GET() {
         }
 
         console.log(`📊 Found ${videos.length} active videos to evaluate`);
+        
+        // Log age distribution
+        const newVideos = videos.filter(v => (new Date().getTime() - v.createdAt.getTime()) / (1000 * 60 * 60 * 24) < 7);
+        const oldVideos = videos.filter(v => (new Date().getTime() - v.createdAt.getTime()) / (1000 * 60 * 60 * 24) >= 7);
+        console.log(`📊 Age distribution: ${newVideos.length} videos <7 days (hourly), ${oldVideos.length} videos 7+ days (performance-based)`);
         
         if (videos.length === 0) {
             console.log('⚠️ No videos found in database');

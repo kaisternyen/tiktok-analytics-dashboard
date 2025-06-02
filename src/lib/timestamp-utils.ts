@@ -80,9 +80,9 @@ export function isCurrentInterval(timestamp: Date | string, interval: TimestampI
  */
 export const CADENCE_INTERVALS: Record<string, TimestampInterval> = {
     'testing': 'minute',     // For rapid testing (every minute)
-    'hourly': '5min',       // High-frequency videos: 5-minute intervals
-    'daily': '60min',       // Low-frequency videos: hourly intervals
-    'manual': '5min',       // Manual scrapes: 5-minute intervals
+    'hourly': '60min',       // Active videos: hourly intervals (every hour at :00)
+    'daily': '60min',        // Inactive videos: daily intervals (every hour at :00, but only scraped once per day)
+    'manual': '5min',        // Manual scrapes: 5-minute intervals for immediate feedback
 };
 
 /**
