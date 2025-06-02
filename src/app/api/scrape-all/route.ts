@@ -324,9 +324,12 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         }
                     });
 
-                    // Add new metrics history entry
+                    // Add new metrics history entry with EST-based timestamp normalization
                     const videoInterval = getIntervalForCadence(video.scrapingCadence);
-                    const normalizedTimestamp = getCurrentNormalizedTimestamp(videoInterval);
+                    
+                    // Get current EST time and normalize it for consistency with scraping schedule
+                    const estTime = new Date(new Date().toLocaleString("en-US", {timeZone: "America/New_York"}));
+                    const normalizedTimestamp = normalizeTimestamp(estTime, videoInterval);
                     
                     // Check if we already have a metric entry at this normalized timestamp
                     const existingMetric = await prisma.metricsHistory.findFirst({

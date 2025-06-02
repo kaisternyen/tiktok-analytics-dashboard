@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import nacl from 'tweetnacl';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
-import { getCurrentNormalizedTimestamp } from '@/lib/timestamp-utils';
+import { getCurrentNormalizedTimestamp, normalizeTimestamp } from '@/lib/timestamp-utils';
 
 // Union type for all possible media data
 type MediaData = TikTokVideoData | InstagramPostData | YouTubeVideoData;
@@ -182,8 +182,9 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      // Add initial metrics history entry
-      const normalizedTimestamp = getCurrentNormalizedTimestamp('60min');
+      // Add initial metrics history entry with EST-based timestamp normalization
+      const estTime = new Date(new Date().toLocaleString("en-US", {timeZone: "America/New_York"}));
+      const normalizedTimestamp = normalizeTimestamp(estTime, '60min');
       await prisma.metricsHistory.create({
         data: {
           videoId: newVideo.id,
