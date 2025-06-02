@@ -65,34 +65,6 @@ interface CronStatus {
     }>;
 }
 
-interface HealthStatus {
-    status: string;
-    timestamp: string;
-    environment: string;
-    deployment: {
-        vercel: boolean;
-        region: string;
-        url: string;
-    };
-    apiKey: {
-        configured: boolean;
-        length: number;
-        preview: string;
-    };
-    tikHub: {
-        status: string;
-        error: string | null;
-        response: {
-            status: number;
-            statusText: string;
-        } | null;
-    };
-    database: {
-        configured: boolean;
-        preview: string;
-    };
-}
-
 interface ChartDataPoint {
     time: string;
     views: number;
@@ -112,7 +84,6 @@ export default function TikTokTracker() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
-    const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
     const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('W');
     const [showDelta, setShowDelta] = useState(false);
@@ -143,22 +114,6 @@ export default function TikTokTracker() {
             }
         };
 
-        const fetchHealth = async () => {
-            try {
-                console.log('🏥 Fetching health status...');
-                const response = await fetch('/api/health');
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('🏥 Health status received:', data);
-                    setHealthStatus(data);
-                } else {
-                    console.error('❌ Health check failed:', response.status, response.statusText);
-                }
-            } catch (error) {
-                console.error('💥 Health check error:', error);
-            }
-        };
-
         // Auto-refresh videos data every 30 seconds for real-time updates
         const autoRefreshVideos = async () => {
             try {
@@ -171,12 +126,10 @@ export default function TikTokTracker() {
 
         // Fetch immediately
         fetchStatus();
-        fetchHealth();
 
         // Set up interval for auto-refresh (30 seconds)
         const interval = setInterval(() => {
             fetchStatus();
-            fetchHealth();
             autoRefreshVideos();
         }, 30000); // Every 30 seconds for real-time feel
 
