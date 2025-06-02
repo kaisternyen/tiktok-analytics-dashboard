@@ -145,11 +145,24 @@ export async function POST(request: NextRequest) {
                 }
             });
 
-            console.log('✅ Media updated successfully:', {
+            // Add metrics history entry for manual scrapes to appear on graph
+            await prisma.metricsHistory.create({
+                data: {
+                    videoId: updatedVideo.id,
+                    views: views,
+                    likes: likes,
+                    comments: comments,
+                    shares: shares,
+                }
+            });
+
+            console.log('✅ Media updated successfully with new metrics history:', {
                 id: result.data.id,
                 username: updatedVideo.username,
                 platform: platform,
-                url: updatedVideo.url
+                url: updatedVideo.url,
+                views: views,
+                likes: likes
             });
 
             return NextResponse.json({
@@ -188,11 +201,24 @@ export async function POST(request: NextRequest) {
             }
         });
 
-        console.log('✅ New media created successfully:', {
+        // Create initial metrics history entry so the first scrape appears on the graph
+        await prisma.metricsHistory.create({
+            data: {
+                videoId: newVideo.id,
+                views: views,
+                likes: likes,
+                comments: comments,
+                shares: shares,
+            }
+        });
+
+        console.log('✅ New media created successfully with initial metrics history:', {
             id: result.data.id,
             username: newVideo.username,
             platform: platform,
-            dbId: newVideo.id
+            dbId: newVideo.id,
+            initialViews: views,
+            initialLikes: likes
         });
 
         return NextResponse.json({
