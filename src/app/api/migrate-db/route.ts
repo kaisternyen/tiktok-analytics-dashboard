@@ -46,7 +46,7 @@ export async function POST(request: Request) {
                 }
             });
             console.log('✅ Cadence fields already exist in database');
-        } catch (error) {
+        } catch {
             fieldsNeedAdding = true;
             console.log('⚠️ Cadence fields need to be added to database');
         }
