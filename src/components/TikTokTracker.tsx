@@ -847,31 +847,6 @@ export default function TikTokTracker() {
                                 )}
                             </div>
                         )}
-                        {healthStatus && (
-                            <div className="flex items-center gap-3">
-                                <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${healthStatus.tikHub.status === 'CONNECTED'
-                                    ? 'bg-green-100 text-green-800'
-                                    : healthStatus.tikHub.status === 'NO_API_KEY'
-                                        ? 'bg-red-100 text-red-800'
-                                        : 'bg-yellow-100 text-yellow-800'
-                                    }`}>
-                                    <span className={`w-2 h-2 rounded-full ${healthStatus.tikHub.status === 'CONNECTED' ? 'bg-green-500' :
-                                        healthStatus.tikHub.status === 'NO_API_KEY' ? 'bg-red-500' : 'bg-yellow-500'
-                                        }`} />
-                                    TikHub {healthStatus.tikHub.status === 'CONNECTED' ? 'Connected' :
-                                        healthStatus.tikHub.status === 'NO_API_KEY' ? 'No API Key' :
-                                            healthStatus.tikHub.status}
-                                </span>
-                                {healthStatus.tikHub.error && (
-                                    <span className="text-xs text-red-600 max-w-xs truncate bg-red-50 px-3 py-1.5 rounded-full" title={healthStatus.tikHub.error}>
-                                        {healthStatus.tikHub.error}
-                                    </span>
-                                )}
-                                <span className="text-xs text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">
-                                    {healthStatus.environment} | Key: {healthStatus.apiKey.configured ? '✓' : '✗'}
-                                </span>
-                            </div>
-                        )}
                     </div>
 
                     {/* Status Messages */}
@@ -1197,16 +1172,16 @@ export default function TikTokTracker() {
                                                         </td>
                                                         <td className="p-4">{formatGrowth(video.growth.views)}</td>
                                                         <td className="p-4">
-                                                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                                                                 video.scrapingCadence === 'hourly' 
                                                                     ? 'bg-blue-100 text-blue-800' 
                                                                     : video.scrapingCadence === 'daily'
                                                                     ? 'bg-orange-100 text-orange-800'
                                                                     : 'bg-purple-100 text-purple-800'
                                                             }`}>
-                                                                {video.scrapingCadence === 'hourly' ? '⏰ Hourly' : 
-                                                                 video.scrapingCadence === 'daily' ? '🌙 Daily' : 
-                                                                 '🧪 Testing'}
+                                                                {video.scrapingCadence === 'hourly' ? '1H' : 
+                                                                 video.scrapingCadence === 'daily' ? '1D' : 
+                                                                 '1M'}
                                                             </span>
                                                         </td>
                                                         <td className="p-4">
