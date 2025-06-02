@@ -37,7 +37,7 @@ interface TrackedVideo {
         author: string;
     };
     platform: 'tiktok' | 'instagram' | 'youtube';
-    scrapingCadence?: string; // 'hourly' | 'daily'
+    scrapingCadence: string; // 'hourly' | 'daily' | 'testing'
     growth: {
         views: number;
         likes: number;
@@ -1053,7 +1053,7 @@ export default function TikTokTracker() {
                                                 </span>
                                             </div>
                                             <div className="text-sm text-gray-500">
-                                                Cron: Every minute • Next scrape in ~{60 - new Date().getSeconds()}s
+                                                Cron: Every hour • Next scrape in ~{60 - new Date().getMinutes()}m
                                             </div>
                                         </div>
                                     </CardContent>
@@ -1064,6 +1064,25 @@ export default function TikTokTracker() {
 
                     {/* Videos Tab */}
                     <TabsContent value="videos">
+                        {/* Cadence Info Card */}
+                        <Card className="mb-4">
+                            <CardContent className="p-4">
+                                <div className="flex items-start gap-3">
+                                    <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
+                                        <span className="text-xs font-medium text-blue-600">i</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="font-medium text-gray-900 mb-1">Adaptive Scraping Cadence</h4>
+                                        <div className="text-sm text-gray-600 space-y-1">
+                                            <p>• <span className="text-blue-600 font-medium">Hourly</span>: New videos (first week) and high-performance videos (10k+ daily views)</p>
+                                            <p>• <span className="text-orange-600 font-medium">Daily</span>: Older videos with low views - scraped at 12:00 AM EST</p>
+                                            <p>• <span className="text-purple-600 font-medium">Testing</span>: Development mode - scraped every minute</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                        
                         <Card>
                             <CardContent className="p-0">
                                 {tracked.length === 0 ? (
@@ -1084,6 +1103,7 @@ export default function TikTokTracker() {
                                                     <th className="text-left p-4 font-medium text-gray-900">Comments</th>
                                                     <th className="text-left p-4 font-medium text-gray-900">Shares</th>
                                                     <th className="text-left p-4 font-medium text-gray-900">Growth</th>
+                                                    <th className="text-left p-4 font-medium text-gray-900">Cadence</th>
                                                     <th className="text-left p-4 font-medium text-gray-900">Status</th>
                                                     <th className="text-left p-4 font-medium text-gray-900">Actions</th>
                                                 </tr>
@@ -1172,10 +1192,23 @@ export default function TikTokTracker() {
                                                         <td className="p-4 font-medium">{formatNumber(video.views)}</td>
                                                         <td className="p-4 font-medium">{formatNumber(video.likes)}</td>
                                                         <td className="p-4 font-medium">{formatNumber(video.comments)}</td>
-                                                        <td className="p-4 font-medium">
+                                                        <td className="p-4">
                                                             {video.platform === 'instagram' || video.platform === 'youtube' ? 'N/A' : formatNumber(video.shares)}
                                                         </td>
                                                         <td className="p-4">{formatGrowth(video.growth.views)}</td>
+                                                        <td className="p-4">
+                                                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                                                video.scrapingCadence === 'hourly' 
+                                                                    ? 'bg-blue-100 text-blue-800' 
+                                                                    : video.scrapingCadence === 'daily'
+                                                                    ? 'bg-orange-100 text-orange-800'
+                                                                    : 'bg-purple-100 text-purple-800'
+                                                            }`}>
+                                                                {video.scrapingCadence === 'hourly' ? '⏰ Hourly' : 
+                                                                 video.scrapingCadence === 'daily' ? '🌙 Daily' : 
+                                                                 '🧪 Testing'}
+                                                            </span>
+                                                        </td>
                                                         <td className="p-4">
                                                             <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded-full">
                                                                 {video.status}

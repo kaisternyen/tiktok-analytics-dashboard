@@ -65,7 +65,7 @@ export async function GET() {
                 videosNeedingScrape: videosNeedingScrape.length
             },
             cron: {
-                expectedFrequency: 'Every 1 minute',
+                expectedFrequency: 'Every 1 hour',
                 lastActivity: lastActivity?.toISOString() || 'Never',
                 minutesSinceLastActivity,
                 isHealthy: true,

@@ -56,7 +56,31 @@ export async function GET() {
         console.log(`✅ Found ${videos.length} videos in database`);
 
         // Transform data for frontend
-        const transformedVideos = videos.map(video => {
+        const transformedVideos = videos.map((video: {
+            id: string;
+            url: string;
+            username: string;
+            description: string;
+            thumbnailUrl: string | null;
+            createdAt: Date;
+            lastScrapedAt: Date;
+            isActive: boolean;
+            currentViews: number;
+            currentLikes: number;
+            currentComments: number;
+            currentShares: number;
+            hashtags: string | null;
+            music: string | null;
+            platform: string | null;
+            scrapingCadence: string | null;
+            metricsHistory: Array<{
+                timestamp: Date;
+                views: number;
+                likes: number;
+                comments: number;
+                shares: number;
+            }>;
+        }) => {
             // Parse JSON fields
             const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
             const music = video.music ? JSON.parse(video.music) : null;
@@ -93,8 +117,15 @@ export async function GET() {
                 hashtags,
                 music,
                 platform: video.platform || 'tiktok',
+                scrapingCadence: video.scrapingCadence || 'hourly',
                 growth,
-                history: history.map(h => ({
+                history: history.map((h: {
+                    timestamp: Date;
+                    views: number;
+                    likes: number;
+                    comments: number;
+                    shares: number;
+                }) => ({
                     time: h.timestamp.toISOString(),
                     views: h.views,
                     likes: h.likes,
