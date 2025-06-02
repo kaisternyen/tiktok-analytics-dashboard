@@ -5,23 +5,6 @@ import { prisma } from '@/lib/prisma';
 // Force dynamic rendering for cron jobs
 export const dynamic = 'force-dynamic';
 
-interface VideoRecord {
-    id: string;
-    url: string;
-    username: string;
-    platform: string;
-    currentViews: number;
-    currentLikes: number;
-    currentComments: number;
-    currentShares: number;
-    trackingMode: string;
-    lastModeChange: Date;
-    lastDailyViews: number;
-    createdAt: Date;
-    lastScrapedAt: Date;
-    isActive: boolean;
-}
-
 interface CronStatusResponse {
     success: boolean;
     message: string;
@@ -46,113 +29,16 @@ interface CronStatusResponse {
     };
 }
 
-// Smart filter: adaptive tracking based on video age and performance with synchronized timing
-function shouldScrapeVideo(video: VideoRecord): boolean {
+// Smart filter: check if video needs scraping based on time elapsed
+function shouldScrapeVideo(video: any): boolean {
     const now = new Date();
     const lastScrape = new Date(video.lastScrapedAt);
+    const timeDiff = now.getTime() - lastScrape.getTime();
     
-    // Check if video needs tracking mode evaluation
-    const needsModeEvaluation = shouldEvaluateTrackingMode(video);
+    // For now, scrape every 30 minutes in production, every minute in development
+    const scrapeInterval = process.env.NODE_ENV === 'production' ? 30 * 60 * 1000 : 60 * 1000;
     
-    if (video.trackingMode === 'active') {
-        // Active videos: hourly boundaries in production, minute boundaries for testing
-        if (process.env.NODE_ENV === 'production') {
-            // Production: Check if we've crossed an hour boundary
-            const currentHour = now.getHours();
-            const lastScrapedHour = lastScrape.getHours();
-            const crossedHourBoundary = currentHour !== lastScrapedHour || 
-                                      now.getDate() !== lastScrape.getDate() ||
-                                      now.getMonth() !== lastScrape.getMonth();
-            return crossedHourBoundary || needsModeEvaluation;
-        } else {
-            // Testing: Check if we've crossed a minute boundary  
-            const currentMinute = now.getMinutes();
-            const lastScrapedMinute = lastScrape.getMinutes();
-            const crossedMinuteBoundary = currentMinute !== lastScrapedMinute ||
-                                        now.getHours() !== lastScrape.getHours() ||
-                                        now.getDate() !== lastScrape.getDate();
-            return crossedMinuteBoundary || needsModeEvaluation;
-        }
-    } else {
-        // Dormant videos: daily boundaries in production, minute boundaries for testing
-        if (process.env.NODE_ENV === 'production') {
-            // Production: Check if we've crossed a day boundary
-            const currentDay = now.getDate();
-            const lastScrapedDay = lastScrape.getDate();
-            const crossedDayBoundary = currentDay !== lastScrapedDay ||
-                                     now.getMonth() !== lastScrape.getMonth() ||
-                                     now.getFullYear() !== lastScrape.getFullYear();
-            return crossedDayBoundary || needsModeEvaluation;
-        } else {
-            // Testing: Still use minute boundaries for dormant videos during testing
-            const currentMinute = now.getMinutes();
-            const lastScrapedMinute = lastScrape.getMinutes();
-            const crossedMinuteBoundary = currentMinute !== lastScrapedMinute ||
-                                        now.getHours() !== lastScrape.getHours() ||
-                                        now.getDate() !== lastScrape.getDate();
-            return crossedMinuteBoundary || needsModeEvaluation;
-        }
-    }
-}
-
-// Determine if a video needs tracking mode evaluation
-function shouldEvaluateTrackingMode(video: VideoRecord): boolean {
-    const now = new Date();
-    const daysSinceCreated = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-    const hoursSinceLastModeChange = (now.getTime() - video.lastModeChange.getTime()) / (1000 * 60 * 60);
-    
-    // Only evaluate if it's been at least 1 hour since last mode change
-    if (hoursSinceLastModeChange < 1) return false;
-    
-    // Videos older than 7 days should be evaluated for dormant mode
-    if (daysSinceCreated >= 7 && video.trackingMode === 'active') {
-        return true;
-    }
-    
-    // Dormant videos should be evaluated if they might be gaining traction
-    if (video.trackingMode === 'dormant') {
-        return true;
-    }
-    
-    return false;
-}
-
-// Determine the appropriate tracking mode for a video
-async function evaluateTrackingMode(video: VideoRecord): Promise<'active' | 'dormant'> {
-    const now = new Date();
-    const daysSinceCreated = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-    
-    // Videos less than 7 days old are always active
-    if (daysSinceCreated < 7) {
-        return 'active';
-    }
-    
-    // For videos older than 7 days, check daily growth
-    // Get views from 24 hours ago
-    const viewsYesterday = video.lastDailyViews || video.currentViews;
-    const dailyGrowth = video.currentViews - viewsYesterday;
-    
-    console.log(`📊 Evaluating tracking mode for @${video.username}:`, {
-        age: `${daysSinceCreated.toFixed(1)} days`,
-        currentViews: video.currentViews,
-        viewsYesterday,
-        dailyGrowth,
-        threshold: 10000
-    });
-    
-    // If daily growth is > 10,000 views, switch to active
-    if (dailyGrowth > 10000) {
-        console.log(`🚀 @${video.username} gained ${dailyGrowth} views in 24h - switching to ACTIVE tracking`);
-        return 'active';
-    }
-    
-    // Otherwise, keep as dormant for older videos
-    if (daysSinceCreated >= 7) {
-        console.log(`💤 @${video.username} gained ${dailyGrowth} views in 24h - keeping DORMANT tracking`);
-        return 'dormant';
-    }
-    
-    return 'active';
+    return timeDiff >= scrapeInterval;
 }
 
 export async function GET() {
@@ -171,9 +57,6 @@ export async function GET() {
                 currentLikes: true,
                 currentComments: true,
                 currentShares: true,
-                trackingMode: true,
-                lastModeChange: true,
-                lastDailyViews: true,
                 createdAt: true,
                 lastScrapedAt: true,
                 isActive: true
@@ -182,39 +65,10 @@ export async function GET() {
 
         console.log(`📊 Found ${videos.length} total videos in database`);
 
-        // Filter videos that need scraping (adaptive scheduling)
+        // Filter videos that need scraping
         const videosToScrape = videos.filter(shouldScrapeVideo);
-        const activeVideos = videos.filter(v => v.trackingMode === 'active');
-        const dormantVideos = videos.filter(v => v.trackingMode === 'dormant');
 
-        console.log(`🎯 Adaptive tracking status:`, {
-            total: videos.length,
-            active: activeVideos.length,
-            dormant: dormantVideos.length,
-            needingScrape: videosToScrape.length
-        });
-
-        // Log synchronization details
-        const now = new Date();
-        const isProduction = process.env.NODE_ENV === 'production';
-        console.log(`⏰ Synchronization timing:`, {
-            environment: isProduction ? 'production' : 'development',
-            currentTime: now.toISOString(),
-            syncBoundary: isProduction ? `Hour: ${now.getHours()}:00` : `Minute: ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`,
-            syncType: isProduction ? 'hourly/daily boundaries' : 'minute boundaries'
-        });
-
-        // Show which videos need scraping and why
-        if (videosToScrape.length > 0) {
-            console.log(`📋 Videos requiring sync:`, videosToScrape.map(v => {
-                const lastScrape = new Date(v.lastScrapedAt);
-                const reason = shouldEvaluateTrackingMode(v) ? 'mode evaluation' : 'boundary crossed';
-                const timeDiff = isProduction ? 
-                    `last: ${lastScrape.getHours()}:00, current: ${now.getHours()}:00` :
-                    `last: ${lastScrape.getHours()}:${lastScrape.getMinutes().toString().padStart(2, '0')}, current: ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
-                return `@${v.username} (${v.trackingMode}, ${reason}, ${timeDiff})`;
-            }));
-        }
+        console.log(`🎯 Videos needing scrape: ${videosToScrape.length} of ${videos.length}`);
 
         if (videosToScrape.length === 0) {
             console.log('✅ No videos need scraping at this time');
@@ -226,8 +80,8 @@ export async function GET() {
                     system: {
                         status: 'healthy',
                         totalVideos: videos.length,
-                        activeVideos: activeVideos.length,
-                        dormantVideos: dormantVideos.length,
+                        activeVideos: videos.length,
+                        dormantVideos: 0,
                         videosNeedingScrape: 0
                     },
                     cron: {
@@ -251,29 +105,7 @@ export async function GET() {
         // Process each video
         for (const video of videosToScrape) {
             try {
-                console.log(`🎬 Processing @${video.username} (${video.platform}, ${video.trackingMode} mode)...`);
-
-                // Evaluate tracking mode if needed
-                const needsModeEvaluation = shouldEvaluateTrackingMode(video);
-                let newTrackingMode = video.trackingMode;
-                
-                if (needsModeEvaluation) {
-                    newTrackingMode = await evaluateTrackingMode(video);
-                    
-                    if (newTrackingMode !== video.trackingMode) {
-                        console.log(`🔄 @${video.username} tracking mode: ${video.trackingMode} → ${newTrackingMode}`);
-                        
-                        // Update tracking mode in database
-                        await prisma.video.update({
-                            where: { id: video.id },
-                            data: {
-                                trackingMode: newTrackingMode,
-                                lastModeChange: new Date(),
-                                lastDailyViews: video.currentViews // Store current views for next evaluation
-                            }
-                        });
-                    }
-                }
+                console.log(`🎬 Processing @${video.username} (${video.platform})...`);
 
                 // Scrape the video
                 const result = await scrapeMediaPost(video.url);
@@ -325,8 +157,7 @@ export async function GET() {
                         username: video.username,
                         views: views,
                         change: viewsChange,
-                        status: 'success',
-                        trackingMode: newTrackingMode
+                        status: 'success'
                     });
 
                     successCount++;
@@ -355,22 +186,13 @@ export async function GET() {
 
         // Build response
         const recentActivity = results
-            .filter(r => r.status === 'success' && r.views)
+            .filter(r => r.status === 'success' && r.views !== undefined)
             .slice(0, 5)
             .map(r => ({
                 username: r.username,
-                views: r.views,
+                views: r.views!,
                 minutesAgo: 0
             }));
-
-        // Refresh counts after processing
-        const finalVideos = await prisma.video.findMany({
-            where: { isActive: true },
-            select: { trackingMode: true }
-        });
-
-        const finalActiveCount = finalVideos.filter(v => v.trackingMode === 'active').length;
-        const finalDormantCount = finalVideos.filter(v => v.trackingMode === 'dormant').length;
 
         const response: CronStatusResponse = {
             success: true,
@@ -378,9 +200,9 @@ export async function GET() {
             status: {
                 system: {
                     status: errorCount > 0 ? 'partial' : 'healthy',
-                    totalVideos: finalVideos.length,
-                    activeVideos: finalActiveCount,
-                    dormantVideos: finalDormantCount,
+                    totalVideos: videos.length,
+                    activeVideos: videos.length,
+                    dormantVideos: 0,
                     videosNeedingScrape: 0
                 },
                 cron: {
