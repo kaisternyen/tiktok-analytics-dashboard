@@ -579,81 +579,108 @@ export default function TikTokTracker() {
         return null;
     };
 
-    // Enhanced chart data processing with aggregate data across ALL videos
+    // Enhanced chart data processing with proper aggregate data across ALL videos
     const getChartData = (): ChartDataPoint[] => {
         if (tracked.length === 0) return [];
 
-        // Aggregate all video histories into timeline
-        const timelineMap: { [time: string]: { views: number; likes: number; comments: number; shares: number; count: number } } = {};
-
+        // Collect all unique timestamps from all videos
+        const allTimestamps = new Set<string>();
         tracked.forEach(video => {
-            if (!video.history?.length) return;
-
-            video.history.forEach(point => {
-                const timeKey = point.time;
-                if (!timelineMap[timeKey]) {
-                    timelineMap[timeKey] = { views: 0, likes: 0, comments: 0, shares: 0, count: 0 };
-                }
-                timelineMap[timeKey].views += point.views;
-                timelineMap[timeKey].likes += point.likes;
-                timelineMap[timeKey].comments += point.comments;
-                timelineMap[timeKey].shares += point.shares;
-                timelineMap[timeKey].count++;
-            });
+            if (video.history?.length) {
+                video.history.forEach(point => {
+                    allTimestamps.add(point.time);
+                });
+            }
         });
 
-        // Convert to array and filter by time period
-        const allData = Object.entries(timelineMap).map(([time, data]) => ({
-            time,
-            views: data.views,
-            likes: data.likes,
-            comments: data.comments,
-            shares: data.shares,
-            originalTime: new Date(time)
-        }));
+        // Convert to sorted array
+        const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => 
+            new Date(a).getTime() - new Date(b).getTime()
+        );
 
+        // Filter timestamps by selected time period
         const now = new Date();
-        let filteredData = [...allData];
+        let filteredTimestamps = sortedTimestamps;
 
-        // Filter by time period
         switch (selectedTimePeriod) {
             case 'D':
-                filteredData = allData.filter(point =>
-                    new Date(point.time) >= new Date(now.getTime() - 24 * 60 * 60 * 1000)
+                filteredTimestamps = sortedTimestamps.filter(timestamp =>
+                    new Date(timestamp) >= new Date(now.getTime() - 24 * 60 * 60 * 1000)
                 );
                 break;
             case 'W':
-                filteredData = allData.filter(point =>
-                    new Date(point.time) >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+                filteredTimestamps = sortedTimestamps.filter(timestamp =>
+                    new Date(timestamp) >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
                 );
                 break;
             case 'M':
-                filteredData = allData.filter(point =>
-                    new Date(point.time) >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+                filteredTimestamps = sortedTimestamps.filter(timestamp =>
+                    new Date(timestamp) >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
                 );
                 break;
             case '3M':
-                filteredData = allData.filter(point =>
-                    new Date(point.time) >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+                filteredTimestamps = sortedTimestamps.filter(timestamp =>
+                    new Date(timestamp) >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
                 );
                 break;
             case '1Y':
-                filteredData = allData.filter(point =>
-                    new Date(point.time) >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+                filteredTimestamps = sortedTimestamps.filter(timestamp =>
+                    new Date(timestamp) >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
                 );
                 break;
             case 'ALL':
             default:
-                // Use all data
+                // Use all timestamps
                 break;
         }
 
-        // Sort by time
-        filteredData.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        // Build proper aggregate data by carrying forward last known values
+        const aggregateData: ChartDataPoint[] = [];
+        const lastKnownValues: { [videoId: string]: VideoHistory } = {};
 
-        // Calculate delta values
-        const chartData: ChartDataPoint[] = filteredData.map((point, index) => {
-            const previousPoint = index > 0 ? filteredData[index - 1] : point;
+        // Initialize with first known values for each video
+        tracked.forEach(video => {
+            if (video.history?.length) {
+                const firstPoint = video.history
+                    .filter(h => filteredTimestamps.includes(h.time))
+                    .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())[0];
+                
+                if (firstPoint) {
+                    lastKnownValues[video.id] = firstPoint;
+                }
+            }
+        });
+
+        // Process each timestamp and build aggregate
+        filteredTimestamps.forEach(timestamp => {
+            // Update last known values for videos that have data at this timestamp
+            tracked.forEach(video => {
+                const pointAtTime = video.history?.find(h => h.time === timestamp);
+                if (pointAtTime) {
+                    lastKnownValues[video.id] = pointAtTime;
+                }
+            });
+
+            // Calculate aggregate values using last known values
+            const aggregateViews = Object.values(lastKnownValues).reduce((sum, point) => sum + point.views, 0);
+            const aggregateLikes = Object.values(lastKnownValues).reduce((sum, point) => sum + point.likes, 0);
+            const aggregateComments = Object.values(lastKnownValues).reduce((sum, point) => sum + point.comments, 0);
+            const aggregateShares = Object.values(lastKnownValues).reduce((sum, point) => sum + point.shares, 0);
+
+            // Only add if we have data for at least one video at this point
+            if (Object.keys(lastKnownValues).length > 0) {
+                aggregateData.push({
+                    time: timestamp,
+                    views: aggregateViews,
+                    delta: 0, // Will be calculated below
+                    originalTime: new Date(timestamp)
+                });
+            }
+        });
+
+        // Calculate delta values properly
+        const chartData: ChartDataPoint[] = aggregateData.map((point, index) => {
+            const previousPoint = index > 0 ? aggregateData[index - 1] : point;
             const delta = point.views - previousPoint.views;
 
             return {
