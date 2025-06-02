@@ -54,35 +54,14 @@ interface VideoRecord {
 function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?: string } {
     const now = new Date();
     const videoAgeInDays = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-    const hoursSinceLastScrape = (now.getTime() - video.lastScrapedAt.getTime()) / (1000 * 60 * 60);
+    const minutesSinceLastScrape = (now.getTime() - video.lastScrapedAt.getTime()) / (1000 * 60);
     
-    // Always scrape if video is less than 7 days old (Week 1 rule)
-    if (videoAgeInDays < 7) {
-        if (hoursSinceLastScrape >= 1) {
-            return { shouldScrape: true, reason: 'Week 1 - hourly tracking' };
-        } else {
-            return { shouldScrape: false, reason: `Week 1 - scraped ${Math.floor(hoursSinceLastScrape * 60)} min ago` };
-        }
+    // For testing: All videos scrape every minute (regardless of age)
+    if (minutesSinceLastScrape >= 1) {
+        return { shouldScrape: true, reason: 'Testing mode - minutely tracking' };
+    } else {
+        return { shouldScrape: false, reason: `Testing - scraped ${Math.floor(minutesSinceLastScrape * 60)} sec ago` };
     }
-    
-    // For videos older than 7 days, use adaptive cadence
-    if (video.scrapingCadence === 'hourly') {
-        if (hoursSinceLastScrape >= 1) {
-            return { shouldScrape: true, reason: 'Hourly cadence' };
-        } else {
-            return { shouldScrape: false, reason: `Hourly - scraped ${Math.floor(hoursSinceLastScrape * 60)} min ago` };
-        }
-    } else if (video.scrapingCadence === 'daily') {
-        const hoursSinceLastScrape = (now.getTime() - video.lastScrapedAt.getTime()) / (1000 * 60 * 60);
-        if (hoursSinceLastScrape >= 24) {
-            return { shouldScrape: true, reason: 'Daily cadence - 24hrs elapsed' };
-        } else {
-            const hoursRemaining = Math.ceil(24 - hoursSinceLastScrape);
-            return { shouldScrape: false, reason: `Daily - ${hoursRemaining}hrs remaining` };
-        }
-    }
-    
-    return { shouldScrape: false, reason: 'Unknown cadence' };
 }
 
 // Calculate if video should change cadence based on performance
@@ -225,10 +204,11 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                             currentComments: mediaData.comments,
                             currentShares: shares,
                             lastScrapedAt: new Date(),
-                            scrapingCadence: newCadence,
-                            lastDailyViews: video.currentViews,
-                            dailyViewsGrowth: dailyGrowth,
-                            needsCadenceCheck: false,
+                            // TODO: Uncomment after migration
+                            // scrapingCadence: newCadence,
+                            // lastDailyViews: video.currentViews,
+                            // dailyViewsGrowth: dailyGrowth,
+                            // needsCadenceCheck: false,
                         }
                     });
 
@@ -318,13 +298,13 @@ export async function GET() {
     console.log(`⏰ Standardized timing: Running at minute :00`);
 
     try {
-        // Fetch all active videos (with new cadence fields after migration)
+        // Fetch all active videos (with backward compatibility for missing cadence fields)
         console.log('📋 Fetching active videos from database...');
         
         let videos: VideoRecord[] = [];
         
         try {
-            // Fetch with both old and new fields
+            // Try to fetch with new cadence fields
             const rawVideos = await prisma.video.findMany({
                 where: { isActive: true },
                 select: {
@@ -338,20 +318,16 @@ export async function GET() {
                     currentShares: true,
                     lastScrapedAt: true,
                     createdAt: true,
-                    scrapingCadence: true,
-                    lastDailyViews: true,
-                    dailyViewsGrowth: true,
-                    needsCadenceCheck: true,
                 }
             });
 
-            // Map to VideoRecord format
+            // Add default cadence values for backward compatibility
             videos = rawVideos.map(video => ({
                 ...video,
-                scrapingCadence: video.scrapingCadence || 'hourly',
-                lastDailyViews: video.lastDailyViews,
-                dailyViewsGrowth: video.dailyViewsGrowth,
-                needsCadenceCheck: video.needsCadenceCheck || false,
+                scrapingCadence: 'hourly', // Default all to hourly until migration
+                lastDailyViews: null,
+                dailyViewsGrowth: null,
+                needsCadenceCheck: false,
             }));
             
         } catch (error) {
