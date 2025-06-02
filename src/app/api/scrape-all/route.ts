@@ -47,8 +47,8 @@ function shouldScrapeVideo(video: VideoRecord): boolean {
     const now = new Date();
     const minutesSinceLastScrape = (now.getTime() - video.lastScrapedAt.getTime()) / (1000 * 60);
     
-    // Skip if scraped within last 30 minutes to avoid overloading
-    return minutesSinceLastScrape >= 30;
+    // Skip if scraped within last 5 minutes to avoid overloading but still get frequent updates
+    return minutesSinceLastScrape >= 5;
 }
 
 // Smart processing with rate limiting and error handling
