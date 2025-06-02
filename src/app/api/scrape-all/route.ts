@@ -71,24 +71,52 @@ interface CronStatusResponse {
     };
 }
 
-// Smart filter: adaptive tracking based on video age and performance
+// Smart filter: adaptive tracking based on video age and performance with synchronized timing
 function shouldScrapeVideo(video: VideoRecord): boolean {
     const now = new Date();
-    const minutesSinceLastScrape = (now.getTime() - video.lastScrapedAt.getTime()) / (1000 * 60);
-    const daysSinceCreated = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-    
-    // Always use rapid testing interval (1 minute) for now during testing
-    const testingInterval = 1;
+    const lastScrape = new Date(video.lastScrapedAt);
     
     // Check if video needs tracking mode evaluation
     const needsModeEvaluation = shouldEvaluateTrackingMode(video);
     
     if (video.trackingMode === 'active') {
-        // Active videos (hourly in production, 1 min for testing)
-        return minutesSinceLastScrape >= testingInterval || needsModeEvaluation;
+        // Active videos: hourly boundaries in production, minute boundaries for testing
+        if (process.env.NODE_ENV === 'production') {
+            // Production: Check if we've crossed an hour boundary
+            const currentHour = now.getHours();
+            const lastScrapedHour = lastScrape.getHours();
+            const crossedHourBoundary = currentHour !== lastScrapedHour || 
+                                      now.getDate() !== lastScrape.getDate() ||
+                                      now.getMonth() !== lastScrape.getMonth();
+            return crossedHourBoundary || needsModeEvaluation;
+        } else {
+            // Testing: Check if we've crossed a minute boundary  
+            const currentMinute = now.getMinutes();
+            const lastScrapedMinute = lastScrape.getMinutes();
+            const crossedMinuteBoundary = currentMinute !== lastScrapedMinute ||
+                                        now.getHours() !== lastScrape.getHours() ||
+                                        now.getDate() !== lastScrape.getDate();
+            return crossedMinuteBoundary || needsModeEvaluation;
+        }
     } else {
-        // Dormant videos (daily in production, but still 1 min for testing)
-        return minutesSinceLastScrape >= testingInterval || needsModeEvaluation;
+        // Dormant videos: daily boundaries in production, minute boundaries for testing
+        if (process.env.NODE_ENV === 'production') {
+            // Production: Check if we've crossed a day boundary
+            const currentDay = now.getDate();
+            const lastScrapedDay = lastScrape.getDate();
+            const crossedDayBoundary = currentDay !== lastScrapedDay ||
+                                     now.getMonth() !== lastScrape.getMonth() ||
+                                     now.getFullYear() !== lastScrape.getFullYear();
+            return crossedDayBoundary || needsModeEvaluation;
+        } else {
+            // Testing: Still use minute boundaries for dormant videos during testing
+            const currentMinute = now.getMinutes();
+            const lastScrapedMinute = lastScrape.getMinutes();
+            const crossedMinuteBoundary = currentMinute !== lastScrapedMinute ||
+                                        now.getHours() !== lastScrape.getHours() ||
+                                        now.getDate() !== lastScrape.getDate();
+            return crossedMinuteBoundary || needsModeEvaluation;
+        }
     }
 }
 
@@ -348,6 +376,28 @@ export async function GET() {
             dormant: dormantVideos.length,
             needingScrape: videosToScrape.length
         });
+
+        // Log synchronization details
+        const now = new Date();
+        const isProduction = process.env.NODE_ENV === 'production';
+        console.log(`⏰ Synchronization timing:`, {
+            environment: isProduction ? 'production' : 'development',
+            currentTime: now.toISOString(),
+            syncBoundary: isProduction ? `Hour: ${now.getHours()}:00` : `Minute: ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`,
+            syncType: isProduction ? 'hourly/daily boundaries' : 'minute boundaries'
+        });
+
+        // Show which videos need scraping and why
+        if (videosToScrape.length > 0) {
+            console.log(`📋 Videos requiring sync:`, videosToScrape.map(v => {
+                const lastScrape = new Date(v.lastScrapedAt);
+                const reason = shouldEvaluateTrackingMode(v) ? 'mode evaluation' : 'boundary crossed';
+                const timeDiff = isProduction ? 
+                    `last: ${lastScrape.getHours()}:00, current: ${now.getHours()}:00` :
+                    `last: ${lastScrape.getHours()}:${lastScrape.getMinutes().toString().padStart(2, '0')}, current: ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`;
+                return `@${v.username} (${v.trackingMode}, ${reason}, ${timeDiff})`;
+            }));
+        }
 
         if (videosToScrape.length === 0) {
             console.log('✅ No videos need scraping at this time');
