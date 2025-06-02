@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
   // Handle /submit command
   if (json.data && json.data.name === 'submit') {
-    const urlOption = json.data.options?.find((opt: any) => opt.name === 'url');
+    const urlOption = json.data.options?.find((opt: { name: string; value: string }) => opt.name === 'url');
     const url = urlOption?.value;
     if (!url) {
       return NextResponse.json({
