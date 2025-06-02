@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
-import { getCurrentNormalizedTimestamp, getIntervalForCadence } from '@/lib/timestamp-utils';
+import { getCurrentNormalizedTimestamp, getIntervalForCadence, normalizeTimestamp } from '@/lib/timestamp-utils';
 
 // Force dynamic rendering for cron jobs
 export const dynamic = 'force-dynamic';
@@ -62,33 +62,31 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
     const currentHour = estTime.getHours();
     
-    // For testing mode (every minute), check if at least 1 minute has passed
+    // For testing mode (every minute), check if we're at a new normalized minute
     if (video.scrapingCadence === 'testing') {
-        const minutesSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60);
-        if (minutesSinceLastScrape >= 1) {
-            return { shouldScrape: true, reason: 'Testing mode - every minute' };
+        const currentNormalizedTime = getCurrentNormalizedTimestamp('minute');
+        const lastScrapedNormalizedTime = normalizeTimestamp(lastScraped, 'minute');
+        
+        if (currentNormalizedTime !== lastScrapedNormalizedTime) {
+            return { shouldScrape: true, reason: 'Testing mode - new minute boundary' };
         } else {
-            return { shouldScrape: false, reason: `Testing mode - recently scraped ${Math.floor(minutesSinceLastScrape * 60)} seconds ago` };
+            return { shouldScrape: false, reason: 'Testing mode - same minute boundary' };
         }
     }
     
-    // All videos under 7 days old: scrape every hour (at the start of each new hour)
+    // All videos under 7 days old: scrape at the top of each EST hour
     if (videoAgeInDays < 7) {
-        const now = new Date();
-        const lastScraped = new Date(video.lastScrapedAt);
+        // Use EST timezone for hour boundaries
+        const estCurrentNormalizedTime = normalizeTimestamp(estTime, '60min');
+        const estLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/New_York"}));
+        const estLastScrapedNormalizedTime = normalizeTimestamp(estLastScrapedTime, '60min');
         
-        // Check if we're in a different hour than when last scraped
-        const currentHour = now.getHours();
-        const lastScrapedHour = lastScraped.getHours();
-        const currentDate = now.toDateString();
-        const lastScrapedDate = lastScraped.toDateString();
-        
-        // Scrape if it's a different hour OR a different day
-        if (currentDate !== lastScrapedDate || currentHour !== lastScrapedHour) {
-            return { shouldScrape: true, reason: `Video ${videoAgeInDays.toFixed(1)} days old - new hour (${currentHour}:00)` };
+        if (estCurrentNormalizedTime !== estLastScrapedNormalizedTime) {
+            return { shouldScrape: true, reason: `Video ${videoAgeInDays.toFixed(1)} days old - new EST hour (${currentHour}:00)` };
         } else {
-            const minutesIntoHour = now.getMinutes();
-            return { shouldScrape: false, reason: `Same hour as last scrape - wait for next hour (${60 - minutesIntoHour}m remaining)` };
+            const minutesIntoHour = estTime.getMinutes();
+            const minutesRemaining = 60 - minutesIntoHour;
+            return { shouldScrape: false, reason: `Same EST hour - wait for top of next hour (${minutesRemaining}m remaining)` };
         }
     }
     
@@ -107,24 +105,20 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
         }
     }
     
-    // Videos 7+ days old with hourly cadence: scrape every hour (at the start of each new hour)
+    // Videos 7+ days old with hourly cadence: scrape at the top of each EST hour
     if (video.scrapingCadence === 'hourly') {
-        const now = new Date();
-        const lastScraped = new Date(video.lastScrapedAt);
+        // Use EST timezone for hour boundaries
+        const estCurrentNormalizedTime = normalizeTimestamp(estTime, '60min');
+        const estLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/New_York"}));
+        const estLastScrapedNormalizedTime = normalizeTimestamp(estLastScrapedTime, '60min');
         
-        // Check if we're in a different hour than when last scraped
-        const currentHour = now.getHours();
-        const lastScrapedHour = lastScraped.getHours();
-        const currentDate = now.toDateString();
-        const lastScrapedDate = lastScraped.toDateString();
-        
-        // Scrape if it's a different hour OR a different day
-        if (currentDate !== lastScrapedDate || currentHour !== lastScrapedHour) {
+        if (estCurrentNormalizedTime !== estLastScrapedNormalizedTime) {
             const isEvaluationHour = currentHour === 0 ? ' (+ cadence evaluation)' : '';
-            return { shouldScrape: true, reason: `High-performance video - new hour (${currentHour}:00)${isEvaluationHour}` };
+            return { shouldScrape: true, reason: `High-performance video - new EST hour (${currentHour}:00)${isEvaluationHour}` };
         } else {
-            const minutesIntoHour = now.getMinutes();
-            return { shouldScrape: false, reason: `Same hour as last scrape - wait for next hour (${60 - minutesIntoHour}m remaining)` };
+            const minutesIntoHour = estTime.getMinutes();
+            const minutesRemaining = 60 - minutesIntoHour;
+            return { shouldScrape: false, reason: `Same EST hour - wait for top of next hour (${minutesRemaining}m remaining)` };
         }
     }
     
