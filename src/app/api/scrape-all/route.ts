@@ -225,10 +225,11 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                             currentComments: mediaData.comments,
                             currentShares: shares,
                             lastScrapedAt: new Date(),
-                            scrapingCadence: newCadence,
-                            lastDailyViews: video.currentViews, // Store current views as yesterday's baseline
-                            dailyViewsGrowth: dailyGrowth,
-                            needsCadenceCheck: false,
+                            // TODO: Uncomment after migration
+                            // scrapingCadence: newCadence,
+                            // lastDailyViews: video.currentViews,
+                            // dailyViewsGrowth: dailyGrowth,
+                            // needsCadenceCheck: false,
                         }
                     });
 
@@ -318,27 +319,42 @@ export async function GET() {
     console.log(`⏰ Standardized timing: Running at minute :00`);
 
     try {
-        // Fetch all active videos with new cadence fields
+        // Fetch all active videos (with backward compatibility for missing cadence fields)
         console.log('📋 Fetching active videos from database...');
-        const videos = await prisma.video.findMany({
-            where: { isActive: true },
-            select: {
-                id: true,
-                url: true,
-                username: true,
-                platform: true,
-                currentViews: true,
-                currentLikes: true,
-                currentComments: true,
-                currentShares: true,
-                lastScrapedAt: true,
-                createdAt: true,
-                scrapingCadence: true,
-                lastDailyViews: true,
-                dailyViewsGrowth: true,
-                needsCadenceCheck: true,
-            }
-        });
+        
+        let videos: VideoRecord[] = [];
+        
+        try {
+            // Try to fetch with new cadence fields
+            const rawVideos = await prisma.video.findMany({
+                where: { isActive: true },
+                select: {
+                    id: true,
+                    url: true,
+                    username: true,
+                    platform: true,
+                    currentViews: true,
+                    currentLikes: true,
+                    currentComments: true,
+                    currentShares: true,
+                    lastScrapedAt: true,
+                    createdAt: true,
+                }
+            });
+
+            // Add default cadence values for backward compatibility
+            videos = rawVideos.map(video => ({
+                ...video,
+                scrapingCadence: 'hourly', // Default all to hourly until migration
+                lastDailyViews: null,
+                dailyViewsGrowth: null,
+                needsCadenceCheck: false,
+            }));
+            
+        } catch (error) {
+            console.error('💥 Error fetching videos:', error);
+            throw error;
+        }
 
         console.log(`📊 Found ${videos.length} active videos to evaluate`);
         
