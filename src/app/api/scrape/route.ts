@@ -269,7 +269,7 @@ export async function POST(request: NextRequest) {
         console.error('💥 Scraping endpoint crashed:', error);
         return NextResponse.json(
             {
-                success: false,
+            success: false,
                 error: 'Internal server error',
                 details: error instanceof Error ? error.message : 'Unknown error'
             },
