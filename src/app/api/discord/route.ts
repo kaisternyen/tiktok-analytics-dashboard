@@ -2,9 +2,64 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Discord signature verification dependencies
 import nacl from 'tweetnacl';
-import { scrapeMediaPost } from '@/lib/tikhub';
+import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import { getCurrentNormalizedTimestamp } from '@/lib/timestamp-utils';
+
+// Union type for all possible media data
+type MediaData = TikTokVideoData | InstagramPostData | YouTubeVideoData;
+
+// Helper to safely get username from any media type
+function getUsername(data: MediaData): string {
+  if ('username' in data) {
+    return data.username || 'unknown';
+  }
+  if ('channelTitle' in data) {
+    return data.channelTitle || 'unknown';
+  }
+  return 'unknown';
+}
+
+// Helper to safely get description from any media type
+function getDescription(data: MediaData): string {
+  if ('description' in data && data.description) {
+    return data.description;
+  }
+  if ('title' in data && data.title) {
+    return data.title;
+  }
+  return 'Submitted via Discord';
+}
+
+// Helper to safely get thumbnail URL from any media type
+function getThumbnailUrl(data: MediaData): string | null {
+  if ('thumbnailUrl' in data) {
+    return data.thumbnailUrl || null;
+  }
+  if ('thumbnails' in data && data.thumbnails.medium) {
+    return data.thumbnails.medium.url || null;
+  }
+  return null;
+}
+
+// Helper to safely get hashtags from any media type
+function getHashtags(data: MediaData): string[] {
+  if ('hashtags' in data) {
+    return data.hashtags || [];
+  }
+  if ('tags' in data) {
+    return data.tags || [];
+  }
+  return [];
+}
+
+// Helper to safely get music from any media type
+function getMusic(data: MediaData): Record<string, unknown> | null {
+  if ('music' in data) {
+    return data.music || null;
+  }
+  return null;
+}
 
 // Helper to verify Discord signature
 function verifyDiscordRequest(req: NextRequest, body: Buffer) {
@@ -80,7 +135,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const mediaData = scrapingResult.data;
+      const mediaData = scrapingResult.data as MediaData;
       
       // Determine platform and extract data
       let platform = 'tiktok';
@@ -91,18 +146,18 @@ export async function POST(req: NextRequest) {
       if (url.includes('instagram.com')) {
         platform = 'instagram';
         platformName = 'Instagram';
-        const instaData = mediaData as any;
+        const instaData = mediaData as InstagramPostData;
         views = instaData.plays || instaData.views || 0;
         shares = 0; // Instagram doesn't track shares
       } else if (url.includes('youtube.com')) {
         platform = 'youtube';
         platformName = 'YouTube';
-        const youtubeData = mediaData as any;
+        const youtubeData = mediaData as YouTubeVideoData;
         views = youtubeData.views || 0;
         shares = 0; // YouTube doesn't track shares in our API
       } else {
         platformName = 'TikTok';
-        const tiktokData = mediaData as any;
+        const tiktokData = mediaData as TikTokVideoData;
         views = tiktokData.views || 0;
         shares = tiktokData.shares || 0;
       }
@@ -111,9 +166,9 @@ export async function POST(req: NextRequest) {
       const newVideo = await prisma.video.create({
         data: {
           url: url,
-          username: (mediaData as any).username || 'unknown',
-          description: (mediaData as any).description || 'Submitted via Discord',
-          thumbnailUrl: (mediaData as any).thumbnail_url || (mediaData as any).thumbnailUrl || null,
+          username: getUsername(mediaData),
+          description: getDescription(mediaData),
+          thumbnailUrl: getThumbnailUrl(mediaData),
           platform: platform,
           currentViews: views,
           currentLikes: mediaData.likes,
@@ -121,9 +176,9 @@ export async function POST(req: NextRequest) {
           currentShares: shares,
           scrapingCadence: 'hourly', // Default for new videos
           lastScrapedAt: new Date(),
-          hashtags: JSON.stringify((mediaData as any).hashtags || []),
-          music: JSON.stringify((mediaData as any).music || null),
-          isActive: true,
+          hashtags: JSON.stringify(getHashtags(mediaData)),
+          music: JSON.stringify(getMusic(mediaData)),
+          isActive: true, // This is required for videos to show up in dashboard
         }
       });
 
@@ -144,7 +199,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         type: 4,
         data: { 
-          content: `✅ Successfully submitted video by @${(mediaData as any).username || 'unknown'} on ${platformName}!\n📊 ${views.toLocaleString()} views, ${mediaData.likes.toLocaleString()} likes\n🔄 Set to hourly tracking` 
+          content: `✅ Successfully submitted video by @${getUsername(mediaData)} on ${platformName}!\n📊 ${views.toLocaleString()} views, ${mediaData.likes.toLocaleString()} likes\n🔄 Set to hourly tracking` 
         }
       });
 
