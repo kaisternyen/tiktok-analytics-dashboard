@@ -449,7 +449,18 @@ export async function GET() {
             });
 
             // Add default cadence values for backward compatibility
-            videos = rawVideos.map((video: any) => {
+            videos = rawVideos.map((video: {
+                id: string;
+                url: string;
+                username: string;
+                platform: string;
+                currentViews: number;
+                currentLikes: number;
+                currentComments: number;
+                currentShares: number;
+                lastScrapedAt: Date;
+                createdAt: Date;
+            }) => {
                 const ageInDays = (new Date().getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
                 return {
                     ...video,
