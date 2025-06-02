@@ -445,10 +445,14 @@ export async function GET() {
                     currentShares: true,
                     lastScrapedAt: true,
                     createdAt: true,
+                    scrapingCadence: true,
+                    lastDailyViews: true,
+                    dailyViewsGrowth: true,
+                    needsCadenceCheck: true,
                 }
             });
 
-            // Add default cadence values for backward compatibility
+            // Map to VideoRecord format with proper cadence logic
             videos = rawVideos.map((video: {
                 id: string;
                 url: string;
@@ -460,14 +464,27 @@ export async function GET() {
                 currentShares: number;
                 lastScrapedAt: Date;
                 createdAt: Date;
+                scrapingCadence: string | null;
+                lastDailyViews: number | null;
+                dailyViewsGrowth: number | null;
+                needsCadenceCheck: boolean | null;
             }) => {
                 const ageInDays = (new Date().getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+                
+                // Determine proper cadence based on age and current setting
+                let cadence = video.scrapingCadence || 'hourly';
+                
+                // Reset any testing cadence back to proper logic
+                if (cadence === 'testing') {
+                    cadence = ageInDays < 7 ? 'hourly' : 'hourly'; // Default to hourly, evaluation will adjust
+                }
+                
                 return {
                     ...video,
-                    scrapingCadence: ageInDays < 7 ? 'hourly' : 'hourly', // Default all to hourly, evaluation will adjust
-                    lastDailyViews: null,
-                    dailyViewsGrowth: null,
-                    needsCadenceCheck: false,
+                    scrapingCadence: cadence,
+                    lastDailyViews: video.lastDailyViews || null,
+                    dailyViewsGrowth: video.dailyViewsGrowth || null,
+                    needsCadenceCheck: video.needsCadenceCheck || false,
                 };
             });
             

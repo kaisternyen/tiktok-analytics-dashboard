@@ -59,8 +59,8 @@ export async function POST(request: Request) {
                 where: { isActive: true },
                 data: {
                     scrapingCadence: 'hourly',  // Default to hourly for existing videos
-                    lastDailyViews: null,
-                    dailyViewsGrowth: null,
+                    lastDailyViews: 0,  // Set to 0 instead of null to avoid constraint issues
+                    dailyViewsGrowth: 0,  // Set to 0 instead of null
                     needsCadenceCheck: false
                 }
             });
