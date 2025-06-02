@@ -103,28 +103,32 @@ function evaluateCadenceChange(video: VideoRecord, newViews: number): { newCaden
     
     // Videos under 7 days old always stay on hourly tracking
     if (videoAgeInDays < 7) {
-        return null; // No cadence changes for new videos
+        return null; // No cadence changes for new videos - always hourly first week
     }
     
-    // For videos 7+ days old, evaluate performance
-    const dailyGrowth = video.lastDailyViews ? newViews - video.lastDailyViews : 0;
+    // For videos 7+ days old, calculate daily views from last known data point
+    const dailyViews = video.lastDailyViews ? Math.max(0, newViews - video.lastDailyViews) : 0;
     
-    // Performance thresholds for 7+ day old videos
-    const HIGH_PERFORMANCE_THRESHOLD = 10000; // Views per day
+    // Threshold: 10,000 daily views
+    const DAILY_VIEWS_THRESHOLD = 10000;
     
-    if (video.scrapingCadence === 'hourly' && dailyGrowth < HIGH_PERFORMANCE_THRESHOLD) {
+    // Switch from hourly to daily if views drop below threshold
+    if (video.scrapingCadence === 'hourly' && dailyViews < DAILY_VIEWS_THRESHOLD) {
         return {
             newCadence: 'daily',
-            reason: `Video ${videoAgeInDays.toFixed(1)} days old, low growth: ${dailyGrowth.toLocaleString()} views/day → daily tracking`
+            reason: `Daily views dropped to ${dailyViews.toLocaleString()} < ${DAILY_VIEWS_THRESHOLD.toLocaleString()} → switching to daily tracking`
         };
-    } else if (video.scrapingCadence === 'daily' && dailyGrowth >= HIGH_PERFORMANCE_THRESHOLD) {
+    } 
+    
+    // Switch from daily to hourly if views exceed threshold
+    if (video.scrapingCadence === 'daily' && dailyViews >= DAILY_VIEWS_THRESHOLD) {
         return {
             newCadence: 'hourly',
-            reason: `High growth detected: ${dailyGrowth.toLocaleString()} views/day → hourly tracking`
+            reason: `Daily views spiked to ${dailyViews.toLocaleString()} ≥ ${DAILY_VIEWS_THRESHOLD.toLocaleString()} → switching to hourly tracking`
         };
     }
     
-    return null;
+    return null; // No change needed
 }
 
 // Smart processing with standardized timing and adaptive frequency
@@ -209,14 +213,14 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         shares = tiktokData.shares || 0;
                     }
 
-                    // Calculate daily growth for cadence evaluation
-                    let dailyGrowth: number | null = null;
+                    // Calculate daily views for cadence evaluation (views gained since last update)
+                    let dailyViews: number | null = null;
                     
                     if (video.lastDailyViews !== null) {
-                        dailyGrowth = views - video.lastDailyViews;
+                        dailyViews = Math.max(0, views - video.lastDailyViews);
                     }
 
-                    // Evaluate cadence change
+                    // Evaluate cadence change based on user's 10k threshold logic
                     const cadenceEvaluation = evaluateCadenceChange(video, views);
                     let newCadence = video.scrapingCadence;
                     let cadenceAction = '';
@@ -237,11 +241,11 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                             currentComments: mediaData.comments,
                             currentShares: shares,
                             lastScrapedAt: new Date(),
-                            // TODO: Uncomment after migration
-                            // scrapingCadence: newCadence,
-                            // lastDailyViews: video.currentViews,
-                            // dailyViewsGrowth: dailyGrowth,
-                            // needsCadenceCheck: false,
+                            // Enable cadence changes with user's 10k logic
+                            scrapingCadence: newCadence,
+                            lastDailyViews: video.currentViews, // Store current views as baseline for next calculation
+                            dailyViewsGrowth: dailyViews,
+                            needsCadenceCheck: false,
                         }
                     });
 
@@ -285,7 +289,7 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
 
                     const viewsChange = views - video.currentViews;
                     const likesChange = mediaData.likes - video.currentLikes;
-                    console.log(`✅ [${i + index + 1}] @${video.username} (${video.platform}, ${newCadence}): ${views.toLocaleString()} views (+${viewsChange.toLocaleString()}), ${mediaData.likes.toLocaleString()} likes (+${likesChange.toLocaleString()})${dailyGrowth !== null ? `, daily: +${dailyGrowth.toLocaleString()}` : ''}`);
+                    console.log(`✅ [${i + index + 1}] @${video.username} (${video.platform}, ${newCadence}): ${views.toLocaleString()} views (+${viewsChange.toLocaleString()}), ${mediaData.likes.toLocaleString()} likes (+${likesChange.toLocaleString()})${dailyViews !== null ? `, daily: +${dailyViews.toLocaleString()}` : ''}`);
 
                     return {
                         status: 'success' as const,
@@ -356,7 +360,8 @@ export async function GET() {
     const startTime = Date.now();
     console.log(`🚀 ===== CRON JOB STARTED (${new Date().toISOString()}) =====`);
     console.log(`⏰ Hourly scraping: Running at :00 minutes of each hour`);
-    console.log(`📋 Strategy: <7 days = hourly, 7+ days = performance-based (hourly/daily)`);
+    console.log(`📋 Strategy: First week = hourly, After week 1 = 10k daily views threshold`);
+    console.log(`🔄 Dynamic switching: >10k daily views = hourly, <10k daily views = daily`);
 
     try {
         // Fetch all active videos (with backward compatibility for missing cadence fields)
@@ -401,10 +406,10 @@ export async function GET() {
 
         console.log(`📊 Found ${videos.length} active videos to evaluate`);
         
-        // Log age distribution
+        // Log age distribution and strategy
         const newVideos = videos.filter(v => (new Date().getTime() - v.createdAt.getTime()) / (1000 * 60 * 60 * 24) < 7);
         const oldVideos = videos.filter(v => (new Date().getTime() - v.createdAt.getTime()) / (1000 * 60 * 60 * 24) >= 7);
-        console.log(`📊 Age distribution: ${newVideos.length} videos <7 days (hourly), ${oldVideos.length} videos 7+ days (performance-based)`);
+        console.log(`📊 Age distribution: ${newVideos.length} videos <7 days (hourly), ${oldVideos.length} videos 7+ days (10k threshold)`);
         
         if (videos.length === 0) {
             console.log('⚠️ No videos found in database');
