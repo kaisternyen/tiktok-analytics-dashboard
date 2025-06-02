@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
-import { getCurrentNormalizedTimestamp, getIntervalForCadence, normalizeTimestamp } from '@/lib/timestamp-utils';
+import { getCurrentNormalizedTimestamp, getIntervalForCadence, normalizeTimestamp, TimestampInterval } from '@/lib/timestamp-utils';
 
 // Force dynamic rendering for cron jobs
 export const dynamic = 'force-dynamic';
@@ -324,12 +324,17 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         }
                     });
 
-                    // Add new metrics history entry with EST-based timestamp normalization
-                    const videoInterval = getIntervalForCadence(video.scrapingCadence);
+                    // Add new metrics history entry with consistent timestamp normalization
+                    // All hourly videos should use 60min intervals, testing uses 1min intervals
+                    let timestampInterval: TimestampInterval;
+                    if (video.scrapingCadence === 'testing') {
+                        timestampInterval = 'minute';
+                    } else {
+                        // Both hourly and daily cadences use 60min intervals for consistency
+                        timestampInterval = '60min';
+                    }
                     
-                    // Get current EST time and normalize it for consistency with scraping schedule
-                    const estTime = new Date(new Date().toLocaleString("en-US", {timeZone: "America/New_York"}));
-                    const normalizedTimestamp = normalizeTimestamp(estTime, videoInterval);
+                    const normalizedTimestamp = getCurrentNormalizedTimestamp(timestampInterval);
                     
                     // Check if we already have a metric entry at this normalized timestamp
                     const existingMetric = await prisma.metricsHistory.findFirst({
@@ -350,7 +355,7 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                                 timestamp: new Date(normalizedTimestamp)
                             }
                         });
-                        console.log(`📊 [${i + index + 1}] Created new metrics entry at ${normalizedTimestamp} (${videoInterval} interval)`);
+                        console.log(`📊 [${i + index + 1}] Created new metrics entry at ${normalizedTimestamp} (${timestampInterval} interval)`);
                     } else {
                         // Update existing entry with latest values
                         await prisma.metricsHistory.update({
@@ -362,7 +367,7 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                                 shares: shares,
                             }
                         });
-                        console.log(`📊 [${i + index + 1}] Updated existing metrics entry at ${normalizedTimestamp} (${videoInterval} interval)`);
+                        console.log(`📊 [${i + index + 1}] Updated existing metrics entry at ${normalizedTimestamp} (${timestampInterval} interval)`);
                     }
 
                     const viewsChange = views - video.currentViews;
@@ -563,27 +568,6 @@ export async function GET() {
             hourlyVideos: videos.filter(v => v.scrapingCadence === 'hourly').length,
             dailyVideos: videos.filter(v => v.scrapingCadence === 'daily').length,
         };
-
-        // Create a heartbeat entry to track cron execution regardless of processing results
-        try {
-            if (videos.length > 0) {
-                // Use the first video to create a heartbeat metrics entry (won't interfere with real data)
-                const firstVideo = videos[0];
-                await prisma.metricsHistory.create({
-                    data: {
-                        videoId: firstVideo.id,
-                        views: firstVideo.currentViews,
-                        likes: firstVideo.currentLikes,
-                        comments: firstVideo.currentComments,
-                        shares: firstVideo.currentShares,
-                        timestamp: new Date()
-                    }
-                });
-                console.log('💓 Cron heartbeat recorded');
-            }
-        } catch (heartbeatError) {
-            console.log('⚠️ Heartbeat recording failed (non-critical):', heartbeatError);
-        }
 
         return NextResponse.json({
             success: true,
