@@ -1,5 +1,74 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getIntervalForCadence, normalizeTimestamp, getCurrentNormalizedTimestamp } from '@/lib/timestamp-utils';
+
+// Same logic as in scrape-all/route.ts
+function shouldScrapeVideo(video: any): { shouldScrape: boolean; reason?: string } {
+    const now = new Date();
+    const interval = getIntervalForCadence(video.scrapingCadence);
+    const lastScraped = new Date(video.lastScrapedAt);
+    const videoAgeInDays = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+    
+    // Get current EST time for daily video scheduling
+    const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const currentHour = estTime.getHours();
+    
+    // For testing mode (every minute), check if we're at a new normalized minute
+    if (video.scrapingCadence === 'testing') {
+        const currentNormalizedTime = getCurrentNormalizedTimestamp('minute');
+        const lastScrapedNormalizedTime = normalizeTimestamp(lastScraped, 'minute');
+        
+        if (currentNormalizedTime !== lastScrapedNormalizedTime) {
+            return { shouldScrape: true, reason: 'Testing mode - new minute boundary' };
+        } else {
+            return { shouldScrape: false, reason: 'Testing mode - same minute boundary' };
+        }
+    }
+    
+    // All videos under 7 days old: scrape at the top of each EST hour
+    if (videoAgeInDays < 7) {
+        // Use EST timezone for hour boundaries
+        const estCurrentNormalizedTime = normalizeTimestamp(estTime, '60min');
+        const estLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/New_York"}));
+        const estLastScrapedNormalizedTime = normalizeTimestamp(estLastScrapedTime, '60min');
+        
+        if (estCurrentNormalizedTime !== estLastScrapedNormalizedTime) {
+            return { shouldScrape: true, reason: `Video ${videoAgeInDays.toFixed(1)} days old - new EST hour` };
+        } else {
+            return { shouldScrape: false, reason: 'Same EST hour' };
+        }
+    }
+    
+    // Videos 7+ days old with daily cadence: scrape only at 12:00 AM EST
+    if (video.scrapingCadence === 'daily') {
+        if (currentHour === 0) {
+            const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+            if (hoursSinceLastScrape >= 20) {
+                return { shouldScrape: true, reason: 'Daily video - midnight EST window' };
+            } else {
+                return { shouldScrape: false, reason: 'Daily video - already scraped recently' };
+            }
+        } else {
+            return { shouldScrape: false, reason: 'Daily video - waiting for midnight EST' };
+        }
+    }
+    
+    // Videos 7+ days old with hourly cadence: scrape at the top of each EST hour
+    if (video.scrapingCadence === 'hourly') {
+        // Use EST timezone for hour boundaries
+        const estCurrentNormalizedTime = normalizeTimestamp(estTime, '60min');
+        const estLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/New_York"}));
+        const estLastScrapedNormalizedTime = normalizeTimestamp(estLastScrapedTime, '60min');
+        
+        if (estCurrentNormalizedTime !== estLastScrapedNormalizedTime) {
+            return { shouldScrape: true, reason: 'High-performance video - new EST hour' };
+        } else {
+            return { shouldScrape: false, reason: 'Same EST hour' };
+        }
+    }
+    
+    return { shouldScrape: true, reason: 'Ready to scrape' };
+}
 
 export async function GET() {
     try {
@@ -36,25 +105,29 @@ export async function GET() {
             })
         ]);
 
+        // Get all active videos to check scraping status properly
+        const allVideos = await prisma.video.findMany({
+            where: { isActive: true },
+            select: {
+                username: true,
+                lastScrapedAt: true,
+                createdAt: true,
+                scrapingCadence: true
+            }
+        });
+
+        // Use proper shouldScrapeVideo logic instead of simple time check
+        const videosNeedingScrape = allVideos.filter(video => {
+            const { shouldScrape } = shouldScrapeVideo(video);
+            return shouldScrape;
+        });
+
         // Calculate time since last activity
         const now = new Date();
         const lastActivity = recentHistory[0]?.timestamp;
         const minutesSinceLastActivity = lastActivity
             ? Math.floor((now.getTime() - new Date(lastActivity).getTime()) / (1000 * 60))
             : null;
-
-        // Check which videos need scraping
-        const videosNeedingScrape = await prisma.video.findMany({
-            where: {
-                isActive: true,
-                lastScrapedAt: {
-                    lt: new Date(Date.now() - 60 * 1000) // More than 1 minute ago
-                }
-            },
-            select: { username: true, lastScrapedAt: true },
-            orderBy: { lastScrapedAt: 'asc' },
-            take: 20
-        });
 
         const status = {
             timestamp: now.toISOString(),
@@ -84,7 +157,7 @@ export async function GET() {
                     lastScraped: newestVideo.lastScrapedAt.toISOString(),
                     minutesAgo: Math.floor((now.getTime() - newestVideo.lastScrapedAt.getTime()) / (1000 * 60))
                 } : null,
-                needingScrape: videosNeedingScrape.map((v: { username: string; lastScrapedAt: Date }) => ({
+                needingScrape: videosNeedingScrape.map((v) => ({
                     username: v.username,
                     minutesAgo: Math.floor((now.getTime() - v.lastScrapedAt.getTime()) / (1000 * 60))
                 }))
