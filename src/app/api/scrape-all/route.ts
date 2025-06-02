@@ -113,8 +113,8 @@ async function evaluateCadenceChange(video: VideoRecord, newViews: number): Prom
     // Videos under 7 days old always stay on hourly tracking
     if (videoAgeInDays < 7) {
         return null; // No cadence changes for new videos - always hourly first week
-    }
-    
+}
+
     // Check if we're at 12:00 AM EST (cadence evaluation window)
     const now = new Date();
     const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
@@ -330,8 +330,8 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                                 likes: mediaData.likes,
                                 comments: mediaData.comments,
                                 shares: shares,
-                            }
-                        });
+                        }
+                    });
                         console.log(`📊 [${i + index + 1}] Updated existing metrics entry at ${normalizedTimestamp} (${videoInterval} interval)`);
                     }
 
@@ -433,7 +433,7 @@ export async function GET() {
         try {
             // Try to fetch with new cadence fields
             const rawVideos = await prisma.video.findMany({
-                where: { isActive: true },
+            where: { isActive: true },
                 select: {
                     id: true,
                     url: true,
@@ -499,7 +499,7 @@ export async function GET() {
         const newVideos = videos.filter(v => (new Date().getTime() - v.createdAt.getTime()) / (1000 * 60 * 60 * 24) < 7);
         const oldVideos = videos.filter(v => (new Date().getTime() - v.createdAt.getTime()) / (1000 * 60 * 60 * 24) >= 7);
         console.log(`📊 Age distribution: ${newVideos.length} videos <7 days (hourly), ${oldVideos.length} videos 7+ days (10k threshold)`);
-        
+
         if (videos.length === 0) {
             console.log('⚠️ No videos found in database');
             return NextResponse.json({
@@ -570,7 +570,7 @@ export async function GET() {
         const duration = Date.now() - startTime;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('💥 CRON JOB CRASHED:', errorMessage);
-        
+
         return NextResponse.json({
             success: false,
             error: errorMessage,

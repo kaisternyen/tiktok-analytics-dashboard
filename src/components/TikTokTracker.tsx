@@ -612,7 +612,7 @@ export default function TikTokTracker() {
             if (video.history?.length) {
                 video.history.forEach(point => {
                     allTimestamps.add(point.time);
-                });
+            });
             }
         });
 
@@ -823,55 +823,55 @@ export default function TikTokTracker() {
                     {/* Status Indicators Row */}
                     <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100">
                         <span className="bg-green-100 text-green-800 text-xs font-medium px-3 py-1.5 rounded-full">
-                            ● {tracked.length} videos tracked
-                        </span>
-                        {cronStatus && (
+                                ● {tracked.length} videos tracked
+                            </span>
+                            {cronStatus && (
                             <div className="flex items-center gap-3">
                                 <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${cronStatus.cron.isHealthy
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-red-100 text-red-800'
-                                    }`}>
-                                    <span className={`w-2 h-2 rounded-full ${cronStatus.cron.isHealthy ? 'bg-green-500' : 'bg-red-500'
-                                        }`} />
-                                    Cron {cronStatus.cron.isHealthy ? 'Active' : 'Inactive'}
-                                </span>
-                                {cronStatus.cron.minutesSinceLastActivity !== null && (
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-red-100 text-red-800'
+                                        }`}>
+                                        <span className={`w-2 h-2 rounded-full ${cronStatus.cron.isHealthy ? 'bg-green-500' : 'bg-red-500'
+                                            }`} />
+                                        Cron {cronStatus.cron.isHealthy ? 'Active' : 'Inactive'}
+                                    </span>
+                                    {cronStatus.cron.minutesSinceLastActivity !== null && (
                                     <span className="text-xs text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">
-                                        Last: {cronStatus.cron.minutesSinceLastActivity}m ago
-                                    </span>
-                                )}
-                                {cronStatus.system.videosNeedingScrape > 0 && (
+                                            Last: {cronStatus.cron.minutesSinceLastActivity}m ago
+                                        </span>
+                                    )}
+                                    {cronStatus.system.videosNeedingScrape > 0 && (
                                     <span className="bg-yellow-100 text-yellow-800 text-xs font-medium px-3 py-1.5 rounded-full">
-                                        {cronStatus.system.videosNeedingScrape} pending
-                                    </span>
-                                )}
-                            </div>
-                        )}
-                        {healthStatus && (
+                                            {cronStatus.system.videosNeedingScrape} pending
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                            {healthStatus && (
                             <div className="flex items-center gap-3">
                                 <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${healthStatus.tikHub.status === 'CONNECTED'
-                                    ? 'bg-green-100 text-green-800'
-                                    : healthStatus.tikHub.status === 'NO_API_KEY'
-                                        ? 'bg-red-100 text-red-800'
-                                        : 'bg-yellow-100 text-yellow-800'
-                                    }`}>
-                                    <span className={`w-2 h-2 rounded-full ${healthStatus.tikHub.status === 'CONNECTED' ? 'bg-green-500' :
-                                        healthStatus.tikHub.status === 'NO_API_KEY' ? 'bg-red-500' : 'bg-yellow-500'
-                                        }`} />
-                                    TikHub {healthStatus.tikHub.status === 'CONNECTED' ? 'Connected' :
-                                        healthStatus.tikHub.status === 'NO_API_KEY' ? 'No API Key' :
-                                            healthStatus.tikHub.status}
-                                </span>
-                                {healthStatus.tikHub.error && (
-                                    <span className="text-xs text-red-600 max-w-xs truncate bg-red-50 px-3 py-1.5 rounded-full" title={healthStatus.tikHub.error}>
-                                        {healthStatus.tikHub.error}
+                                        ? 'bg-green-100 text-green-800'
+                                        : healthStatus.tikHub.status === 'NO_API_KEY'
+                                            ? 'bg-red-100 text-red-800'
+                                            : 'bg-yellow-100 text-yellow-800'
+                                        }`}>
+                                        <span className={`w-2 h-2 rounded-full ${healthStatus.tikHub.status === 'CONNECTED' ? 'bg-green-500' :
+                                            healthStatus.tikHub.status === 'NO_API_KEY' ? 'bg-red-500' : 'bg-yellow-500'
+                                            }`} />
+                                        TikHub {healthStatus.tikHub.status === 'CONNECTED' ? 'Connected' :
+                                            healthStatus.tikHub.status === 'NO_API_KEY' ? 'No API Key' :
+                                                healthStatus.tikHub.status}
                                     </span>
-                                )}
+                                    {healthStatus.tikHub.error && (
+                                    <span className="text-xs text-red-600 max-w-xs truncate bg-red-50 px-3 py-1.5 rounded-full" title={healthStatus.tikHub.error}>
+                                            {healthStatus.tikHub.error}
+                                        </span>
+                                    )}
                                 <span className="text-xs text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full">
-                                    {healthStatus.environment} | Key: {healthStatus.apiKey.configured ? '✓' : '✗'}
-                                </span>
-                            </div>
-                        )}
+                                        {healthStatus.environment} | Key: {healthStatus.apiKey.configured ? '✓' : '✗'}
+                                    </span>
+                                </div>
+                            )}
                     </div>
 
                     {/* Status Messages */}
@@ -1109,11 +1109,11 @@ export default function TikTokTracker() {
                                                                     >
                                                                         <Image
                                                                             src={`/api/image-proxy?url=${encodeURIComponent(video.thumbnailUrl)}`}
-                                                                            alt={`${video.username} thumbnail`}
-                                                                            className="w-10 h-14 object-cover rounded bg-gray-200"
+                                                                        alt={`${video.username} thumbnail`}
+                                                                        className="w-10 h-14 object-cover rounded bg-gray-200"
                                                                             width={40}
                                                                             height={56}
-                                                                            onError={(e) => {
+                                                                        onError={(e) => {
                                                                                 console.log('❌ Thumbnail failed to load for:', video.username, video.thumbnailUrl);
                                                                                 // Hide the image and show fallback
                                                                                 const img = e.target as HTMLImageElement;
@@ -1160,9 +1160,9 @@ export default function TikTokTracker() {
                                                                         <Play className="w-3 h-3 text-white" />
                                                                     </div>
                                                                 ) : (
-                                                                    <div className="w-5 h-5 bg-black rounded flex items-center justify-center">
-                                                                        <Play className="w-3 h-3 text-white" />
-                                                                    </div>
+                                                                <div className="w-5 h-5 bg-black rounded flex items-center justify-center">
+                                                                    <Play className="w-3 h-3 text-white" />
+                                                                </div>
                                                                 )}
                                                                 <span className="text-sm font-medium">
                                                                     {video.platform === 'instagram' ? 'Instagram' : 
