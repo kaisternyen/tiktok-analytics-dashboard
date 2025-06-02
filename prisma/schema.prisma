@@ -16,7 +16,7 @@ model Video {
   username    String
   description String
   thumbnailUrl String?
-  platform    String   @default("tiktok") // "tiktok" or "instagram"
+  platform    String   @default("tiktok") // "tiktok", "instagram", or "youtube"
   
   // Current metrics (latest values)
   currentViews    Int      @default(0)
@@ -24,17 +24,20 @@ model Video {
   currentComments Int      @default(0)
   currentShares   Int      @default(0)
   
+  // Adaptive frequency tracking
+  scrapingCadence String   @default("hourly") // "hourly", "daily"
+  lastDailyViews  Int?     // Views from 24 hours ago for growth calculation
+  dailyViewsGrowth Int?    // Views gained in last 24 hours
+  needsCadenceCheck Boolean @default(false)   // Flag for videos that need cadence evaluation
+  
   // Metadata
   hashtags      String?  // JSON string for MVP simplicity
   music         String?  // JSON string for MVP simplicity
   
   // Tracking info
-  isActive         Boolean  @default(true)
-  trackingMode     String   @default("active")     // "active" (hourly) or "dormant" (daily)
-  lastModeChange   DateTime @default(now())        // When tracking mode last changed
-  lastDailyViews   Int      @default(0)            // Views from yesterday for growth calculation
-  createdAt        DateTime @default(now())
-  lastScrapedAt    DateTime @default(now())
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  lastScrapedAt DateTime @default(now())
   
   // Relationship
   metricsHistory MetricsHistory[]
