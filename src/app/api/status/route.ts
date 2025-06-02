@@ -84,12 +84,12 @@ export async function GET() {
                     lastScraped: newestVideo.lastScrapedAt.toISOString(),
                     minutesAgo: Math.floor((now.getTime() - newestVideo.lastScrapedAt.getTime()) / (1000 * 60))
                 } : null,
-                needingScrape: videosNeedingScrape.map((v: any) => ({
+                needingScrape: videosNeedingScrape.map((v: { username: string; lastScrapedAt: Date }) => ({
                     username: v.username,
                     minutesAgo: Math.floor((now.getTime() - v.lastScrapedAt.getTime()) / (1000 * 60))
                 }))
             },
-            recentActivity: recentHistory.map((h: any) => ({
+            recentActivity: recentHistory.map((h: { video: { username: string }; views: number; timestamp: Date }) => ({
                 username: h.video.username,
                 views: h.views,
                 timestamp: h.timestamp.toISOString(),
