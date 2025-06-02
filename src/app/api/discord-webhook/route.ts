@@ -17,6 +17,22 @@ interface DiscordWebhookPayload {
     timestamp: string;
 }
 
+// Type definitions
+interface ScrapedData {
+    description?: string;
+    likes?: number;
+    comments?: number;
+    thumbnail?: string;
+    thumbnailUrl?: string;
+    views?: number;
+    plays?: number;
+    shares?: number;
+    username?: string;
+    author?: string;
+    hashtags?: string[];
+    music?: object;
+}
+
 // URL patterns for supported platforms
 const URL_PATTERNS = {
     tiktok: /(?:https?:\/\/)?(?:www\.)?(?:tiktok\.com|vm\.tiktok\.com)\/[^\s]+/gi,
@@ -51,7 +67,7 @@ function detectPlatform(url: string): 'tiktok' | 'instagram' | 'youtube' | null 
     return null;
 }
 
-async function processVideoUrl(url: string, submittedBy: string): Promise<{ success: boolean; message: string; data?: any }> {
+async function processVideoUrl(url: string, submittedBy: string): Promise<{ success: boolean; message: string; data?: Record<string, unknown> }> {
     try {
         console.log(`🎬 Processing Discord submission: ${url} by @${submittedBy}`);
         
@@ -92,31 +108,31 @@ async function processVideoUrl(url: string, submittedBy: string): Promise<{ succ
         let shares = 0;
         let username = '';
         let thumbnailUrl = '';
-        let hashtags: any[] = [];
-        let music: any = null;
+        let hashtags: string[] = [];
+        let music: object | null = null;
         
         if (platform === 'instagram') {
-            const instaData = result.data as any; // Instagram data structure
+            const instaData = result.data as ScrapedData;
             views = instaData.plays || instaData.views || 0;
             shares = 0; // Instagram doesn't track shares
             username = instaData.username || 'unknown';
-            thumbnailUrl = instaData.thumbnail || null;
+            thumbnailUrl = instaData.thumbnail || '';
             hashtags = instaData.hashtags || [];
             music = instaData.music || null;
         } else if (platform === 'youtube') {
-            const youtubeData = result.data as any; // YouTube data structure
+            const youtubeData = result.data as ScrapedData;
             views = youtubeData.views || 0;
             shares = 0; // YouTube doesn't track shares in our API
             username = youtubeData.author || youtubeData.username || 'unknown';
-            thumbnailUrl = youtubeData.thumbnail || null;
+            thumbnailUrl = youtubeData.thumbnail || '';
             hashtags = []; // YouTube doesn't have hashtags in our API
             music = null; // YouTube doesn't have music data in our API
         } else {
-            const tiktokData = result.data as any; // TikTok data structure
+            const tiktokData = result.data as ScrapedData;
             views = tiktokData.views || 0;
             shares = tiktokData.shares || 0;
             username = tiktokData.username || 'unknown';
-            thumbnailUrl = tiktokData.thumbnailUrl || tiktokData.thumbnail || null;
+            thumbnailUrl = tiktokData.thumbnailUrl || tiktokData.thumbnail || '';
             hashtags = tiktokData.hashtags || [];
             music = tiktokData.music || null;
         }
@@ -126,12 +142,12 @@ async function processVideoUrl(url: string, submittedBy: string): Promise<{ succ
             data: {
                 url: url,
                 username: username,
-                description: result.data.description || '',
+                description: (result.data as ScrapedData).description || '',
                 thumbnailUrl: thumbnailUrl,
                 platform: platform,
                 currentViews: views,
-                currentLikes: result.data.likes || 0,
-                currentComments: result.data.comments || 0,
+                currentLikes: (result.data as ScrapedData).likes || 0,
+                currentComments: (result.data as ScrapedData).comments || 0,
                 currentShares: shares,
                 lastScrapedAt: new Date(),
                 scrapingCadence: 'hourly', // New videos start with hourly tracking
@@ -146,8 +162,8 @@ async function processVideoUrl(url: string, submittedBy: string): Promise<{ succ
             data: {
                 videoId: newVideo.id,
                 views: views,
-                likes: result.data.likes || 0,
-                comments: result.data.comments || 0,
+                likes: (result.data as ScrapedData).likes || 0,
+                comments: (result.data as ScrapedData).comments || 0,
                 shares: shares,
                 timestamp: new Date(normalizedTimestamp)
             }
@@ -162,7 +178,7 @@ async function processVideoUrl(url: string, submittedBy: string): Promise<{ succ
                 username: newVideo.username,
                 platform: platform,
                 views: views,
-                likes: result.data.likes || 0
+                likes: (result.data as ScrapedData).likes || 0
             }
         };
         
