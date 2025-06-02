@@ -5,31 +5,6 @@ import { prisma } from '@/lib/prisma';
 // Force dynamic rendering for cron jobs
 export const dynamic = 'force-dynamic';
 
-interface VideoResult {
-    status: 'success' | 'failed' | 'skipped';
-    username: string;
-    platform?: string;
-    views?: number;
-    likes?: number;
-    comments?: number;
-    shares?: number;
-    changes?: {
-        views: number;
-        likes: number;
-        comments: number;
-        shares: number;
-    };
-    error?: string;
-    reason?: string;
-}
-
-interface ProcessingResult {
-    results: VideoResult[];
-    successful: number;
-    failed: number;
-    skipped: number;
-}
-
 interface VideoRecord {
     id: string;
     url: string;
@@ -161,8 +136,6 @@ async function evaluateTrackingMode(video: VideoRecord): Promise<'active' | 'dor
     }
     
     // For videos older than 7 days, check daily growth
-    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    
     // Get views from 24 hours ago
     const viewsYesterday = video.lastDailyViews || video.currentViews;
     const dailyGrowth = video.currentViews - viewsYesterday;
@@ -188,162 +161,6 @@ async function evaluateTrackingMode(video: VideoRecord): Promise<'active' | 'dor
     }
     
     return 'active';
-}
-
-// Smart processing with rate limiting and error handling
-async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 10): Promise<ProcessingResult> {
-    const results: VideoResult[] = [];
-    let successful = 0;
-    let failed = 0;
-    let skipped = 0;
-
-    // Filter videos that need scraping
-    const videosToProcess = videos.filter(video => {
-        if (shouldScrapeVideo(video)) {
-            return true;
-        } else {
-            const minutesAgo = Math.floor((new Date().getTime() - video.lastScrapedAt.getTime()) / (1000 * 60));
-            console.log(`⏭️ Skipping @${video.username} (${video.platform}) (scraped ${minutesAgo} min ago)`);
-            results.push({
-                status: 'skipped',
-                username: video.username,
-                platform: video.platform,
-                reason: `Scraped ${minutesAgo} minutes ago`
-            });
-            skipped++;
-            return false;
-        }
-    });
-
-    if (videosToProcess.length === 0) {
-        console.log(`⚠️ No videos need scraping (all recently updated)`);
-        return { results, successful, failed, skipped };
-    }
-
-    // Limit processing to avoid timeouts
-    const limitedVideos = videosToProcess.slice(0, maxPerRun);
-    console.log(`🎯 Processing ${limitedVideos.length}/${videosToProcess.length} videos (max ${maxPerRun} per run)`);
-
-    // Process in smaller batches
-    const batchSize = 3;
-    console.log(`🚀 Starting batch processing with batch size: ${batchSize}`);
-
-    for (let i = 0; i < limitedVideos.length; i += batchSize) {
-        const batch = limitedVideos.slice(i, i + batchSize);
-        const batchNum = Math.floor(i / batchSize) + 1;
-        const totalBatches = Math.ceil(limitedVideos.length / batchSize);
-
-        console.log(`📦 ===== BATCH ${batchNum}/${totalBatches} =====`);
-        console.log(`🎬 Processing: ${batch.map(v => `@${v.username} (${v.platform})`).join(', ')}`);
-
-        // Process batch in parallel
-        const batchPromises = batch.map(async (video, index) => {
-            try {
-                console.log(`🎬 [${i + index + 1}/${limitedVideos.length}] Starting @${video.username} (${video.platform})...`);
-
-                // Use the generic scrapeMediaPost function that handles both platforms
-                const result = await scrapeMediaPost(video.url);
-
-                if (result.success && result.data) {
-                    const mediaData = result.data as TikTokVideoData | InstagramPostData;
-                    const isInstagram = video.platform === 'instagram';
-                    
-                    // Get views based on platform
-                    const views = isInstagram ? 
-                        ((mediaData as InstagramPostData).plays || (mediaData as InstagramPostData).views || 0) : 
-                        (mediaData as TikTokVideoData).views;
-                    
-                    const shares = isInstagram ? 0 : ((mediaData as TikTokVideoData).shares || 0);
-
-                    // Update video metrics
-                    await prisma.video.update({
-                        where: { id: video.id },
-                        data: {
-                            currentViews: views,
-                            currentLikes: mediaData.likes,
-                            currentComments: mediaData.comments,
-                            currentShares: shares,
-                            lastScrapedAt: new Date(),
-                        }
-                    });
-
-                    // Add new metrics history entry
-                    await prisma.metricsHistory.create({
-                        data: {
-                            videoId: video.id,
-                            views: views,
-                            likes: mediaData.likes,
-                            comments: mediaData.comments,
-                            shares: shares,
-                        }
-                    });
-
-                    const viewsChange = views - video.currentViews;
-                    const likesChange = mediaData.likes - video.currentLikes;
-                    console.log(`✅ [${i + index + 1}] @${video.username} (${video.platform}): ${views.toLocaleString()} views (+${viewsChange.toLocaleString()}), ${mediaData.likes.toLocaleString()} likes (+${likesChange.toLocaleString()})`);
-
-                    return {
-                        status: 'success' as const,
-                        username: video.username,
-                        platform: video.platform,
-                        views: views,
-                        likes: mediaData.likes,
-                        comments: mediaData.comments,
-                        shares: shares,
-                        changes: {
-                            views: viewsChange,
-                            likes: likesChange,
-                            comments: mediaData.comments - video.currentComments,
-                            shares: shares - video.currentShares,
-                        }
-                    };
-                } else {
-                    console.log(`❌ [${i + index + 1}] @${video.username} (${video.platform}) failed: ${result.error}`);
-                    return {
-                        status: 'failed' as const,
-                        username: video.username,
-                        platform: video.platform,
-                        error: result.error || 'Unknown error'
-                    };
-                }
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                console.error(`💥 [${i + index + 1}] @${video.username} (${video.platform}) crashed: ${errorMessage}`);
-                return {
-                    status: 'failed' as const,
-                    username: video.username,
-                    platform: video.platform,
-                    error: errorMessage
-                };
-            }
-        });
-
-        // Wait for batch to complete
-        console.log(`⏳ Waiting for batch ${batchNum} to complete...`);
-        const batchResults = await Promise.all(batchPromises);
-
-        // Count results
-        batchResults.forEach(result => {
-            results.push(result);
-            if (result.status === 'success') successful++;
-            else if (result.status === 'failed') failed++;
-        });
-
-        const batchSuccess = batchResults.filter(r => r.status === 'success').length;
-        const batchFailed = batchResults.filter(r => r.status === 'failed').length;
-        console.log(`📊 Batch ${batchNum} complete: ${batchSuccess} success, ${batchFailed} failed`);
-
-        // Rate limiting: wait 1 second between batches to be nice to APIs
-        if (i + batchSize < limitedVideos.length) {
-            console.log(`⏱️ Rate limiting: waiting 1 second before next batch...`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-    }
-
-    console.log(`🏁 ===== PROCESSING COMPLETE =====`);
-    console.log(`📊 Final results: ${successful} success, ${failed} failed, ${skipped} skipped`);
-
-    return { results, successful, failed, skipped };
 }
 
 export async function GET() {
