@@ -53,7 +53,6 @@ interface VideoRecord {
 // Determine if video should be scraped based on standardized timing and cadence
 function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?: string } {
     const now = new Date();
-    const videoAgeInDays = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
     const minutesSinceLastScrape = (now.getTime() - video.lastScrapedAt.getTime()) / (1000 * 60);
     
     // For testing: All videos scrape every minute (regardless of age)
