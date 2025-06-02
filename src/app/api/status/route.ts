@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getIntervalForCadence, normalizeTimestamp, getCurrentNormalizedTimestamp } from '@/lib/timestamp-utils';
+import { normalizeTimestamp, getCurrentNormalizedTimestamp } from '@/lib/timestamp-utils';
+
+interface VideoForScrapeCheck {
+    scrapingCadence: string;
+    lastScrapedAt: Date;
+    createdAt: Date;
+    username: string;
+}
 
 // Same logic as in scrape-all/route.ts
-function shouldScrapeVideo(video: any): { shouldScrape: boolean; reason?: string } {
+function shouldScrapeVideo(video: VideoForScrapeCheck): { shouldScrape: boolean; reason?: string } {
     const now = new Date();
-    const interval = getIntervalForCadence(video.scrapingCadence);
     const lastScraped = new Date(video.lastScrapedAt);
     const videoAgeInDays = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
     

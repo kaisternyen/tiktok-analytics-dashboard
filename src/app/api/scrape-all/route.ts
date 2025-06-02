@@ -496,10 +496,8 @@ export async function GET() {
                 dailyViewsGrowth: number | null;
                 needsCadenceCheck: boolean | null;
             }) => {
-                const ageInDays = (new Date().getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-                
-                // Determine proper cadence based on age and current setting
-                let cadence = video.scrapingCadence || 'hourly';
+                // Determine proper cadence based on current setting
+                const cadence = video.scrapingCadence || 'hourly';
                 
                 // Keep testing cadence as is - don't override it
                 // Other cadences can be adjusted based on age/performance logic
