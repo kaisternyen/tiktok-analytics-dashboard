@@ -281,11 +281,19 @@ export async function GET() {
                 if (result.success && result.data) {
                     const data = result.data as TikTokVideoData | InstagramPostData;
 
-                    // Extract metrics
-                    const views = data.plays || data.views || 0;
+                    // Extract metrics based on platform
+                    let views = 0;
+                    if (video.platform === 'instagram' || video.platform === 'youtube') {
+                        const mediaData = data as InstagramPostData;
+                        views = mediaData.plays || mediaData.views || 0;
+                    } else {
+                        const mediaData = data as TikTokVideoData;
+                        views = mediaData.views || 0;
+                    }
+                    
                     const likes = data.likes || 0;
                     const comments = data.comments || 0;
-                    const shares = (data as TikTokVideoData).shares || 0;
+                    const shares = video.platform === 'instagram' || video.platform === 'youtube' ? 0 : ((data as TikTokVideoData).shares || 0);
 
                     // Update video record
                     await prisma.video.update({
