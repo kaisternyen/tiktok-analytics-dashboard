@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
-import { getCurrentNormalizedTimestamp, getIntervalForCadence, isCurrentInterval } from '@/lib/timestamp-utils';
+import { getCurrentNormalizedTimestamp, getIntervalForCadence } from '@/lib/timestamp-utils';
 
 // Force dynamic rendering for cron jobs
 export const dynamic = 'force-dynamic';
@@ -55,7 +55,6 @@ interface VideoRecord {
 function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?: string } {
     const now = new Date();
     const interval = getIntervalForCadence(video.scrapingCadence);
-    const normalizedTimestamp = getCurrentNormalizedTimestamp(interval);
     
     // For testing mode (every minute), always scrape
     if (video.scrapingCadence === 'testing') {
