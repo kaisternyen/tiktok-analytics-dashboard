@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
     console.log('❌ Discord sent GET request - Discord expects POST');
     return NextResponse.json({ error: 'Discord verification requires POST' }, { status: 405 });
 }
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         }
         
         // Try to parse as JSON
-        let body: any;
+        let body: Record<string, unknown>;
         try {
             body = JSON.parse(bodyText);
             console.log('✅ Parsed JSON body:', JSON.stringify(body, null, 2));
@@ -76,16 +76,18 @@ export async function POST(request: NextRequest) {
             console.log('🎬 Slash command (type 2) received');
             console.log('📋 Command data:', JSON.stringify(body.data, null, 2));
             
-            if (body.data?.name === 's') {
-                const url = body.data.options?.[0]?.value;
-                const user = body.member?.user || body.user;
+            if ((body.data as Record<string, unknown>)?.name === 's') {
+                const data = body.data as Record<string, unknown>;
+                const options = data.options as Array<Record<string, unknown>>;
+                const url = options?.[0]?.value;
+                const user = (body.member as Record<string, unknown>)?.user || body.user;
                 
-                console.log(`🎯 /s command: URL=${url}, User=${user?.username}`);
+                console.log(`🎯 /s command: URL=${url}, User=${(user as Record<string, unknown>)?.username}`);
                 
                 const response = {
                     type: 4,
                     data: {
-                        content: `🎉 Discord integration working!\n\n📋 **Received:**\n🔗 URL: ${url}\n👤 User: ${user?.username}\n\n🔧 **Next:** Add environment variables to enable full video processing!`,
+                        content: `🎉 Discord integration working!\n\n📋 **Received:**\n🔗 URL: ${url}\n👤 User: ${(user as Record<string, unknown>)?.username}\n\n🔧 **Next:** Add environment variables to enable full video processing!`,
                         flags: 0
                     }
                 };
