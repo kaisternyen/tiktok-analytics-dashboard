@@ -207,7 +207,7 @@ async function evaluateCadenceChange(video: VideoRecord, newViews: number): Prom
 }
 
 // Smart processing with standardized timing and adaptive frequency
-async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 15): Promise<ProcessingResult> {
+async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1000): Promise<ProcessingResult> {
     const results: VideoResult[] = [];
     let successful = 0;
     let failed = 0;
@@ -392,7 +392,7 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         }
                     };
                 } else {
-                    console.log(`❌ [${i + index + 1}] @${video.username} (${video.platform}) failed: ${result.error}`);
+                    console.error(`❌ [${i + index + 1}] @${video.username} (${video.platform}) failed: ${result.error}`);
                     return {
                         status: 'failed' as const,
                         username: video.username,
