@@ -289,43 +289,6 @@ export default function TikTokTracker() {
         }
     };
 
-    const handleRefreshAll = async () => {
-        setIsRefreshing(true);
-        setError(null);
-        setSuccess(null);
-
-        try {
-            console.log('🔄 Refreshing all videos...');
-
-            // Refresh each video by re-scraping
-            for (const video of tracked) {
-                console.log(`🔄 Refreshing @${video.username}...`);
-
-                const response = await fetch('/api/scrape', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ url: video.url }),
-                });
-
-                if (!response.ok) {
-                    console.warn(`⚠️ Failed to refresh @${video.username}`);
-                }
-            }
-
-            // Fetch updated data
-            await fetchVideos();
-            setSuccess(`✅ Successfully refreshed ${tracked.length} videos!`);
-
-        } catch (err) {
-            console.error('💥 Error refreshing videos:', err);
-            setError('Failed to refresh some videos');
-        } finally {
-            setIsRefreshing(false);
-        }
-    };
-
     const handleDeleteVideo = async (videoId: string, event: React.MouseEvent) => {
         event.stopPropagation();
 
