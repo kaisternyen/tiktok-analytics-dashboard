@@ -2,19 +2,26 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Cookies from 'js-cookie';
+import { cookies } from 'next/headers';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // For demo purposes, using a simple hardcoded check
     // In production, you should use a proper authentication system
     if (username === 'admin' && password === 'blokdin7') {
-      Cookies.set('isAuthenticated', 'true', { expires: 7 }); // Cookie expires in 7 days
+      // Set cookie using fetch to our own API
+      await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ success: true }),
+      });
       router.push('/');
     } else {
       alert('Invalid credentials');
