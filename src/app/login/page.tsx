@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { cookies } from 'next/headers';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
