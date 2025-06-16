@@ -753,9 +753,9 @@ export default function TikTokTracker() {
                         <div className="flex items-center gap-3">
                             <Button
                                 variant="outline"
-                                onClick={handleRefreshAll}
-                                disabled={isRefreshing || tracked.length === 0}
-                                className="flex items-center gap-2"
+                                className="flex items-center gap-2 cursor-default select-none"
+                                tabIndex={-1}
+                                aria-disabled="true"
                             >
                                 <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                                 {isRefreshing ? 'Refreshing...' : 'Refresh All'}
