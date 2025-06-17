@@ -156,54 +156,6 @@ function parseSorts(sortParam: string | null): Array<Record<string, 'asc' | 'des
     }
 }
 
-// Move VideoWithMetrics type to top-level for reuse
-type VideoWithMetrics = {
-    id: string;
-    url: string;
-    username: string;
-    description: string;
-    thumbnailUrl: string | null;
-    createdAt: Date;
-    lastScrapedAt: Date;
-    isActive: boolean;
-    currentViews: number;
-    currentLikes: number;
-    currentComments: number;
-    currentShares: number;
-    hashtags: string | null;
-    music: string | null;
-    platform: string | null;
-    scrapingCadence: string | null;
-    metricsHistory: Array<{
-        timestamp: Date;
-        views: number;
-        likes: number;
-        comments: number;
-        shares: number;
-    }>;
-};
-
-// For raw query, define a type matching the DB fields (no metricsHistory)
-type VideoRaw = {
-    id: string;
-    url: string;
-    username: string;
-    description: string;
-    thumbnailUrl: string | null;
-    createdAt: Date;
-    lastScrapedAt: Date;
-    isActive: boolean;
-    currentViews: number;
-    currentLikes: number;
-    currentComments: number;
-    currentShares: number;
-    hashtags: string | null;
-    music: string | null;
-    platform: string | null;
-    scrapingCadence: string | null;
-    // No metricsHistory in raw query
-};
-
 export async function GET(req: Request) {
     try {
         await runMigrationIfNeeded();
@@ -214,52 +166,86 @@ export async function GET(req: Request) {
         const decodedSortParam = sortParam ? decodeURIComponent(sortParam) : null;
         console.log('RAW filterParam:', filterParam);
         let where: Record<string, unknown> = { isActive: true };
+        let timeframe: [string, string] | null = null;
+        let filterParamToParse = decodedFilterParam;
         if (decodedFilterParam) {
-            const parsed = parseFilters(decodedFilterParam);
-            console.log('PARSED filters:', parsed);
-            if (parsed) where = { ...parsed, isActive: true };
+            const parsed = JSON.parse(decodedFilterParam);
+            // Extract timeframe filter if present
+            if (parsed && parsed.conditions) {
+                const tf = parsed.conditions.find((f: any) => f.field === 'timeframe');
+                if (tf && Array.isArray(tf.value) && tf.value.length === 2 && tf.value[0] && tf.value[1]) {
+                    timeframe = [tf.value[0], tf.value[1]];
+                    // Remove timeframe from conditions before passing to parseFilters
+                    parsed.conditions = parsed.conditions.filter((f: any) => f.field !== 'timeframe');
+                    filterParamToParse = JSON.stringify(parsed);
+                }
+            }
+            const parsedFilters = parseFilters(filterParamToParse);
+            console.log('PARSED filters:', parsedFilters);
+            if (parsedFilters) where = { ...parsedFilters, isActive: true };
         }
         console.log('FINAL where clause:', where);
         const orderBy = parseSorts(decodedSortParam) || [{ createdAt: 'desc' }];
         console.log('📋 Fetching videos from database with:', { where, orderBy });
-
-        // Check if sorting by username and make it case-insensitive
-        let useRawOrderBy = false;
-        let usernameOrder: 'asc' | 'desc' | null = null;
-        if (orderBy.length === 1 && orderBy[0].hasOwnProperty('username')) {
-            useRawOrderBy = true;
-            usernameOrder = orderBy[0]['username'];
-        }
-        let videos: VideoWithMetrics[] | VideoRaw[];
-        if (useRawOrderBy && usernameOrder) {
-            // Case-insensitive sort for username (Postgres syntax)
-            // Note: This bypasses Prisma's include/transform logic. You may need to manually join metricsHistory if needed.
-            videos = await prisma.$queryRaw<VideoRaw[]>`SELECT * FROM "videos" WHERE "isActive" = true ORDER BY LOWER("username") ${usernameOrder === 'asc' ? 'ASC' : 'DESC'}`;
-        } else {
-            videos = await prisma.video.findMany({
-                where,
-                include: {
-                    metricsHistory: {
-                        orderBy: { timestamp: 'desc' },
-                        take: 48
-                    }
-                },
-                orderBy
-            });
-        }
+        const videos = await prisma.video.findMany({
+            where,
+            include: {
+                metricsHistory: {
+                    orderBy: { timestamp: 'desc' },
+                    take: 48
+                }
+            },
+            orderBy
+        });
 
         console.log(`✅ Found ${videos.length} videos in database`);
 
+        // If timeframe filter is present, filter metricsHistory and videos accordingly
+        let filteredVideos = videos;
+        if (timeframe) {
+            const [start, end] = timeframe;
+            filteredVideos = videos.map(video => {
+                const filteredHistory = video.metricsHistory.filter((h: any) => {
+                    const t = new Date(h.timestamp).getTime();
+                    return t >= new Date(start).getTime() && t <= new Date(end).getTime();
+                });
+                return { ...video, metricsHistory: filteredHistory };
+            }).filter(video => video.metricsHistory.length > 0);
+        }
+
         // Transform data for frontend
-        const transformedVideos = (videos as (VideoWithMetrics | VideoRaw)[]).map((video) => {
-            // If metricsHistory is missing (raw query), add empty array
-            const metricsHistory = 'metricsHistory' in video && video.metricsHistory ? video.metricsHistory : [];
+        type VideoWithMetrics = {
+            id: string;
+            url: string;
+            username: string;
+            description: string;
+            thumbnailUrl: string | null;
+            createdAt: Date;
+            lastScrapedAt: Date;
+            isActive: boolean;
+            currentViews: number;
+            currentLikes: number;
+            currentComments: number;
+            currentShares: number;
+            hashtags: string | null;
+            music: string | null;
+            platform: string | null;
+            scrapingCadence: string | null;
+            metricsHistory: Array<{
+                timestamp: Date;
+                views: number;
+                likes: number;
+                comments: number;
+                shares: number;
+            }>;
+        };
+        const transformedVideos = filteredVideos.map((video: VideoWithMetrics) => {
             // Parse JSON fields
             const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
             const music = video.music ? JSON.parse(video.music) : null;
 
-            // Calculate growth from last 2 data points
-            const history = metricsHistory;
+            // Calculate growth from last 2 data points (in filtered history)
+            const history = video.metricsHistory;
             let growth = { views: 0, likes: 0, comments: 0, shares: 0 };
 
             if (history.length >= 2) {
@@ -292,13 +278,7 @@ export async function GET(req: Request) {
                 platform: video.platform || 'tiktok',
                 scrapingCadence: video.scrapingCadence || 'hourly',
                 growth,
-                history: history.map((h: {
-                    timestamp: Date;
-                    views: number;
-                    likes: number;
-                    comments: number;
-                    shares: number;
-                }) => ({
+                history: history.map((h: any) => ({
                     time: h.timestamp.toISOString(),
                     views: h.views,
                     likes: h.likes,
