@@ -121,10 +121,11 @@ export async function GET(req: Request) {
         const url = new URL(req.url);
         const filterParam = url.searchParams.get('filter');
         const sortParam = url.searchParams.get('sort');
+        const decodedFilterParam = filterParam ? decodeURIComponent(filterParam) : null;
         console.log('RAW filterParam:', filterParam);
         let where: Record<string, unknown> = { isActive: true };
-        if (filterParam) {
-            const parsed = parseFilters(filterParam);
+        if (decodedFilterParam) {
+            const parsed = parseFilters(decodedFilterParam);
             console.log('PARSED filters:', parsed);
             if (parsed) where = { ...parsed, isActive: true };
         }
