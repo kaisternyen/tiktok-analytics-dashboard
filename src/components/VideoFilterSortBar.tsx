@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import { fromZonedTime, toZonedTime, format } from 'date-fns-tz';
 
 // Define field types for the videos table
 const FIELD_DEFS = [
@@ -296,20 +299,19 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                   />
                 ) : isTimeframe ? (
                   <>
-                    <input
-                      type="datetime-local"
-                      step="3600"
-                      className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-                      value={Array.isArray(filter.value) ? (typeof filter.value[0] === 'string' ? filter.value[0].slice(0, 13) + ':00' : '') : ''}
-                      onChange={e => {
-                        // Always force minutes to 00
-                        const d = new Date(e.target.value);
+                    <DatePicker
+                      selected={Array.isArray(filter.value) && filter.value[0] ? toZonedTime(new Date(filter.value[0]), 'America/New_York') : null}
+                      onChange={date => {
+                        if (!date) return;
+                        // Always round to the nearest hour
+                        const d = new Date(date);
                         d.setMinutes(0, 0, 0);
-                        const iso = d.toISOString().slice(0, 16) + ':00.000Z';
+                        // Convert to EST ISO string
+                        const estIso = fromZonedTime(d, 'America/New_York').toISOString();
                         const end = Array.isArray(filter.value) && typeof filter.value[1] === 'string' ? filter.value[1] : '';
-                        const newValue: [string, string] = [iso, end];
+                        const newValue: [string, string] = [estIso, end];
                         // Check if range > 24h
-                        if (end && Math.abs(new Date(end).getTime() - d.getTime()) > 24*60*60*1000) {
+                        if (end && Math.abs(new Date(end).getTime() - new Date(estIso).getTime()) > 24*60*60*1000) {
                           setShowSnapModal(true);
                           setPendingSnapIdx(idx);
                           setPendingSnapValue(newValue);
@@ -318,23 +320,29 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                           handleFilterChange(idx, 'value', newValue);
                         }
                       }}
-                      required
+                      showTimeSelect
+                      showTimeSelectOnly={false}
+                      timeIntervals={60}
+                      dateFormat="MMMM d, yyyy h aa"
+                      timeCaption="Hour"
+                      placeholderText="Start date/time (EST)"
+                      className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+                      popperPlacement="bottom"
                     />
                     <span className="mx-1 text-xs">to</span>
-                    <input
-                      type="datetime-local"
-                      step="3600"
-                      className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-                      value={Array.isArray(filter.value) ? (typeof filter.value[1] === 'string' ? filter.value[1].slice(0, 13) + ':00' : '') : ''}
-                      onChange={e => {
-                        // Always force minutes to 00
-                        const d = new Date(e.target.value);
+                    <DatePicker
+                      selected={Array.isArray(filter.value) && filter.value[1] ? toZonedTime(new Date(filter.value[1]), 'America/New_York') : null}
+                      onChange={date => {
+                        if (!date) return;
+                        // Always round to the nearest hour
+                        const d = new Date(date);
                         d.setMinutes(0, 0, 0);
-                        const iso = d.toISOString().slice(0, 16) + ':00.000Z';
+                        // Convert to EST ISO string
+                        const estIso = fromZonedTime(d, 'America/New_York').toISOString();
                         const start = Array.isArray(filter.value) && typeof filter.value[0] === 'string' ? filter.value[0] : '';
-                        const newValue: [string, string] = [start, iso];
+                        const newValue: [string, string] = [start, estIso];
                         // Check if range > 24h
-                        if (start && Math.abs(new Date(iso).getTime() - new Date(start).getTime()) > 24*60*60*1000) {
+                        if (start && Math.abs(new Date(estIso).getTime() - new Date(start).getTime()) > 24*60*60*1000) {
                           setShowSnapModal(true);
                           setPendingSnapIdx(idx);
                           setPendingSnapValue(newValue);
@@ -343,7 +351,14 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                           handleFilterChange(idx, 'value', newValue);
                         }
                       }}
-                      required
+                      showTimeSelect
+                      showTimeSelectOnly={false}
+                      timeIntervals={60}
+                      dateFormat="MMMM d, yyyy h aa"
+                      timeCaption="Hour"
+                      placeholderText="End date/time (EST)"
+                      className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+                      popperPlacement="bottom"
                     />
                     {/* Snap Modal */}
                     {showSnapModal && pendingSnapIdx === idx && (
@@ -357,13 +372,12 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                             <button
                               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                               onClick={() => {
-                                // Snap both to 12:00 AM EST (UTC-5)
+                                // Snap both to 12:00 AM EST (America/New_York)
                                 if (pendingSnapValue) {
                                   const toESTMidnight = (dateStr: string) => {
-                                    const d = new Date(dateStr);
-                                    // Convert to EST (UTC-5)
-                                    d.setUTCHours(5, 0, 0, 0); // 12:00 AM EST is 5:00 AM UTC
-                                    return d.toISOString();
+                                    const d = toZonedTime(new Date(dateStr), 'America/New_York');
+                                    d.setHours(0, 0, 0, 0);
+                                    return fromZonedTime(d, 'America/New_York').toISOString();
                                   };
                                   const start = toESTMidnight(pendingSnapValue[0]);
                                   const end = toESTMidnight(pendingSnapValue[1]);
