@@ -290,7 +290,13 @@ export async function GET(req: Request) {
                       case 'likes': val = video.currentLikes; break;
                       case 'comments': val = video.currentComments; break;
                       case 'shares': val = video.currentShares; break;
-                      default: val = (video as any)[cond.field]; // fallback for other fields
+                      default:
+                        if (typeof video[cond.field as keyof FilteredVideoWithMetrics] === 'number' || typeof video[cond.field as keyof FilteredVideoWithMetrics] === 'string') {
+                          val = video[cond.field as keyof FilteredVideoWithMetrics] as number | string;
+                        } else {
+                          val = undefined;
+                        }
+                        break;
                     }
                     if (cond.value === null || cond.value === undefined) return true;
                     if (val === undefined) return false;
