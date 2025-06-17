@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 interface VideoHistory {
     time: string;
@@ -85,6 +87,106 @@ interface VideoSort {
     direction: 'asc' | 'desc';
 }
 
+// Field definitions for filter UI
+const FILTER_FIELDS = [
+  {
+    key: "username",
+    label: "Username",
+    type: "string"
+  },
+  {
+    key: "platform",
+    label: "Platform",
+    type: "enum",
+    options: ["tiktok", "instagram", "youtube"]
+  },
+  {
+    key: "scrapingCadence",
+    label: "Scraping Cadence",
+    type: "enum",
+    options: ["hourly", "daily", "testing"]
+  },
+  {
+    key: "description",
+    label: "Description",
+    type: "string"
+  },
+  {
+    key: "status",
+    label: "Status",
+    type: "enum",
+    options: ["Active", "Paused"]
+  },
+  {
+    key: "currentViews",
+    label: "Views",
+    type: "number"
+  },
+  {
+    key: "currentLikes",
+    label: "Likes",
+    type: "number"
+  },
+  {
+    key: "currentComments",
+    label: "Comments",
+    type: "number"
+  },
+  {
+    key: "currentShares",
+    label: "Shares",
+    type: "number"
+  },
+  {
+    key: "createdAt",
+    label: "Created At",
+    type: "date"
+  },
+  {
+    key: "lastScrapedAt",
+    label: "Last Scraped At",
+    type: "date"
+  }
+];
+
+const OPERATORS: Record<string, { value: string; label: string }[]> = {
+  string: [
+    { value: "contains", label: "contains" },
+    { value: "does_not_contain", label: "does not contain" },
+    { value: "is", label: "is" },
+    { value: "is_not", label: "is not" },
+    { value: "is_empty", label: "is empty" },
+    { value: "is_not_empty", label: "is not empty" }
+  ],
+  number: [
+    { value: "=", label: "=" },
+    { value: "!=", label: "≠" },
+    { value: "<", label: "<" },
+    { value: "<=", label: "≤" },
+    { value: ">", label: ">" },
+    { value: ">=", label: "≥" },
+    { value: "is_empty", label: "is empty" },
+    { value: "is_not_empty", label: "is not empty" }
+  ],
+  date: [
+    { value: "is", label: "is" },
+    { value: "is_before", label: "is before" },
+    { value: "is_after", label: "is after" },
+    { value: "is_on_or_before", label: "is on or before" },
+    { value: "is_on_or_after", label: "is on or after" },
+    { value: "is_not", label: "is not" },
+    { value: "is_empty", label: "is empty" },
+    { value: "is_not_empty", label: "is not empty" },
+    { value: "is_within", label: "is within" }
+  ],
+  enum: [
+    { value: "is", label: "is" },
+    { value: "is_not", label: "is not" },
+    { value: "is_empty", label: "is empty" },
+    { value: "is_not_empty", label: "is not empty" }
+  ]
+};
+
 export default function TikTokTracker() {
     const [videoUrl, setVideoUrl] = useState("");
     const [tracked, setTracked] = useState<TrackedVideo[]>([]);
@@ -101,18 +203,18 @@ export default function TikTokTracker() {
     const [sorts, setSorts] = useState<VideoSort[]>([]);
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [showSortModal, setShowSortModal] = useState(false);
-    const filterFieldRef = useRef<HTMLInputElement>(null);
-    const filterOperatorRef = useRef<HTMLInputElement>(null);
-    const filterValueRef = useRef<HTMLInputElement>(null);
-    const sortFieldRef = useRef<HTMLInputElement>(null);
-    const sortDirectionRef = useRef<HTMLSelectElement>(null);
-
-    // Individual video chart states
+    const [filterField, setFilterField] = useState<string>("");
+    const [filterOperator, setFilterOperator] = useState<string>("");
+    const [filterValue, setFilterValue] = useState<string | number | null>("");
+    const [dateValue, setDateValue] = useState<Date | null>(null);
+    const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
     const [selectedVideoTimePeriod, setSelectedVideoTimePeriod] = useState<TimePeriod>('W');
     const [showViewsDelta, setShowViewsDelta] = useState(false);
     const [showLikesDelta, setShowLikesDelta] = useState(false);
     const [showCommentsDelta, setShowCommentsDelta] = useState(false);
     const [showSharesDelta, setShowSharesDelta] = useState(false);
+    const [sortField, setSortField] = useState<string>("");
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>("asc");
 
     const fetchVideos = useCallback(async () => {
         try {
@@ -1523,24 +1625,131 @@ export default function TikTokTracker() {
             </div>
             {showFilterModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-                    <div className="bg-white p-6 rounded shadow-lg w-96">
-                        <h2 className="font-bold mb-2">Add Filter</h2>
-                        <div className="flex flex-col gap-2 mb-4">
-                            <input ref={filterFieldRef} placeholder="Field (e.g. username)" className="border p-1 rounded" />
-                            <input ref={filterOperatorRef} placeholder="Operator (e.g. contains)" className="border p-1 rounded" />
-                            <input ref={filterValueRef} placeholder="Value" className="border p-1 rounded" />
+                    <div className="bg-white p-4 rounded-lg shadow-xl w-full max-w-md mx-auto" style={{ minWidth: 340 }}>
+                        <h2 className="font-bold mb-3 text-lg">Add Filter</h2>
+                        <div className="flex flex-col gap-3 mb-4">
+                            {/* Field Dropdown */}
+                            <label className="text-xs font-medium text-gray-600">Field</label>
+                            <select
+                                className="border p-2 rounded"
+                                value={filterField}
+                                onChange={e => {
+                                    setFilterField(e.target.value);
+                                    setFilterOperator("");
+                                    setFilterValue("");
+                                    setDateValue(null);
+                                    setDateRange([null, null]);
+                                }}
+                            >
+                                <option value="">Select field...</option>
+                                {FILTER_FIELDS.map(f => (
+                                    <option key={f.key} value={f.key}>{f.label}</option>
+                                ))}
+                            </select>
+                            {/* Operator Dropdown */}
+                            <label className="text-xs font-medium text-gray-600">Operator</label>
+                            <select
+                                className="border p-2 rounded"
+                                value={filterOperator}
+                                onChange={e => setFilterOperator(e.target.value)}
+                                disabled={!filterField}
+                            >
+                                <option value="">Select operator...</option>
+                                {filterField && OPERATORS[FILTER_FIELDS.find(f => f.key === filterField)?.type || 'string'].map(op => (
+                                    <option key={op.value} value={op.value}>{op.label}</option>
+                                ))}
+                            </select>
+                            {/* Value Input (dynamic) */}
+                            <label className="text-xs font-medium text-gray-600">Value</label>
+                            {(() => {
+                                const field = FILTER_FIELDS.find(f => f.key === filterField);
+                                if (!field) return <input className="border p-2 rounded" disabled placeholder="Select a field first" />;
+                                if (field.type === 'enum') {
+                                    return (
+                                        <select className="border p-2 rounded" value={filterValue as string} onChange={e => setFilterValue(e.target.value)}>
+                                            <option value="">Select value...</option>
+                                            {(field.options || []).map((opt: string) => (
+                                                <option key={opt} value={opt}>{opt}</option>
+                                            ))}
+                                        </select>
+                                    );
+                                }
+                                if (field.type === 'date') {
+                                    if (filterOperator === 'is_within') {
+                                        return (
+                                            <div className="flex gap-2">
+                                                <DatePicker
+                                                    selected={dateRange[0]}
+                                                    onChange={date => setDateRange([date as Date, dateRange[1]])}
+                                                    selectsStart
+                                                    startDate={dateRange[0]}
+                                                    endDate={dateRange[1]}
+                                                    className="border p-2 rounded w-full"
+                                                    placeholderText="Start date"
+                                                />
+                                                <DatePicker
+                                                    selected={dateRange[1]}
+                                                    onChange={date => setDateRange([dateRange[0], date as Date])}
+                                                    selectsEnd
+                                                    startDate={dateRange[0]}
+                                                    endDate={dateRange[1]}
+                                                    className="border p-2 rounded w-full"
+                                                    placeholderText="End date"
+                                                />
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <DatePicker
+                                            selected={dateValue}
+                                            onChange={date => setDateValue(date as Date)}
+                                            className="border p-2 rounded w-full"
+                                            placeholderText="Select date"
+                                            showTimeSelect={false}
+                                            dateFormat="yyyy-MM-dd"
+                                        />
+                                    );
+                                }
+                                return <input className="border p-2 rounded" value={filterValue as string | number} onChange={e => setFilterValue(field.type === 'number' ? Number(e.target.value) : e.target.value)} placeholder="Enter value..." type={field.type === 'number' ? 'number' : 'text'} />;
+                            })()}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 justify-end">
                             <Button onClick={() => {
-                                const field = filterFieldRef.current?.value || '';
-                                const operator = filterOperatorRef.current?.value || '';
-                                const value = filterValueRef.current?.value || '';
+                                const field = filterField;
+                                const operator = filterOperator;
+                                let value: any = '';
+                                const fieldDef = FILTER_FIELDS.find(f => f.key === field);
+                                if (fieldDef?.type === 'enum') {
+                                    value = filterValue;
+                                } else if (fieldDef?.type === 'date') {
+                                    if (operator === 'is_within') {
+                                        value = { start: dateRange[0]?.toISOString() || '', end: dateRange[1]?.toISOString() || '' };
+                                    } else {
+                                        value = dateValue ? dateValue.toISOString() : '';
+                                    }
+                                } else if (fieldDef?.type === 'number') {
+                                    value = filterValue !== '' ? Number(filterValue) : '';
+                                } else {
+                                    value = filterValue;
+                                }
                                 if (field && operator) {
                                     setFilters([...filters, { field, operator, value }]);
                                 }
                                 setShowFilterModal(false);
+                                setFilterField("");
+                                setFilterOperator("");
+                                setFilterValue("");
+                                setDateValue(null);
+                                setDateRange([null, null]);
                             }}>Add</Button>
-                            <Button variant="outline" onClick={() => setShowFilterModal(false)}>Cancel</Button>
+                            <Button variant="outline" onClick={() => {
+                                setShowFilterModal(false);
+                                setFilterField("");
+                                setFilterOperator("");
+                                setFilterValue("");
+                                setDateValue(null);
+                                setDateRange([null, null]);
+                            }}>Cancel</Button>
                         </div>
                     </div>
                 </div>
@@ -1550,22 +1759,31 @@ export default function TikTokTracker() {
                     <div className="bg-white p-6 rounded shadow-lg w-96">
                         <h2 className="font-bold mb-2">Add Sort</h2>
                         <div className="flex flex-col gap-2 mb-4">
-                            <input ref={sortFieldRef} placeholder="Field (e.g. views)" className="border p-1 rounded" />
-                            <select ref={sortDirectionRef} className="border p-1 rounded">
+                            <select value={sortField} onChange={e => setSortField(e.target.value)} className="border p-1 rounded">
+                                <option value="">Select field...</option>
+                                {FILTER_FIELDS.map(f => (
+                                    <option key={f.key} value={f.key}>{f.label}</option>
+                                ))}
+                            </select>
+                            <select value={sortDirection} onChange={e => setSortDirection(e.target.value as 'asc' | 'desc')} className="border p-1 rounded">
                                 <option value="asc">Ascending</option>
                                 <option value="desc">Descending</option>
                             </select>
                         </div>
                         <div className="flex gap-2">
                             <Button onClick={() => {
-                                const field = sortFieldRef.current?.value || '';
-                                const direction = (sortDirectionRef.current?.value === 'asc' ? 'asc' : 'desc');
-                                if (field) {
-                                    setSorts([...sorts, { field, direction }]);
+                                if (sortField) {
+                                    setSorts([...sorts, { field: sortField, direction: sortDirection }]);
                                 }
                                 setShowSortModal(false);
+                                setSortField("");
+                                setSortDirection("asc");
                             }}>Add</Button>
-                            <Button variant="outline" onClick={() => setShowSortModal(false)}>Cancel</Button>
+                            <Button variant="outline" onClick={() => {
+                                setShowSortModal(false);
+                                setSortField("");
+                                setSortDirection("asc");
+                            }}>Cancel</Button>
                         </div>
                     </div>
                 </div>
