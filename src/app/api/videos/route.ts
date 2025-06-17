@@ -40,6 +40,7 @@ function parseFilters(filterParam: string | null): Record<string, unknown> | und
     try {
         type FilterValue = string | number | boolean | null | string[] | number[] | Date | Date[];
         const filters: Array<{ field: string; operator: string; value: FilterValue }> = JSON.parse(filterParam);
+        if (filters.length === 0) return undefined;
         const where: Record<string, unknown> = { AND: [] };
         for (const filter of filters) {
             const { field, operator, value } = filter;
@@ -123,8 +124,8 @@ export async function GET(req: Request) {
         const url = new URL(req.url);
         const filterParam = url.searchParams.get('filter');
         const sortParam = url.searchParams.get('sort');
-        const where = parseFilters(filterParam) || { isActive: true };
-        if (!where.isActive) where.isActive = true;
+        const filters = parseFilters(filterParam);
+        const where = filters ? { ...filters, isActive: true } : { isActive: true };
         const orderBy = parseSorts(sortParam) || [{ createdAt: 'desc' }];
         console.log('📋 Fetching videos from database with:', { where, orderBy });
 
