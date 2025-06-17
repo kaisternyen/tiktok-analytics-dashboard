@@ -35,15 +35,14 @@ async function runMigrationIfNeeded() {
     }
 }
 
-function parseFilters(filterParam: string | null) {
+function parseFilters(filterParam: string | null): Record<string, unknown> | undefined {
     if (!filterParam) return undefined;
     try {
-        const filters = JSON.parse(filterParam);
-        // Convert to Prisma where object
-        const where: any = { AND: [] };
+        const filters: Array<{ field: string; operator: string; value: any }> = JSON.parse(filterParam);
+        const where: Record<string, unknown> = { AND: [] };
         for (const filter of filters) {
             const { field, operator, value } = filter;
-            let condition: any = {};
+            const condition: Record<string, unknown> = {};
             switch (operator) {
                 case '=':
                 case 'is':
@@ -90,26 +89,25 @@ function parseFilters(filterParam: string | null) {
                     condition[field] = { gte: value };
                     break;
                 case 'is within':
-                    // value should be [start, end]
                     condition[field] = { gte: value[0], lte: value[1] };
                     break;
                 default:
                     break;
             }
-            where.AND.push(condition);
+            (where.AND as Array<Record<string, unknown>>).push(condition);
         }
         return where;
-    } catch (e) {
+    } catch {
         return undefined;
     }
 }
 
-function parseSorts(sortParam: string | null) {
+function parseSorts(sortParam: string | null): Array<Record<string, 'asc' | 'desc'>> | undefined {
     if (!sortParam) return undefined;
     try {
-        const sorts = JSON.parse(sortParam);
-        return sorts.map((s: any) => ({ [s.field]: s.order === 'desc' ? 'desc' : 'asc' }));
-    } catch (e) {
+        const sorts: Array<{ field: string; order: string }> = JSON.parse(sortParam);
+        return sorts.map((s) => ({ [s.field]: s.order === 'desc' ? 'desc' : 'asc' }));
+    } catch {
         return undefined;
     }
 }
