@@ -344,9 +344,9 @@ export async function GET(req: Request) {
                     let field = cond.field;
                     const op = cond.operator;
                     const value = cond.value;
-                    // Map likes/views/comments/shares to delta fields
-                    if (["likes", "views", "comments", "shares"].includes(field)) {
-                        field = field + "Delta";
+                    // Always map likes/views/comments/shares (or their delta fields) to delta fields
+                    if (["likes", "views", "comments", "shares", "likesDelta", "viewsDelta", "commentsDelta", "sharesDelta"].includes(field)) {
+                        if (!field.endsWith("Delta")) field = field + "Delta";
                     }
                     transformedVideos = transformedVideos.filter(video => {
                         const v = (video as unknown as Record<string, number>)[field];
@@ -371,8 +371,9 @@ export async function GET(req: Request) {
             for (const sort of sorts) {
                 let field = sort.field;
                 const order = sort.order;
-                if (["likes", "views", "comments", "shares"].includes(field)) {
-                    field = field + "Delta";
+                // Always map likes/views/comments/shares (or their delta fields) to delta fields
+                if (["likes", "views", "comments", "shares", "likesDelta", "viewsDelta", "commentsDelta", "sharesDelta"].includes(field)) {
+                    if (!field.endsWith("Delta")) field = field + "Delta";
                 }
                 transformedVideos = transformedVideos.sort((a, b) => {
                     if (order === 'desc') return (b as unknown as Record<string, number>)[field] - (a as unknown as Record<string, number>)[field];
