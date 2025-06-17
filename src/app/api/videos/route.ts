@@ -239,6 +239,15 @@ export async function GET(req: Request) {
 
         // If timeframe filter is present, filter metricsHistory and videos accordingly
         let filteredVideos: FilteredVideoWithMetrics[] = videos;
+        let filterConditions: FilterCondition[] = [];
+        let filterOperator: 'AND' | 'OR' = 'AND';
+        if (decodedFilterParam) {
+            const parsed = JSON.parse(decodedFilterParam);
+            if (parsed && parsed.conditions) {
+                filterConditions = parsed.conditions;
+                filterOperator = parsed.operator || 'AND';
+            }
+        }
         if (timeframe) {
             const [start, end] = timeframe;
             filteredVideos = videos.map((video) => {
@@ -271,6 +280,32 @@ export async function GET(req: Request) {
                 }
                 return { ...video, metricsHistory: filteredHistory, currentViews, currentLikes, currentComments, currentShares };
             }).filter((video) => video.metricsHistory.length > 0);
+
+            // In-memory filter on timeline-sliced metrics
+            if (filterConditions.length > 0) {
+                const check = (video: any, cond: FilterCondition) => {
+                    const val = video[`current${cond.field.charAt(0).toUpperCase() + cond.field.slice(1)}`] ?? video[cond.field];
+                    if (cond.value === null || cond.value === undefined) return true;
+                    switch (cond.operator) {
+                        case '>': return val > cond.value;
+                        case '>=': return val >= cond.value;
+                        case '<': return val < cond.value;
+                        case '<=': return val <= cond.value;
+                        case '=':
+                        case 'is': return val === cond.value;
+                        case '≠':
+                        case 'is not': return val !== cond.value;
+                        default: return true;
+                    }
+                };
+                filteredVideos = filteredVideos.filter(video => {
+                    if (filterOperator === 'AND') {
+                        return filterConditions.every(cond => check(video, cond));
+                    } else {
+                        return filterConditions.some(cond => check(video, cond));
+                    }
+                });
+            }
         }
 
         // Transform data for frontend
