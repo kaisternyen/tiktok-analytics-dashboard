@@ -79,6 +79,17 @@ interface VideoFilterSortBarProps {
 // Remove 'timeframe' from FIELD_DEFS for filters
 const FILTER_FIELD_DEFS = FIELD_DEFS.filter(f => f.name !== 'timeframe');
 
+// Add type guard for FilterGroup
+function isFilterGroup(obj: unknown): obj is FilterGroup {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    'operator' in obj &&
+    'conditions' in obj &&
+    Array.isArray((obj as FilterGroup).conditions)
+  );
+}
+
 export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFilterSortBarProps) {
   const [localOperator, setLocalOperator] = useState<FilterOperator>(filters.operator || 'AND');
   const [localFilters, setLocalFilters] = useState<FilterCondition[]>(filters.conditions.filter(f => f.field !== 'timeframe') || []);
@@ -131,7 +142,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
     // Remove empty nested group if present
     if (combinedFilters.conditions && combinedFilters.conditions.length === 2) {
       const [first, second] = combinedFilters.conditions;
-      if ('operator' in second && Array.isArray((second as any).conditions) && (second as any).conditions.length === 0) {
+      if (isFilterGroup(second) && second.conditions.length === 0) {
         combinedFilters.conditions = [first];
       }
     }
