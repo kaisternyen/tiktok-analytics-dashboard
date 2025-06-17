@@ -968,6 +968,39 @@ export default function TikTokTracker() {
                                                         Custom
                                                     </button>
                                                 </div>
+                                                {timelinePreset === 'CUSTOM' && (
+                                                    <div className="flex items-center gap-2 mt-2">
+                                                        <DatePicker
+                                                            selected={customTimeframe?.[0] ? new Date(customTimeframe[0]) : null}
+                                                            onChange={(date) => {
+                                                                if (date) {
+                                                                    setCustomTimeframe([date.toISOString(), customTimeframe?.[1] || date.toISOString()]);
+                                                                }
+                                                            }}
+                                                            showTimeSelect
+                                                            timeFormat="HH:mm"
+                                                            timeIntervals={60}
+                                                            dateFormat="MMM d, yyyy h:mm aa"
+                                                            className="w-48"
+                                                            placeholderText="Start date"
+                                                        />
+                                                        <span>to</span>
+                                                        <DatePicker
+                                                            selected={customTimeframe?.[1] ? new Date(customTimeframe[1]) : null}
+                                                            onChange={(date) => {
+                                                                if (date) {
+                                                                    setCustomTimeframe([customTimeframe?.[0] || date.toISOString(), date.toISOString()]);
+                                                                }
+                                                            }}
+                                                            showTimeSelect
+                                                            timeFormat="HH:mm"
+                                                            timeIntervals={60}
+                                                            dateFormat="MMM d, yyyy h:mm aa"
+                                                            className="w-48"
+                                                            placeholderText="End date"
+                                                        />
+                                                    </div>
+                                                )}
                                                 {/* Delta Toggle */}
                                                 <Button
                                                     variant={showDelta ? "default" : "outline"}
