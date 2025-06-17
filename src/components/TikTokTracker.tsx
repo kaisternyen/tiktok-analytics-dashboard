@@ -74,21 +74,31 @@ interface ChartDataPoint {
 
 type TimePeriod = 'D' | 'W' | 'M' | '3M' | '1Y' | 'ALL';
 
+interface VideoFilter {
+    field: string;
+    operator: string;
+    value: any;
+}
+
+interface VideoSort {
+    field: string;
+    direction: 'asc' | 'desc';
+}
+
 export default function TikTokTracker() {
     const [videoUrl, setVideoUrl] = useState("");
     const [tracked, setTracked] = useState<TrackedVideo[]>([]);
     const [selectedVideo, setSelectedVideo] = useState<TrackedVideo | null>(null);
     const [activeTab, setActiveTab] = useState("overview");
     const [isLoading, setIsLoading] = useState(false);
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
     const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('W');
     const [showDelta, setShowDelta] = useState(false);
-    const [filters, setFilters] = useState<any[]>([]);
-    const [sorts, setSorts] = useState<any[]>([]);
+    const [filters, setFilters] = useState<VideoFilter[]>([]);
+    const [sorts, setSorts] = useState<VideoSort[]>([]);
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [showSortModal, setShowSortModal] = useState(false);
     const filterFieldRef = useRef<HTMLInputElement>(null);
@@ -107,6 +117,7 @@ export default function TikTokTracker() {
     // Fetch videos from database on component mount
     useEffect(() => {
         fetchVideos();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filters, sorts]);
 
     // Auto-refresh status every 30 seconds AND auto-refresh video data
@@ -733,8 +744,8 @@ export default function TikTokTracker() {
                                 tabIndex={-1}
                                 aria-disabled="true"
                             >
-                                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                                {isRefreshing ? 'Refreshing...' : 'Refresh All'}
+                                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                                {isLoading ? 'Refreshing...' : 'Refresh All'}
                             </Button>
                             <Input
                                 placeholder="Paste TikTok or Instagram URL"
@@ -1522,11 +1533,12 @@ export default function TikTokTracker() {
                         </div>
                         <div className="flex gap-2">
                             <Button onClick={() => {
-                                setFilters([...filters, {
-                                    field: filterFieldRef.current?.value,
-                                    operator: filterOperatorRef.current?.value,
-                                    value: filterValueRef.current?.value
-                                }]);
+                                const field = filterFieldRef.current?.value || '';
+                                const operator = filterOperatorRef.current?.value || '';
+                                const value = filterValueRef.current?.value || '';
+                                if (field && operator) {
+                                    setFilters([...filters, { field, operator, value }]);
+                                }
                                 setShowFilterModal(false);
                             }}>Add</Button>
                             <Button variant="outline" onClick={() => setShowFilterModal(false)}>Cancel</Button>
@@ -1547,10 +1559,11 @@ export default function TikTokTracker() {
                         </div>
                         <div className="flex gap-2">
                             <Button onClick={() => {
-                                setSorts([...sorts, {
-                                    field: sortFieldRef.current?.value,
-                                    direction: sortDirectionRef.current?.value
-                                }]);
+                                const field = sortFieldRef.current?.value || '';
+                                const direction = (sortDirectionRef.current?.value === 'asc' ? 'asc' : 'desc');
+                                if (field) {
+                                    setSorts([...sorts, { field, direction }]);
+                                }
                                 setShowSortModal(false);
                             }}>Add</Button>
                             <Button variant="outline" onClick={() => setShowSortModal(false)}>Cancel</Button>

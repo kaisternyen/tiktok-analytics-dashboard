@@ -49,8 +49,19 @@ const FIELD_TYPE_MAP: { [key: string]: string } = {
   lastScrapedAt: 'date',
 };
 
-function buildWhere(filters: any[] = []): any {
-  const where: any = { isActive: true };
+interface VideoFilter {
+  field: string;
+  operator: string;
+  value: any;
+}
+
+interface VideoSort {
+  field: string;
+  direction: 'asc' | 'desc';
+}
+
+function buildWhere(filters: VideoFilter[] = []): Record<string, unknown> {
+  const where: Record<string, unknown> = { isActive: true };
   for (const filter of filters) {
     const field = String(filter.field);
     const { operator, value } = filter;
@@ -140,15 +151,15 @@ function buildWhere(filters: any[] = []): any {
   return where;
 }
 
-function buildOrderBy(sorts: any[] = []): any {
+function buildOrderBy(sorts: VideoSort[] = []): Record<string, 'asc' | 'desc'>[] {
   if (!Array.isArray(sorts) || sorts.length === 0) return [{ createdAt: 'desc' }];
   return sorts.map(sort => ({ [sort.field]: sort.direction === 'asc' ? 'asc' : 'desc' }));
 }
 
-export async function POST(req: any) {
+export async function POST(req: Request) {
   try {
     await runMigrationIfNeeded();
-    const { filters = [], sorts = [] } = await req.json();
+    const { filters = [], sorts = [] }: { filters: VideoFilter[]; sorts: VideoSort[] } = await req.json();
     const where = buildWhere(filters);
     const orderBy = buildOrderBy(sorts);
 
