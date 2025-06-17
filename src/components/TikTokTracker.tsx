@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -87,6 +87,15 @@ export default function TikTokTracker() {
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
     const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('W');
     const [showDelta, setShowDelta] = useState(false);
+    const [filters, setFilters] = useState<any[]>([]);
+    const [sorts, setSorts] = useState<any[]>([]);
+    const [showFilterModal, setShowFilterModal] = useState(false);
+    const [showSortModal, setShowSortModal] = useState(false);
+    const filterFieldRef = useRef<HTMLInputElement>(null);
+    const filterOperatorRef = useRef<HTMLInputElement>(null);
+    const filterValueRef = useRef<HTMLInputElement>(null);
+    const sortFieldRef = useRef<HTMLInputElement>(null);
+    const sortDirectionRef = useRef<HTMLSelectElement>(null);
 
     // Individual video chart states
     const [selectedVideoTimePeriod, setSelectedVideoTimePeriod] = useState<TimePeriod>('W');
@@ -98,7 +107,7 @@ export default function TikTokTracker() {
     // Fetch videos from database on component mount
     useEffect(() => {
         fetchVideos();
-    }, []);
+    }, [filters, sorts]);
 
     // Auto-refresh status every 30 seconds AND auto-refresh video data
     useEffect(() => {
@@ -139,7 +148,11 @@ export default function TikTokTracker() {
     const fetchVideos = async () => {
         try {
             console.log('📋 Fetching videos from API...');
-            const response = await fetch('/api/videos');
+            const response = await fetch('/api/videos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filters, sorts })
+            });
             const result = await response.json();
 
             if (result.success) {
@@ -984,6 +997,22 @@ export default function TikTokTracker() {
                                     </div>
                                 ) : (
                                     <div className="overflow-x-auto">
+                                        <div className="flex gap-2 mb-4">
+                                            <Button onClick={() => setShowFilterModal(true)}>Filter</Button>
+                                            <Button onClick={() => setShowSortModal(true)}>Sort</Button>
+                                            {filters.map((f, i) => (
+                                                <span key={i} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs flex items-center gap-1">
+                                                    {f.field} {f.operator} {String(f.value)}
+                                                    <button onClick={() => setFilters(filters.filter((_, idx) => idx !== i))} className="ml-1 text-blue-600">&times;</button>
+                                                </span>
+                                            ))}
+                                            {sorts.map((s, i) => (
+                                                <span key={i} className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs flex items-center gap-1">
+                                                    {s.field} {s.direction}
+                                                    <button onClick={() => setSorts(sorts.filter((_, idx) => idx !== i))} className="ml-1 text-green-600">&times;</button>
+                                                </span>
+                                            ))}
+                                        </div>
                                         <table className="w-full">
                                             <thead className="bg-gray-50 border-b border-gray-200">
                                                 <tr>
@@ -1482,6 +1511,53 @@ export default function TikTokTracker() {
                     )}
                 </Tabs>
             </div>
+            {showFilterModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded shadow-lg w-96">
+                        <h2 className="font-bold mb-2">Add Filter</h2>
+                        <div className="flex flex-col gap-2 mb-4">
+                            <input ref={filterFieldRef} placeholder="Field (e.g. username)" className="border p-1 rounded" />
+                            <input ref={filterOperatorRef} placeholder="Operator (e.g. contains)" className="border p-1 rounded" />
+                            <input ref={filterValueRef} placeholder="Value" className="border p-1 rounded" />
+                        </div>
+                        <div className="flex gap-2">
+                            <Button onClick={() => {
+                                setFilters([...filters, {
+                                    field: filterFieldRef.current?.value,
+                                    operator: filterOperatorRef.current?.value,
+                                    value: filterValueRef.current?.value
+                                }]);
+                                setShowFilterModal(false);
+                            }}>Add</Button>
+                            <Button variant="outline" onClick={() => setShowFilterModal(false)}>Cancel</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showSortModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded shadow-lg w-96">
+                        <h2 className="font-bold mb-2">Add Sort</h2>
+                        <div className="flex flex-col gap-2 mb-4">
+                            <input ref={sortFieldRef} placeholder="Field (e.g. views)" className="border p-1 rounded" />
+                            <select ref={sortDirectionRef} className="border p-1 rounded">
+                                <option value="asc">Ascending</option>
+                                <option value="desc">Descending</option>
+                            </select>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button onClick={() => {
+                                setSorts([...sorts, {
+                                    field: sortFieldRef.current?.value,
+                                    direction: sortDirectionRef.current?.value
+                                }]);
+                                setShowSortModal(false);
+                            }}>Add</Button>
+                            <Button variant="outline" onClick={() => setShowSortModal(false)}>Cancel</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 } 
