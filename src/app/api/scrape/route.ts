@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import { getCurrentNormalizedTimestamp, getIntervalForCadence } from '@/lib/timestamp-utils';
+import { uploadToS3 } from '@/lib/s3';
+import fetch from 'node-fetch';
 
 export async function POST(request: NextRequest) {
     console.log('🎬 /api/scrape endpoint hit');
@@ -209,6 +211,21 @@ export async function POST(request: NextRequest) {
         }
 
         console.log('📝 Creating new media record in database...');
+
+        // After scraping video data and before saving to DB:
+        if (thumbnailUrl) {
+            try {
+                const res = await fetch(thumbnailUrl);
+                if (res.ok) {
+                    const buffer = await res.buffer();
+                    const key = `thumbnails/${result.data.id}.jpg`;
+                    const s3Url = await uploadToS3(buffer, key, 'image/jpeg');
+                    thumbnailUrl = s3Url;
+                }
+            } catch (err) {
+                console.error('Failed to upload thumbnail to S3:', err);
+            }
+        }
 
         // Create new video record
         const newVideo = await prisma.video.create({
