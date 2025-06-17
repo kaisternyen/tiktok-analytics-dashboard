@@ -40,7 +40,6 @@ function parseFilters(filterParam: string | null): Record<string, unknown> | und
     try {
         type FilterValue = string | number | boolean | null | string[] | number[] | Date | Date[];
         const filters: Array<{ field: string; operator: string; value: FilterValue }> = JSON.parse(filterParam);
-        if (filters.length === 0) return undefined;
         const where: Record<string, unknown> = { AND: [] };
         for (const filter of filters) {
             const { field, operator, value } = filter;
@@ -118,23 +117,23 @@ function parseSorts(sortParam: string | null): Array<Record<string, 'asc' | 'des
 
 export async function GET(req: Request) {
     try {
-        // Run migration if needed
         await runMigrationIfNeeded();
-        
         const url = new URL(req.url);
         const filterParam = url.searchParams.get('filter');
         const sortParam = url.searchParams.get('sort');
-        const filters = parseFilters(filterParam);
-        const where = filters ? { ...filters, isActive: true } : { isActive: true };
+        let where: Record<string, unknown> = { isActive: true };
+        if (filterParam) {
+            const parsed = parseFilters(filterParam);
+            if (parsed) where = { ...parsed, isActive: true };
+        }
         const orderBy = parseSorts(sortParam) || [{ createdAt: 'desc' }];
         console.log('📋 Fetching videos from database with:', { where, orderBy });
-
         const videos = await prisma.video.findMany({
             where,
             include: {
                 metricsHistory: {
                     orderBy: { timestamp: 'desc' },
-                    take: 48 // Last 48 hours for charts
+                    take: 48
                 }
             },
             orderBy
