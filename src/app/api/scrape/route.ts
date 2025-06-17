@@ -131,6 +131,22 @@ export async function POST(request: NextRequest) {
             thumbnailUrl = tikData.thumbnailUrl;
         }
 
+        // Always upload thumbnail to S3 if present
+        if (thumbnailUrl) {
+            try {
+                const res = await fetch(thumbnailUrl);
+                if (res.ok) {
+                    const buffer = await res.buffer();
+                    const key = `thumbnails/${existingVideo ? existingVideo.id : result.data.id}.jpg`;
+                    const s3Url = await uploadToS3(buffer, key, 'image/jpeg');
+                    thumbnailUrl = s3Url;
+                }
+            } catch (err) {
+                console.error('Failed to upload thumbnail to S3:', err);
+            }
+        }
+        console.log('Using thumbnail URL:', thumbnailUrl);
+
         if (existingVideo) {
             console.log('📋 Media already exists, updating with latest data...');
 
@@ -144,7 +160,8 @@ export async function POST(request: NextRequest) {
                     currentComments: comments,
                     currentShares: shares,
                     lastScrapedAt: new Date(),
-                    isActive: true
+                    isActive: true,
+                    thumbnailUrl: thumbnailUrl
                 }
             });
 
@@ -211,21 +228,6 @@ export async function POST(request: NextRequest) {
         }
 
         console.log('📝 Creating new media record in database...');
-
-        // After scraping video data and before saving to DB:
-        if (thumbnailUrl) {
-            try {
-                const res = await fetch(thumbnailUrl);
-                if (res.ok) {
-                    const buffer = await res.buffer();
-                    const key = `thumbnails/${result.data.id}.jpg`;
-                    const s3Url = await uploadToS3(buffer, key, 'image/jpeg');
-                    thumbnailUrl = s3Url;
-                }
-            } catch (err) {
-                console.error('Failed to upload thumbnail to S3:', err);
-            }
-        }
 
         // Create new video record
         const newVideo = await prisma.video.create({
