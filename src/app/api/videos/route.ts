@@ -139,7 +139,7 @@ export async function GET(req: Request) {
         console.log(`✅ Found ${videos.length} videos in database`);
 
         // Transform data for frontend
-        const transformedVideos = videos.map((video: {
+        type VideoWithMetrics = {
             id: string;
             url: string;
             username: string;
@@ -163,7 +163,8 @@ export async function GET(req: Request) {
                 comments: number;
                 shares: number;
             }>;
-        }) => {
+        };
+        const transformedVideos = videos.map((video: VideoWithMetrics) => {
             // Parse JSON fields
             const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
             const music = video.music ? JSON.parse(video.music) : null;
