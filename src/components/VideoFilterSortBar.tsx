@@ -103,15 +103,27 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
   };
 
   return (
-    <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-col gap-2">
+    <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-col gap-4">
       {/* Filter Bar */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex flex-col gap-2">
         <span className="font-medium text-gray-700">Filter:</span>
         {localFilters.map((filter, idx) => {
           const fieldDef = FIELD_DEFS.find(f => f.name === filter.field) || FIELD_DEFS[0];
           const ops = OPERATORS[fieldDef.type as keyof typeof OPERATORS];
+          // Single-choice value options
+          const isStatus = filter.field === 'status';
+          const isCadence = filter.field === 'scrapingCadence';
+          const statusOptions = [
+            { value: 'Active', label: 'Active' },
+            { value: 'Paused', label: 'Paused' },
+          ];
+          const cadenceOptions = [
+            { value: 'hourly', label: 'Hourly' },
+            { value: 'daily', label: 'Daily' },
+            { value: 'testing', label: 'Testing' },
+          ];
           return (
-            <div key={idx} className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded px-2 py-1">
+            <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
               <select
                 className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
                 value={filter.field}
@@ -132,7 +144,29 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
               </select>
               {/* Value input, varies by type and operator */}
               {filter.operator !== 'is empty' && filter.operator !== 'is not empty' && (
-                fieldDef.type === 'date' && filter.operator === 'is within' ? (
+                isStatus ? (
+                  <select
+                    className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+                    value={typeof filter.value === 'string' ? filter.value : ''}
+                    onChange={e => handleFilterChange(idx, 'value', e.target.value)}
+                  >
+                    <option value="">Select status</option>
+                    {statusOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                ) : isCadence ? (
+                  <select
+                    className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+                    value={typeof filter.value === 'string' ? filter.value : ''}
+                    onChange={e => handleFilterChange(idx, 'value', e.target.value)}
+                  >
+                    <option value="">Select cadence</option>
+                    {cadenceOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                ) : fieldDef.type === 'date' && filter.operator === 'is within' ? (
                   <>
                     <input
                       type="date"
@@ -182,17 +216,17 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
           );
         })}
         <button
-          className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+          className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 self-start"
           onClick={handleAddFilter}
         >
           + Add condition
         </button>
       </div>
       {/* Sort Bar */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex flex-col gap-2">
         <span className="font-medium text-gray-700">Sort:</span>
         {localSorts.map((sort, idx) => (
-          <div key={idx} className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded px-2 py-1">
+          <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
             <select
               className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
               value={sort.field}
@@ -220,7 +254,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
           </div>
         ))}
         <button
-          className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+          className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 self-start"
           onClick={handleAddSort}
         >
           + Add sort
