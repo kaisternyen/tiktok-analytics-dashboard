@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 // Define field types for the videos table
 const FIELD_DEFS = [
@@ -73,6 +73,12 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
   const [localOperator, setLocalOperator] = useState<FilterOperator>(filters.operator || 'AND');
   const [localFilters, setLocalFilters] = useState<FilterCondition[]>(filters.conditions || []);
   const [localSorts, setLocalSorts] = useState<SortCondition[]>(sorts);
+
+  // Sync localSorts with parent prop
+  useEffect(() => {
+    setLocalSorts(sorts);
+    console.log('[SortBar] useEffect sync localSorts with parent:', sorts);
+  }, [sorts]);
 
   const handleOperatorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setLocalOperator(e.target.value as FilterOperator);
@@ -315,7 +321,10 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
               <select
                 className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
                 value={sort.field}
-                onChange={e => handleSortChange(idx, 'field', e.target.value)}
+                onChange={e => {
+                  console.log('[SortBar] Dropdown field changed:', e.target.value);
+                  handleSortChange(idx, 'field', e.target.value);
+                }}
               >
                 {FIELD_DEFS.map(f => (
                   <option key={f.name} value={f.name}>{f.label}</option>
