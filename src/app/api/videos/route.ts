@@ -165,27 +165,6 @@ interface MetricsHistoryPoint {
   shares: number;
 }
 
-// Type for filtered videos after timeframe filtering
-interface FilteredVideoWithMetrics {
-  id: string;
-  url: string;
-  username: string;
-  description: string;
-  thumbnailUrl: string | null;
-  createdAt: Date;
-  lastScrapedAt: Date;
-  isActive: boolean;
-  currentViews: number;
-  currentLikes: number;
-  currentComments: number;
-  currentShares: number;
-  hashtags: string | null;
-  music: string | null;
-  platform: string | null;
-  scrapingCadence: string | null;
-  metricsHistory: MetricsHistoryPoint[];
-}
-
 // Type for filter conditions
 interface FilterCondition {
   field: string;
