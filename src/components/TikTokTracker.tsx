@@ -10,7 +10,6 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart,
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
-import TimelineSelector, { TimelinePreset } from './TimelineSelector';
 
 interface VideoHistory {
     time: string;
@@ -99,65 +98,6 @@ export default function TikTokTracker() {
 
     const [filters, setFilters] = useState<FilterGroup>({ operator: 'AND', conditions: [] });
     const [sorts, setSorts] = useState<SortCondition[]>([]);
-
-    // Timeline state for Videos tab and aggregate graph
-    const [timelinePreset, setTimelinePreset] = useState<TimelinePreset>('W');
-    const [customTimelineRange, setCustomTimelineRange] = useState<[Date | null, Date | null]>([null, null]);
-
-    // Sync timelinePreset <-> selectedTimePeriod (aggregate graph)
-    useEffect(() => {
-        // If preset is not CUSTOM, sync selectedTimePeriod
-        if (timelinePreset !== 'CUSTOM' && selectedTimePeriod !== timelinePreset) {
-            setSelectedTimePeriod(timelinePreset as TimePeriod);
-        }
-        // If preset is CUSTOM, do not sync selectedTimePeriod
-    }, [timelinePreset]);
-    useEffect(() => {
-        // If selectedTimePeriod changes (from aggregate graph), update timelinePreset if not CUSTOM
-        if (timelinePreset !== 'CUSTOM' && selectedTimePeriod !== timelinePreset) {
-            setTimelinePreset(selectedTimePeriod as TimelinePreset);
-        }
-    }, [selectedTimePeriod]);
-
-    // When timeline changes, update filters (remove old timeframe, add new if needed)
-    useEffect(() => {
-        setFilters(prev => {
-            // Remove any existing timeframe filter
-            const newConditions = prev.conditions.filter(f => f.field !== 'timeframe');
-            if (timelinePreset === 'CUSTOM' && customTimelineRange[0] && customTimelineRange[1]) {
-                // Add new timeframe filter
-                return {
-                    ...prev,
-                    conditions: [
-                        ...newConditions,
-                        { field: 'timeframe', operator: 'between', value: [customTimelineRange[0].toISOString(), customTimelineRange[1].toISOString()] }
-                    ]
-                };
-            } else if (timelinePreset !== 'CUSTOM' && timelinePreset !== 'ALL') {
-                // Preset: calculate start/end
-                const now = new Date();
-                let start: Date;
-                switch (timelinePreset) {
-                    case 'D': start = new Date(now.getTime() - 24 * 60 * 60 * 1000); break;
-                    case 'W': start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); break;
-                    case 'M': start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); break;
-                    case '3M': start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000); break;
-                    case '1Y': start = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000); break;
-                    default: start = new Date(0);
-                }
-                return {
-                    ...prev,
-                    conditions: [
-                        ...newConditions,
-                        { field: 'timeframe', operator: 'between', value: [start.toISOString(), now.toISOString()] }
-                    ]
-                };
-            } else {
-                // ALL: no timeframe filter
-                return { ...prev, conditions: newConditions };
-            }
-        });
-    }, [timelinePreset, customTimelineRange]);
 
     const fetchVideos = useCallback(async (customFilters: FilterGroup = filters, customSorts = sorts) => {
         console.log('fetchVideos called with:', { customFilters, customSorts });
@@ -1044,19 +984,6 @@ export default function TikTokTracker() {
 
                     {/* Videos Tab */}
                     <TabsContent value="videos">
-                        {/* Timeline Selector */}
-                        <div className="mb-4 flex items-center justify-between">
-                            <TimelineSelector
-                                value={timelinePreset}
-                                customRange={customTimelineRange}
-                                onChange={(preset, range) => {
-                                    setTimelinePreset(preset);
-                                    if (preset === 'CUSTOM' && range) {
-                                        setCustomTimelineRange(range);
-                                    }
-                                }}
-                            />
-                        </div>
                         {/* Cadence Info Card */}
                         <Card className="mb-4">
                             <CardContent className="p-4">
@@ -1077,17 +1004,10 @@ export default function TikTokTracker() {
                         </Card>
                         {/* Filter/Sort Bar */}
                         <VideoFilterSortBar
-                            filters={{
-                                ...filters,
-                                conditions: filters.conditions.filter(f => f.field !== 'timeframe'),
-                            }}
+                            filters={filters}
                             sorts={sorts}
                             onChange={(newFilters, newSorts) => {
-                                // Prevent adding a timeframe filter from the filter bar
-                                setFilters({
-                                    ...newFilters,
-                                    conditions: newFilters.conditions.filter(f => f.field !== 'timeframe'),
-                                });
+                                setFilters(newFilters);
                                 setSorts(newSorts);
                             }}
                         />
