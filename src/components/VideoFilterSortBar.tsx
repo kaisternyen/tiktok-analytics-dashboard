@@ -79,6 +79,17 @@ interface VideoFilterSortBarProps {
 // Remove 'timeframe' from FIELD_DEFS for filters
 const FILTER_FIELD_DEFS = FIELD_DEFS.filter(f => f.name !== 'timeframe');
 
+// Add type guard for FilterGroup
+function isFilterGroup(obj: unknown): obj is FilterGroup {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    'operator' in obj &&
+    'conditions' in obj &&
+    Array.isArray((obj as FilterGroup).conditions)
+  );
+}
+
 export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFilterSortBarProps) {
   const [localOperator, setLocalOperator] = useState<FilterOperator>(filters.operator || 'AND');
   const [localFilters, setLocalFilters] = useState<FilterCondition[]>(filters.conditions.filter(f => f.field !== 'timeframe') || []);
@@ -99,19 +110,42 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
 
   // Update parent on any change
   useEffect(() => {
+    let combinedFilters: FilterGroup;
     const hasTimeframe = timeframe && timeframe[0] && timeframe[1];
     const hasFilters = localFilters.length > 0;
-    let conditions: FilterCondition[] = [];
-    if (hasTimeframe) {
-      conditions.push({ field: 'timeframe', operator: 'is on or after', value: timeframe });
+    if (hasTimeframe && hasFilters) {
+      combinedFilters = {
+        operator: 'AND',
+        conditions: [
+          { field: 'timeframe', operator: 'is on or after', value: timeframe },
+          {
+            operator: localOperator,
+            conditions: localFilters
+          } as unknown as FilterCondition // type cast for backend compatibility
+        ]
+      };
+    } else if (hasTimeframe) {
+      combinedFilters = {
+        operator: 'AND',
+        conditions: [
+          { field: 'timeframe', operator: 'is on or after', value: timeframe }
+        ]
+      };
+    } else if (hasFilters) {
+      combinedFilters = {
+        operator: localOperator,
+        conditions: localFilters
+      };
+    } else {
+      combinedFilters = { operator: 'AND', conditions: [] };
     }
-    if (hasFilters) {
-      conditions = conditions.concat(localFilters);
+    // Remove empty nested group if present
+    if (combinedFilters.conditions && combinedFilters.conditions.length === 2) {
+      const [first, second] = combinedFilters.conditions;
+      if (isFilterGroup(second) && second.conditions.length === 0) {
+        combinedFilters.conditions = [first];
+      }
     }
-    const combinedFilters: FilterGroup = {
-      operator: 'AND',
-      conditions
-    };
     onChange(combinedFilters, localSorts);
     // eslint-disable-next-line
   }, [localFilters, localSorts, localOperator, timeframe]);

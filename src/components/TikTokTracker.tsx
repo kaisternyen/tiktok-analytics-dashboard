@@ -106,14 +106,10 @@ export default function TikTokTracker() {
             // Build query params for filters and sorts
             const params = new URLSearchParams();
             if (customFilters.conditions.length > 0) {
-                const filterString = JSON.stringify(customFilters);
-                console.log('DEBUG: Outgoing filter param:', filterString);
-                params.set('filter', encodeURIComponent(filterString));
+                params.set('filter', encodeURIComponent(JSON.stringify(customFilters)));
             }
             if (customSorts.length > 0) {
-                const sortString = JSON.stringify(customSorts);
-                console.log('DEBUG: Outgoing sort param:', sortString);
-                params.set('sort', encodeURIComponent(sortString));
+                params.set('sort', encodeURIComponent(JSON.stringify(customSorts)));
             }
             const apiUrl = `/api/videos${params.toString() ? `?${params.toString()}` : ''}`;
             console.log('➡️ API Request URL:', apiUrl);

@@ -252,12 +252,29 @@ export async function GET(req: Request) {
                     const t = new Date(h.timestamp).getTime();
                     return t >= new Date(start).getTime() && t <= new Date(end).getTime();
                 });
-                return { ...video, metricsHistory: filteredHistory };
+                // Compute delta for each metric in the timeframe
+                let currentViews = 0, currentLikes = 0, currentComments = 0, currentShares = 0;
+                if (filteredHistory.length > 1) {
+                    const sorted = [...filteredHistory].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                    const first = sorted[0];
+                    const last = sorted[sorted.length - 1];
+                    currentViews = last.views - first.views;
+                    currentLikes = last.likes - first.likes;
+                    currentComments = last.comments - first.comments;
+                    currentShares = last.shares - first.shares;
+                } else if (filteredHistory.length === 1) {
+                    // Only one point in range, treat as no change
+                    currentViews = 0;
+                    currentLikes = 0;
+                    currentComments = 0;
+                    currentShares = 0;
+                }
+                return { ...video, metricsHistory: filteredHistory, currentViews, currentLikes, currentComments, currentShares };
             }).filter((video) => video.metricsHistory.length > 0);
         }
 
         // Transform data for frontend
-        let transformedVideos = filteredVideos.map((video) => {
+        const transformedVideos = filteredVideos.map((video) => {
             // Parse JSON fields
             const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
             const music = video.music ? JSON.parse(video.music) : null;
@@ -265,32 +282,6 @@ export async function GET(req: Request) {
             // Calculate growth from last 2 data points (in filtered history)
             const history = video.metricsHistory;
             let growth = { views: 0, likes: 0, comments: 0, shares: 0 };
-
-            // Delta calculation for metrics in timeframe
-            let likesDelta = 0, viewsDelta = 0, commentsDelta = 0, sharesDelta = 0;
-            if (history.length >= 2) {
-                const first = history[history.length - 1]; // oldest
-                const last = history[0]; // newest
-                // If the timeframe covers all history (first point is earliest ever), use latest value
-                const isAllTime = !timeframe || (video.metricsHistory.length === history.length);
-                if (isAllTime) {
-                    likesDelta = last.likes;
-                    viewsDelta = last.views;
-                    commentsDelta = last.comments;
-                    sharesDelta = last.shares;
-                } else {
-                    likesDelta = last.likes - first.likes;
-                    viewsDelta = last.views - first.views;
-                    commentsDelta = last.comments - first.comments;
-                    sharesDelta = last.shares - first.shares;
-                }
-            } else if (history.length === 1) {
-                // Only one data point in range
-                likesDelta = history[0].likes;
-                viewsDelta = history[0].views;
-                commentsDelta = history[0].comments;
-                sharesDelta = history[0].shares;
-            }
 
             if (history.length >= 2) {
                 const latest = history[0];
@@ -317,10 +308,6 @@ export async function GET(req: Request) {
                 likes: video.currentLikes,
                 comments: video.currentComments,
                 shares: video.currentShares,
-                likesDelta,
-                viewsDelta,
-                commentsDelta,
-                sharesDelta,
                 hashtags,
                 music,
                 platform: video.platform || 'tiktok',
@@ -335,52 +322,6 @@ export async function GET(req: Request) {
                 })).reverse() // Oldest first for charts
             };
         });
-
-        // In-memory filtering and sorting on delta fields if timeframe is set
-        if (timeframe && decodedFilterParam) {
-            const parsed = JSON.parse(decodedFilterParam);
-            if (parsed && parsed.conditions) {
-                for (const cond of parsed.conditions) {
-                    let field = cond.field;
-                    const op = cond.operator;
-                    const value = cond.value;
-                    // Always map likes/views/comments/shares (or their delta fields) to delta fields
-                    if (["likes", "views", "comments", "shares", "likesDelta", "viewsDelta", "commentsDelta", "sharesDelta"].includes(field)) {
-                        if (!field.endsWith("Delta")) field = field + "Delta";
-                    }
-                    transformedVideos = transformedVideos.filter(video => {
-                        const v = (video as unknown as Record<string, number>)[field];
-                        switch (op) {
-                            case '>': return v > value;
-                            case '>=': return v >= value;
-                            case '<': return v < value;
-                            case '<=': return v <= value;
-                            case '=':
-                            case 'is': return v === value;
-                            case '≠':
-                            case 'is not': return v !== value;
-                            default: return true;
-                        }
-                    });
-                }
-            }
-        }
-        // In-memory sorting on delta fields if timeframe is set
-        if (timeframe && decodedSortParam) {
-            const sorts = JSON.parse(decodedSortParam);
-            for (const sort of sorts) {
-                let field = sort.field;
-                const order = sort.order;
-                // Always map likes/views/comments/shares (or their delta fields) to delta fields
-                if (["likes", "views", "comments", "shares", "likesDelta", "viewsDelta", "commentsDelta", "sharesDelta"].includes(field)) {
-                    if (!field.endsWith("Delta")) field = field + "Delta";
-                }
-                transformedVideos = transformedVideos.sort((a, b) => {
-                    if (order === 'desc') return (b as unknown as Record<string, number>)[field] - (a as unknown as Record<string, number>)[field];
-                    return (a as unknown as Record<string, number>)[field] - (b as unknown as Record<string, number>)[field];
-                });
-            }
-        }
 
         return NextResponse.json({
             success: true,
