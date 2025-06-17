@@ -10,6 +10,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart,
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
+import DatePicker from "react-datepicker";
 
 interface VideoHistory {
     time: string;
@@ -749,7 +750,7 @@ export default function TikTokTracker() {
         if (selectedTimePeriod !== 'ALL' && timelinePreset !== selectedTimePeriod) {
             setTimelinePreset(selectedTimePeriod);
         }
-    }, [selectedTimePeriod]);
+    }, [selectedTimePeriod, timelinePreset]);
 
     // When custom range is set, update filters with timeframe
     useEffect(() => {
