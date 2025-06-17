@@ -147,7 +147,7 @@ export default function TikTokTracker() {
                 }) => {
                     // If timeframe filter is present, use delta logic
                     if (timeframeStart && timeframeEnd) {
-                        let filteredHistory = video.history.filter(h => {
+                        const filteredHistory = video.history.filter(h => {
                             const t = new Date(h.time).getTime();
                             return t >= timeframeStart!.getTime() && t <= timeframeEnd!.getTime();
                         });
