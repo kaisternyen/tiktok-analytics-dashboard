@@ -124,18 +124,16 @@ export default function TikTokTracker() {
             const response = await fetch(apiUrl);
             const result = await response.json();
 
+            // Extract timeframe filter if present
+            const timeframeFilter = customFilters.conditions.find(f => f.field === 'timeframe' && Array.isArray(f.value) && f.value[0] && f.value[1]);
+            let timeframeStart: Date | null = null;
+            let timeframeEnd: Date | null = null;
+            if (timeframeFilter && Array.isArray(timeframeFilter.value) && typeof timeframeFilter.value[0] === 'string' && typeof timeframeFilter.value[1] === 'string') {
+                timeframeStart = new Date(timeframeFilter.value[0]);
+                timeframeEnd = new Date(timeframeFilter.value[1]);
+            }
+
             if (result.success) {
-                console.log('✅ API returned videos:', result.videos.map((v: ApiVideoResponse) => ({
-                    id: v.id,
-                    username: v.username,
-                    views: v.currentViews,
-                    likes: v.currentLikes,
-                    createdAt: v.posted,
-                    currentViews: v.currentViews,
-                    currentLikes: v.currentLikes,
-                    currentComments: v.currentComments,
-                    currentShares: v.currentShares,
-                })));
                 const transformedVideos = result.videos.map((video: {
                     id: string;
                     url: string;
@@ -154,22 +152,41 @@ export default function TikTokTracker() {
                     platform: 'tiktok' | 'instagram' | 'youtube';
                     history: VideoHistory[];
                     growth: { views: number; likes: number; comments: number; shares: number };
-                }) => ({
-                    ...video,
-                    growth: {
-                        views: video.growth?.views || 0,
-                        likes: video.growth?.likes || 0,
-                        comments: video.growth?.comments || 0,
-                        shares: video.growth?.shares || 0,
+                }) => {
+                    let filteredHistory = video.history;
+                    if (timeframeStart && timeframeEnd) {
+                        filteredHistory = video.history.filter(h => {
+                            const t = new Date(h.time).getTime();
+                            return t >= timeframeStart!.getTime() && t <= timeframeEnd!.getTime();
+                        });
                     }
-                }));
-
-                console.log('📊 Transformed videos with thumbnail info:', transformedVideos.map((v: TrackedVideo) => ({
-                    username: v.username,
-                    platform: v.platform,
-                    hasThumbnail: !!v.thumbnailUrl,
-                    thumbnailUrl: v.thumbnailUrl ? v.thumbnailUrl.substring(0, 50) + '...' : null
-                })));
+                    // Find start and end points
+                    const sortedHistory = [...filteredHistory].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                    const start = sortedHistory[0];
+                    const end = sortedHistory[sortedHistory.length - 1];
+                    // If missing either, return null (will be filtered out)
+                    if (!start || !end || start === end) return null;
+                    // Calculate deltas
+                    const views = end.views - start.views;
+                    const likes = end.likes - start.likes;
+                    const comments = end.comments - start.comments;
+                    const shares = end.shares - start.shares;
+                    const growth = {
+                        views: start.views > 0 ? ((end.views - start.views) / start.views) * 100 : 0,
+                        likes: start.likes > 0 ? ((end.likes - start.likes) / start.likes) * 100 : 0,
+                        comments: start.comments > 0 ? ((end.comments - start.comments) / start.comments) * 100 : 0,
+                        shares: start.shares > 0 ? ((end.shares - start.shares) / start.shares) * 100 : 0,
+                    };
+                    return {
+                        ...video,
+                        views,
+                        likes,
+                        comments,
+                        shares,
+                        growth,
+                        history: filteredHistory,
+                    };
+                }).filter(Boolean); // Remove nulls (videos missing start/end)
 
                 setTracked(transformedVideos);
                 console.log(`✅ Loaded ${transformedVideos.length} videos from database`);
