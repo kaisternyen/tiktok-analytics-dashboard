@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
+import VideoFilterSortBar, { FilterCondition, SortCondition } from './VideoFilterSortBar';
 
 interface VideoHistory {
     time: string;
@@ -94,6 +95,9 @@ export default function TikTokTracker() {
     const [showCommentsDelta, setShowCommentsDelta] = useState(false);
     const [showSharesDelta, setShowSharesDelta] = useState(false);
 
+    const [filters, setFilters] = useState<FilterCondition[]>([]);
+    const [sorts, setSorts] = useState<SortCondition[]>([]);
+
     // Fetch videos from database on component mount
     useEffect(() => {
         fetchVideos();
@@ -135,10 +139,18 @@ export default function TikTokTracker() {
         return () => clearInterval(interval);
     }, []);
 
-    const fetchVideos = async () => {
+    const fetchVideos = async (customFilters = filters, customSorts = sorts) => {
         try {
             console.log('📋 Fetching videos from API...');
-            const response = await fetch('/api/videos');
+            // Build query params for filters and sorts
+            const params = new URLSearchParams();
+            if (customFilters.length > 0) {
+                params.set('filters', encodeURIComponent(JSON.stringify(customFilters)));
+            }
+            if (customSorts.length > 0) {
+                params.set('sorts', encodeURIComponent(JSON.stringify(customSorts)));
+            }
+            const response = await fetch(`/api/videos${params.toString() ? `?${params.toString()}` : ''}`);
             const result = await response.json();
 
             if (result.success) {
@@ -972,7 +984,16 @@ export default function TikTokTracker() {
                                 </div>
                             </CardContent>
                         </Card>
-                        
+                        {/* Filter/Sort Bar */}
+                        <VideoFilterSortBar
+                            filters={filters}
+                            sorts={sorts}
+                            onChange={(newFilters, newSorts) => {
+                                setFilters(newFilters);
+                                setSorts(newSorts);
+                                fetchVideos(newFilters, newSorts);
+                            }}
+                        />
                         <Card>
                             <CardContent className="p-0">
                                 {tracked.length === 0 ? (
