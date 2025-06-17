@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
-import VideoFilterSortBar, { FilterCondition, SortCondition } from './VideoFilterSortBar';
+import VideoFilterSortBar, { FilterCondition, SortCondition, FilterGroup } from './VideoFilterSortBar';
 
 interface VideoHistory {
     time: string;
@@ -95,16 +95,16 @@ export default function TikTokTracker() {
     const [showCommentsDelta, setShowCommentsDelta] = useState(false);
     const [showSharesDelta, setShowSharesDelta] = useState(false);
 
-    const [filters, setFilters] = useState<FilterCondition[]>([]);
+    const [filters, setFilters] = useState<FilterGroup>({ operator: 'AND', conditions: [] });
     const [sorts, setSorts] = useState<SortCondition[]>([]);
 
-    const fetchVideos = useCallback(async (customFilters = filters, customSorts = sorts) => {
+    const fetchVideos = useCallback(async (customFilters: FilterGroup = filters, customSorts = sorts) => {
         console.log('fetchVideos called with:', { customFilters, customSorts });
         try {
             console.log('📋 Fetching videos from API...');
             // Build query params for filters and sorts
             const params = new URLSearchParams();
-            if (customFilters.length > 0) {
+            if (customFilters.conditions.length > 0) {
                 params.set('filter', encodeURIComponent(JSON.stringify(customFilters)));
             }
             if (customSorts.length > 0) {

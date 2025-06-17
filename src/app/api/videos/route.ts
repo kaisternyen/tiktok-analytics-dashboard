@@ -39,12 +39,22 @@ function parseFilters(filterParam: string | null): Record<string, unknown> | und
     if (!filterParam) return undefined;
     try {
         type FilterValue = string | number | boolean | null | string[] | number[] | Date | Date[];
-        const filters: Array<{ field: string; operator: string; value: FilterValue }> = JSON.parse(filterParam);
-        const where: Record<string, unknown> = { AND: [] };
-        for (const filter of filters) {
-            const { field, operator, value } = filter;
+        // Accept new format: { operator: 'AND' | 'OR', conditions: [...] }
+        const parsed = JSON.parse(filterParam);
+        let operator = 'AND';
+        let conditions: Array<{ field: string; operator: string; value: FilterValue }> = [];
+        if (parsed && typeof parsed === 'object' && parsed.operator && Array.isArray(parsed.conditions)) {
+            operator = parsed.operator;
+            conditions = parsed.conditions;
+        } else if (Array.isArray(parsed)) {
+            // fallback for old array format
+            conditions = parsed;
+        }
+        const where: Record<string, unknown> = { [operator]: [] };
+        for (const filter of conditions) {
+            const { field, operator: op, value } = filter;
             const condition: Record<string, unknown> = {};
-            switch (operator) {
+            switch (op) {
                 case '=':
                 case 'is':
                     condition[field] = value;
@@ -97,7 +107,7 @@ function parseFilters(filterParam: string | null): Record<string, unknown> | und
                 default:
                     break;
             }
-            (where.AND as Array<Record<string, unknown>>).push(condition);
+            (where[operator] as Array<Record<string, unknown>>).push(condition);
         }
         return where;
     } catch {

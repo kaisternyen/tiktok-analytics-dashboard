@@ -47,10 +47,15 @@ const OPERATORS = {
   ],
 };
 
+export type FilterOperator = 'AND' | 'OR';
 export type FilterCondition = {
   field: string;
   operator: string;
   value: string | number | null | [string, string] | [number, number];
+};
+export type FilterGroup = {
+  operator: FilterOperator;
+  conditions: FilterCondition[];
 };
 
 export type SortCondition = {
@@ -59,37 +64,45 @@ export type SortCondition = {
 };
 
 interface VideoFilterSortBarProps {
-  filters: FilterCondition[];
+  filters: FilterGroup;
   sorts: SortCondition[];
-  onChange: (filters: FilterCondition[], sorts: SortCondition[]) => void;
+  onChange: (filters: FilterGroup, sorts: SortCondition[]) => void;
 }
 
 export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFilterSortBarProps) {
-  const [localFilters, setLocalFilters] = useState<FilterCondition[]>(filters);
+  const [localOperator, setLocalOperator] = useState<FilterOperator>(filters.operator || 'AND');
+  const [localFilters, setLocalFilters] = useState<FilterCondition[]>(filters.conditions || []);
   const [localSorts, setLocalSorts] = useState<SortCondition[]>(sorts);
+
+  const handleOperatorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setLocalOperator(e.target.value as FilterOperator);
+    onChange({ operator: e.target.value as FilterOperator, conditions: localFilters }, localSorts);
+  };
 
   const handleFilterChange = (idx: number, key: keyof FilterCondition, value: string | number | null | [string, string] | [number, number]) => {
     const updated = [...localFilters];
     updated[idx] = { ...updated[idx], [key]: value };
     setLocalFilters(updated);
-    onChange(updated, localSorts);
+    onChange({ operator: localOperator, conditions: updated }, localSorts);
   };
 
   const handleAddFilter = () => {
-    setLocalFilters([...localFilters, { field: 'username', operator: 'contains', value: '' }]);
+    const updated = [...localFilters, { field: 'username', operator: 'contains', value: '' }];
+    setLocalFilters(updated);
+    onChange({ operator: localOperator, conditions: updated }, localSorts);
   };
 
   const handleRemoveFilter = (idx: number) => {
     const updated = localFilters.filter((_, i) => i !== idx);
     setLocalFilters(updated);
-    onChange(updated, localSorts);
+    onChange({ operator: localOperator, conditions: updated }, localSorts);
   };
 
   const handleSortChange = (idx: number, key: keyof SortCondition, value: 'asc' | 'desc' | string) => {
     const updated = [...localSorts];
     updated[idx] = { ...updated[idx], [key]: value };
     setLocalSorts(updated);
-    onChange(localFilters, updated);
+    onChange({ operator: localOperator, conditions: localFilters }, updated);
   };
 
   const handleAddSort = () => {
@@ -99,7 +112,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
   const handleRemoveSort = (idx: number) => {
     const updated = localSorts.filter((_, i) => i !== idx);
     setLocalSorts(updated);
-    onChange(localFilters, updated);
+    onChange({ operator: localOperator, conditions: localFilters }, updated);
   };
 
   return (
@@ -107,6 +120,18 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
       {/* Filter Bar */}
       <div className="flex flex-col gap-2">
         <span className="font-medium text-gray-700">Filter:</span>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs text-gray-500">Where</span>
+          <select
+            className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+            value={localOperator}
+            onChange={handleOperatorChange}
+          >
+            <option value="AND">AND</option>
+            <option value="OR">OR</option>
+          </select>
+          <span className="text-xs text-gray-500">of the following conditions:</span>
+        </div>
         {localFilters.map((filter, idx) => {
           const fieldDef = FIELD_DEFS.find(f => f.name === filter.field) || FIELD_DEFS[0];
           const ops = OPERATORS[fieldDef.type as keyof typeof OPERATORS];
