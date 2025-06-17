@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import { getCurrentNormalizedTimestamp, getIntervalForCadence } from '@/lib/timestamp-utils';
-import { uploadToS3 } from '@/lib/s3';
+import { uploadToS3 } from '../../../lib/s3';
 import fetch from 'node-fetch';
 
 export async function POST(request: NextRequest) {
