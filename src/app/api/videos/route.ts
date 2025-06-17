@@ -156,6 +156,36 @@ function parseSorts(sortParam: string | null): Array<Record<string, 'asc' | 'des
     }
 }
 
+// Add type for metricsHistory
+interface MetricsHistoryPoint {
+  timestamp: Date;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+}
+
+// Type for filtered videos after timeframe filtering
+interface FilteredVideoWithMetrics {
+  id: string;
+  url: string;
+  username: string;
+  description: string;
+  thumbnailUrl: string | null;
+  createdAt: Date;
+  lastScrapedAt: Date;
+  isActive: boolean;
+  currentViews: number;
+  currentLikes: number;
+  currentComments: number;
+  currentShares: number;
+  hashtags: string | null;
+  music: string | null;
+  platform: string | null;
+  scrapingCadence: string | null;
+  metricsHistory: MetricsHistoryPoint[];
+}
+
 export async function GET(req: Request) {
     try {
         await runMigrationIfNeeded();
@@ -201,16 +231,22 @@ export async function GET(req: Request) {
         console.log(`✅ Found ${videos.length} videos in database`);
 
         // If timeframe filter is present, filter metricsHistory and videos accordingly
-        let filteredVideos = videos;
+        let filteredVideos: FilteredVideoWithMetrics[] = videos;
         if (timeframe) {
             const [start, end] = timeframe;
-            filteredVideos = videos.map(video => {
-                const filteredHistory = video.metricsHistory.filter((h: any) => {
+            filteredVideos = videos.map((video) => {
+                const filteredHistory = video.metricsHistory.map((h: any) => ({
+                  timestamp: h.timestamp,
+                  views: h.views,
+                  likes: h.likes,
+                  comments: h.comments,
+                  shares: h.shares
+                })).filter((h: MetricsHistoryPoint) => {
                     const t = new Date(h.timestamp).getTime();
                     return t >= new Date(start).getTime() && t <= new Date(end).getTime();
                 });
                 return { ...video, metricsHistory: filteredHistory };
-            }).filter(video => video.metricsHistory.length > 0);
+            }).filter((video) => video.metricsHistory.length > 0);
         }
 
         // Transform data for frontend
@@ -239,7 +275,7 @@ export async function GET(req: Request) {
                 shares: number;
             }>;
         };
-        const transformedVideos = filteredVideos.map((video: VideoWithMetrics) => {
+        const transformedVideos = filteredVideos.map((video) => {
             // Parse JSON fields
             const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
             const music = video.music ? JSON.parse(video.music) : null;
@@ -278,7 +314,7 @@ export async function GET(req: Request) {
                 platform: video.platform || 'tiktok',
                 scrapingCadence: video.scrapingCadence || 'hourly',
                 growth,
-                history: history.map((h: any) => ({
+                history: history.map((h: MetricsHistoryPoint) => ({
                     time: h.timestamp.toISOString(),
                     views: h.views,
                     likes: h.likes,
