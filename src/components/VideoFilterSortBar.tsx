@@ -13,6 +13,7 @@ const FIELD_DEFS = [
   { name: 'createdAt', label: 'Posted', type: 'date' },
   { name: 'lastUpdate', label: 'Last Updated', type: 'date' },
   { name: 'scrapingCadence', label: 'Cadence', type: 'text' },
+  { name: 'timeframe', label: 'Timeframe', type: 'datetime' },
 ];
 
 const OPERATORS = {
@@ -44,6 +45,10 @@ const OPERATORS = {
     { value: 'is not', label: 'is not...' },
     { value: 'is empty', label: 'is empty' },
     { value: 'is not empty', label: 'is not empty' },
+  ],
+  datetime: [
+    { value: 'is on or after', label: 'on and after...' },
+    { value: 'is on or before', label: 'on and before...' },
   ],
 };
 
@@ -157,6 +162,11 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
             { value: 'testing', label: 'Testing' },
           ];
           const isPlatform = filter.field === 'platform';
+          const isTimeframe = filter.field === 'timeframe';
+
+          // DEBUG: Log filter field definitions
+          console.log('FIELD_DEFS at runtime:', FIELD_DEFS);
+
           return (
             <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
               <select
@@ -276,6 +286,30 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                       handleFilterChange(idx, 'value', value);
                     }}
                   />
+                ) : isTimeframe ? (
+                  <>
+                    <input
+                      type="datetime-local"
+                      className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+                      value={Array.isArray(filter.value) ? (typeof filter.value[0] === 'string' ? filter.value[0].slice(0, 16) : '') : ''}
+                      onChange={e => {
+                        const iso = e.target.value ? new Date(e.target.value).toISOString() : '';
+                        handleFilterChange(idx, 'value', [iso, Array.isArray(filter.value) && typeof filter.value[1] === 'string' ? filter.value[1] : '']);
+                      }}
+                      required
+                    />
+                    <span className="mx-1 text-xs">to</span>
+                    <input
+                      type="datetime-local"
+                      className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+                      value={Array.isArray(filter.value) ? (typeof filter.value[1] === 'string' ? filter.value[1].slice(0, 16) : '') : ''}
+                      onChange={e => {
+                        const iso = e.target.value ? new Date(e.target.value).toISOString() : '';
+                        handleFilterChange(idx, 'value', [Array.isArray(filter.value) && typeof filter.value[0] === 'string' ? filter.value[0] : '', iso]);
+                      }}
+                      required
+                    />
+                  </>
                 ) : (
                   <input
                     type="text"
