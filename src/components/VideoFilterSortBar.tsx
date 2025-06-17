@@ -181,15 +181,20 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                   <option key={f.name} value={f.name}>{f.label}</option>
                 ))}
               </select>
-              <select
-                className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-                value={filter.operator}
-                onChange={e => handleFilterChange(idx, 'operator', e.target.value)}
-              >
-                {ops.map(op => (
-                  <option key={op.value} value={op.value}>{op.label}</option>
-                ))}
-              </select>
+              {/* For timeframe, show static text instead of operator dropdown */}
+              {isTimeframe ? (
+                <span className="text-xs text-gray-700">from</span>
+              ) : (
+                <select
+                  className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+                  value={filter.operator}
+                  onChange={e => handleFilterChange(idx, 'operator', e.target.value)}
+                >
+                  {ops.map(op => (
+                    <option key={op.value} value={op.value}>{op.label}</option>
+                  ))}
+                </select>
+              )}
               {/* Value input, varies by type and operator */}
               {filter.operator !== 'is empty' && filter.operator !== 'is not empty' && (
                 isStatus ? (
@@ -297,10 +302,10 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                       className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
                       value={Array.isArray(filter.value) ? (typeof filter.value[0] === 'string' ? filter.value[0].slice(0, 13) + ':00' : '') : ''}
                       onChange={e => {
-                        // Snap to top of the hour
+                        // Always force minutes to 00
                         const d = new Date(e.target.value);
                         d.setMinutes(0, 0, 0);
-                        const iso = d.toISOString();
+                        const iso = d.toISOString().slice(0, 16) + ':00.000Z';
                         const end = Array.isArray(filter.value) && typeof filter.value[1] === 'string' ? filter.value[1] : '';
                         const newValue: [string, string] = [iso, end];
                         // Check if range > 24h
@@ -322,10 +327,10 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                       className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
                       value={Array.isArray(filter.value) ? (typeof filter.value[1] === 'string' ? filter.value[1].slice(0, 13) + ':00' : '') : ''}
                       onChange={e => {
-                        // Snap to top of the hour
+                        // Always force minutes to 00
                         const d = new Date(e.target.value);
                         d.setMinutes(0, 0, 0);
-                        const iso = d.toISOString();
+                        const iso = d.toISOString().slice(0, 16) + ':00.000Z';
                         const start = Array.isArray(filter.value) && typeof filter.value[0] === 'string' ? filter.value[0] : '';
                         const newValue: [string, string] = [start, iso];
                         // Check if range > 24h
@@ -342,23 +347,27 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                     />
                     {/* Snap Modal */}
                     {showSnapModal && pendingSnapIdx === idx && (
-                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-10">
                         <div className="bg-white rounded-lg shadow-lg p-6 w-80 flex flex-col items-center">
                           <div className="mb-4 text-center">
                             <div className="font-semibold mb-2">Range exceeds 24 hours</div>
-                            <div className="text-sm text-gray-600">Convert to daily? This will snap both dates to 12:00 AM.</div>
+                            <div className="text-sm text-gray-600">Convert to daily? This will snap both dates to 12:00 AM EST.</div>
                           </div>
                           <div className="flex gap-4">
                             <button
                               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                               onClick={() => {
-                                // Snap both to 12:00 AM
+                                // Snap both to 12:00 AM EST (UTC-5)
                                 if (pendingSnapValue) {
-                                  const start = new Date(pendingSnapValue[0]);
-                                  const end = new Date(pendingSnapValue[1]);
-                                  start.setHours(0, 0, 0, 0);
-                                  end.setHours(0, 0, 0, 0);
-                                  handleFilterChange(idx, 'value', [start.toISOString(), end.toISOString()]);
+                                  const toESTMidnight = (dateStr: string) => {
+                                    const d = new Date(dateStr);
+                                    // Convert to EST (UTC-5)
+                                    d.setUTCHours(5, 0, 0, 0); // 12:00 AM EST is 5:00 AM UTC
+                                    return d.toISOString();
+                                  };
+                                  const start = toESTMidnight(pendingSnapValue[0]);
+                                  const end = toESTMidnight(pendingSnapValue[1]);
+                                  handleFilterChange(idx, 'value', [start, end]);
                                 }
                                 setShowSnapModal(false);
                                 setPendingSnapIdx(null);
