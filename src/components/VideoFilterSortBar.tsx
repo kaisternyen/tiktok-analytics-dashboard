@@ -310,15 +310,22 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                         const estIso = fromZonedTime(d, 'America/New_York').toISOString();
                         const end = Array.isArray(filter.value) && typeof filter.value[1] === 'string' ? filter.value[1] : '';
                         const newValue: [string, string] = [estIso, end];
-                        // Check if range > 24h
-                        if (end && Math.abs(new Date(end).getTime() - new Date(estIso).getTime()) > 24*60*60*1000) {
-                          setShowSnapModal(true);
-                          setPendingSnapIdx(idx);
-                          setPendingSnapValue(newValue);
-                          setPrevValue([Array.isArray(filter.value) && typeof filter.value[0] === 'string' ? filter.value[0] : '', end]);
-                        } else {
-                          handleFilterChange(idx, 'value', newValue);
+                        // Check if range > 24h and at least one is not 12:00 AM EST
+                        if (end) {
+                          const startDate = toZonedTime(new Date(estIso), 'America/New_York');
+                          const endDate = toZonedTime(new Date(end), 'America/New_York');
+                          const isStartMidnight = startDate.getHours() === 0 && startDate.getMinutes() === 0;
+                          const isEndMidnight = endDate.getHours() === 0 && endDate.getMinutes() === 0;
+                          const rangeMs = Math.abs(new Date(end).getTime() - new Date(estIso).getTime());
+                          if (rangeMs > 24*60*60*1000 && (!isStartMidnight || !isEndMidnight)) {
+                            setShowSnapModal(true);
+                            setPendingSnapIdx(idx);
+                            setPendingSnapValue(newValue);
+                            setPrevValue([Array.isArray(filter.value) && typeof filter.value[0] === 'string' ? filter.value[0] : '', end]);
+                            return;
+                          }
                         }
+                        handleFilterChange(idx, 'value', newValue);
                       }}
                       showTimeSelect
                       showTimeSelectOnly={false}
@@ -341,15 +348,22 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                         const estIso = fromZonedTime(d, 'America/New_York').toISOString();
                         const start = Array.isArray(filter.value) && typeof filter.value[0] === 'string' ? filter.value[0] : '';
                         const newValue: [string, string] = [start, estIso];
-                        // Check if range > 24h
-                        if (start && Math.abs(new Date(estIso).getTime() - new Date(start).getTime()) > 24*60*60*1000) {
-                          setShowSnapModal(true);
-                          setPendingSnapIdx(idx);
-                          setPendingSnapValue(newValue);
-                          setPrevValue([start, Array.isArray(filter.value) && typeof filter.value[1] === 'string' ? filter.value[1] : '']);
-                        } else {
-                          handleFilterChange(idx, 'value', newValue);
+                        // Check if range > 24h and at least one is not 12:00 AM EST
+                        if (start) {
+                          const startDate = toZonedTime(new Date(start), 'America/New_York');
+                          const endDate = toZonedTime(new Date(estIso), 'America/New_York');
+                          const isStartMidnight = startDate.getHours() === 0 && startDate.getMinutes() === 0;
+                          const isEndMidnight = endDate.getHours() === 0 && endDate.getMinutes() === 0;
+                          const rangeMs = Math.abs(new Date(estIso).getTime() - new Date(start).getTime());
+                          if (rangeMs > 24*60*60*1000 && (!isStartMidnight || !isEndMidnight)) {
+                            setShowSnapModal(true);
+                            setPendingSnapIdx(idx);
+                            setPendingSnapValue(newValue);
+                            setPrevValue([start, Array.isArray(filter.value) && typeof filter.value[1] === 'string' ? filter.value[1] : '']);
+                            return;
+                          }
                         }
+                        handleFilterChange(idx, 'value', newValue);
                       }}
                       showTimeSelect
                       showTimeSelectOnly={false}
