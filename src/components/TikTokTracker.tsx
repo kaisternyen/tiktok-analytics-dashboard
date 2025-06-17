@@ -47,6 +47,14 @@ interface TrackedVideo {
     };
 }
 
+// Type for API response video data
+interface ApiVideoResponse extends Omit<TrackedVideo, 'views' | 'likes' | 'comments' | 'shares'> {
+    currentViews: number;
+    currentLikes: number;
+    currentComments: number;
+    currentShares: number;
+}
+
 interface CronStatus {
     system: {
         status: string;
@@ -116,11 +124,11 @@ export default function TikTokTracker() {
             const result = await response.json();
 
             if (result.success) {
-                console.log('✅ API returned videos:', result.videos.map((v: any) => ({
+                console.log('✅ API returned videos:', result.videos.map((v: ApiVideoResponse) => ({
                     id: v.id,
                     username: v.username,
-                    views: v.views,
-                    likes: v.likes,
+                    views: v.currentViews,
+                    likes: v.currentLikes,
                     createdAt: v.posted,
                     currentViews: v.currentViews,
                     currentLikes: v.currentLikes,
