@@ -48,14 +48,6 @@ interface TrackedVideo {
     };
 }
 
-// Type for API response video data
-interface ApiVideoResponse extends Omit<TrackedVideo, 'views' | 'likes' | 'comments' | 'shares'> {
-    currentViews: number;
-    currentLikes: number;
-    currentComments: number;
-    currentShares: number;
-}
-
 interface CronStatus {
     system: {
         status: string;
