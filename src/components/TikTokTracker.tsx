@@ -1045,7 +1045,7 @@ export default function TikTokTracker() {
                                                                             width={40}
                                                                             height={56}
                                                                             onError={(e) => {
-                                                                                console.log('❌ Thumbnail failed to load for:', video.username, video.thumbnailUrl);
+                                                                                // Suppress error log to avoid console spam
                                                                                 // Hide the image and show fallback
                                                                                 const img = e.target as HTMLImageElement;
                                                                                 img.style.display = 'none';
