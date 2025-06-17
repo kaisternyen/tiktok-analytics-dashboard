@@ -62,13 +62,7 @@ export type FilterCondition = {
 };
 export type FilterGroup = {
   operator: FilterOperator;
-  conditions: (FilterCondition | FilterGroup)[];
-};
-
-// Allow recursive nesting for filters.conditions
-export type NestedFilterGroup = {
-  operator: FilterOperator;
-  conditions: (FilterCondition | NestedFilterGroup)[];
+  conditions: FilterCondition[];
 };
 
 export type SortCondition = {
@@ -77,38 +71,24 @@ export type SortCondition = {
 };
 
 interface VideoFilterSortBarProps {
-  filters: NestedFilterGroup;
+  filters: FilterGroup;
   sorts: SortCondition[];
-  onChange: (filters: NestedFilterGroup, sorts: SortCondition[]) => void;
+  onChange: (filters: FilterGroup, sorts: SortCondition[]) => void;
 }
 
 // Remove 'timeframe' from FIELD_DEFS for filters
 const FILTER_FIELD_DEFS = FIELD_DEFS.filter(f => f.name !== 'timeframe');
 
-// Utility to extract only FilterCondition objects from a (possibly nested) conditions array
-function extractFilterConditions(conditions: (FilterCondition | NestedFilterGroup)[]): FilterCondition[] {
-  return conditions.flatMap((cond): FilterCondition[] =>
-    (typeof cond === 'object' && 'field' in cond)
-      ? [cond as FilterCondition]
-      : (typeof cond === 'object' && 'conditions' in cond)
-        ? extractFilterConditions((cond as NestedFilterGroup).conditions)
-        : []
-  );
-}
-
 export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFilterSortBarProps) {
-  // Flatten any nested groups in filters.conditions for localFilters
-  const flatFilterConditions: FilterCondition[] = extractFilterConditions(filters.conditions as (FilterCondition | NestedFilterGroup)[]);
   const [localOperator, setLocalOperator] = useState<FilterOperator>(filters.operator || 'AND');
-  const [localFilters, setLocalFilters] = useState<FilterCondition[]>(flatFilterConditions.filter((f: FilterCondition) => f.field !== 'timeframe') || []);
+  const [localFilters, setLocalFilters] = useState<FilterCondition[]>(filters.conditions.filter(f => f.field !== 'timeframe') || []);
   const [localSorts, setLocalSorts] = useState<SortCondition[]>(sorts);
   const [showSnapModal, setShowSnapModal] = useState(false);
   const [pendingSnapIdx, setPendingSnapIdx] = useState<number | null>(null);
   const [pendingSnapValue, setPendingSnapValue] = useState<[string, string] | null>(null);
   const [prevValue, setPrevValue] = useState<[string, string] | null>(null);
   // Extract timeframe filter from filters
-  const allConditions: FilterCondition[] = extractFilterConditions(filters.conditions);
-  const initialTimeframe = allConditions.find(f => f.field === 'timeframe' && Array.isArray(f.value))?.value as [string, string] | undefined;
+  const initialTimeframe = filters.conditions.find(f => f.field === 'timeframe' && Array.isArray(f.value))?.value as [string, string] | undefined;
   const [timeframe, setTimeframe] = useState<[string, string] | undefined>(initialTimeframe);
 
   // Sync localSorts with parent prop
@@ -119,36 +99,68 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
 
   // Update parent on any change
   useEffect(() => {
-    // Always AND timeframe with filters as a group
-    const conditions = [];
-    if (timeframe && timeframe[0] && timeframe[1]) {
-      conditions.push({ field: 'timeframe', operator: 'is on or after', value: timeframe });
+    let combinedFilters: FilterGroup;
+    const hasTimeframe = timeframe && timeframe[0] && timeframe[1];
+    const hasFilters = localFilters.length > 0;
+    if (hasTimeframe && hasFilters) {
+      combinedFilters = {
+        operator: 'AND',
+        conditions: [
+          { field: 'timeframe', operator: 'is on or after', value: timeframe },
+          {
+            operator: localOperator,
+            conditions: localFilters
+          } as unknown as FilterCondition // type cast for backend compatibility
+        ]
+      };
+    } else if (hasTimeframe) {
+      combinedFilters = {
+        operator: 'AND',
+        conditions: [
+          { field: 'timeframe', operator: 'is on or after', value: timeframe }
+        ]
+      };
+    } else if (hasFilters) {
+      combinedFilters = {
+        operator: localOperator,
+        conditions: localFilters
+      };
+    } else {
+      combinedFilters = { operator: 'AND', conditions: [] };
     }
-    if (localFilters.length > 0) {
-      conditions.push({ operator: localOperator, conditions: localFilters });
+    // Remove empty nested group if present
+    if (combinedFilters.conditions && combinedFilters.conditions.length === 2) {
+      const [first, second] = combinedFilters.conditions;
+      if ('operator' in second && Array.isArray((second as any).conditions) && (second as any).conditions.length === 0) {
+        combinedFilters.conditions = [first];
+      }
     }
-    onChange({ operator: 'AND', conditions }, localSorts);
+    onChange(combinedFilters, localSorts);
     // eslint-disable-next-line
   }, [localFilters, localSorts, localOperator, timeframe]);
 
   const handleOperatorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setLocalOperator(e.target.value as FilterOperator);
+    onChange({ operator: e.target.value as FilterOperator, conditions: localFilters }, localSorts);
   };
 
   const handleFilterChange = (idx: number, key: keyof FilterCondition, value: string | number | null | [string, string] | [number, number]) => {
-    const updated: FilterCondition[] = [...localFilters];
+    const updated = [...localFilters];
     updated[idx] = { ...updated[idx], [key]: value };
     setLocalFilters(updated);
+    onChange({ operator: localOperator, conditions: updated }, localSorts);
   };
 
   const handleAddFilter = () => {
-    const updated: FilterCondition[] = [...localFilters, { field: 'username', operator: 'contains', value: '' }];
+    const updated = [...localFilters, { field: 'username', operator: 'contains', value: '' }];
     setLocalFilters(updated);
+    onChange({ operator: localOperator, conditions: updated }, localSorts);
   };
 
   const handleRemoveFilter = (idx: number) => {
-    const updated: FilterCondition[] = localFilters.filter((_, i) => i !== idx);
+    const updated = localFilters.filter((_, i) => i !== idx);
     setLocalFilters(updated);
+    onChange({ operator: localOperator, conditions: updated }, localSorts);
   };
 
   const handleAddSort = () => {
@@ -240,7 +252,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
           </select>
           <span className="text-xs text-gray-500">of the following conditions:</span>
         </div>
-        {localFilters.map((filter: FilterCondition, idx: number) => {
+        {localFilters.map((filter, idx) => {
           const fieldDef = FILTER_FIELD_DEFS.find(f => f.name === filter.field) || FILTER_FIELD_DEFS[0];
           const ops = OPERATORS[fieldDef.type as keyof typeof OPERATORS];
           // Single-choice value options
