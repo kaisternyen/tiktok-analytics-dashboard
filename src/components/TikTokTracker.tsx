@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
+import { formatInTimeZone } from 'date-fns-tz';
 
 interface VideoHistory {
     time: string;
@@ -414,70 +415,14 @@ export default function TikTokTracker() {
 
     // Custom tick formatter for simplified X-axis labels with exactly 3 ticks
     const formatXAxisTick = (tickItem: string) => {
-        const date = new Date(tickItem);
-
-        // Format based on selected time period
-        switch (selectedTimePeriod) {
-            case 'D':
-                // Daily: show time to the minute (12:00 AM)
-                return date.toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                });
-            case 'W':
-            case 'M':
-                // Weekly/Monthly: show day (JAN 7)
-                return date.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric'
-                });
-            case '3M':
-            case '1Y':
-            case 'ALL':
-                // 3M and higher: show day + year (JAN 7, 2025)
-                return date.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                });
-            default:
-                return date.toLocaleDateString();
-        }
+        // Format in EST
+        return formatInTimeZone(new Date(tickItem), 'America/New_York', 'MMM d, h aa');
     };
 
     // Custom tick formatter for individual video charts
     const formatVideoXAxisTick = (tickItem: string) => {
-        const date = new Date(tickItem);
-
-        // Format based on selected video time period
-        switch (selectedVideoTimePeriod) {
-            case 'D':
-                // Daily: show time to the minute (12:00 AM)
-                return date.toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                });
-            case 'W':
-            case 'M':
-                // Weekly/Monthly: show day (JAN 7)
-                return date.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric'
-                });
-            case '3M':
-            case '1Y':
-            case 'ALL':
-                // 3M and higher: show day + year (JAN 7, 2025)
-                return date.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric'
-                });
-            default:
-                return date.toLocaleDateString();
-        }
+        // Format in EST
+        return formatInTimeZone(new Date(tickItem), 'America/New_York', 'MMM d, h aa');
     };
 
     // Calculate interval for showing exactly 3 ticks
@@ -503,12 +448,13 @@ export default function TikTokTracker() {
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: ChartDataPoint }>; label?: string }) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload as ChartDataPoint;
-            const date = new Date(label || '');
+            // Format in EST
+            const dateStr = formatInTimeZone(label || '', 'America/New_York', 'MMM d, yyyy h:mm aa zzz');
 
             return (
                 <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
                     <p className="font-medium text-gray-900">
-                        {date.toLocaleDateString()} {date.toLocaleTimeString()}
+                        {dateStr}
                     </p>
                     {showDelta ? (
                         <>
