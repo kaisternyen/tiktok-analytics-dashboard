@@ -194,14 +194,22 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                     type="number"
                     className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
                     value={typeof filter.value === 'number' || typeof filter.value === 'string' ? filter.value : ''}
-                    onInput={e => handleFilterChange(idx, 'value', (e.target as HTMLInputElement).value === '' ? null : Number((e.target as HTMLInputElement).value))}
+                    onInput={e => {
+                      const value = (e.target as HTMLInputElement).value === '' ? null : Number((e.target as HTMLInputElement).value);
+                      console.log('Filter input changed:', { idx, value });
+                      handleFilterChange(idx, 'value', value);
+                    }}
                   />
                 ) : (
                   <input
                     type="text"
                     className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
                     value={typeof filter.value === 'string' ? filter.value : ''}
-                    onInput={e => handleFilterChange(idx, 'value', (e.target as HTMLInputElement).value)}
+                    onInput={e => {
+                      const value = (e.target as HTMLInputElement).value;
+                      console.log('Filter input changed:', { idx, value });
+                      handleFilterChange(idx, 'value', value);
+                    }}
                   />
                 )
               )}

@@ -99,6 +99,7 @@ export default function TikTokTracker() {
     const [sorts, setSorts] = useState<SortCondition[]>([]);
 
     const fetchVideos = useCallback(async (customFilters = filters, customSorts = sorts) => {
+        console.log('fetchVideos called with:', { customFilters, customSorts });
         try {
             console.log('📋 Fetching videos from API...');
             // Build query params for filters and sorts
