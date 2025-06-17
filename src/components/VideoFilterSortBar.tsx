@@ -102,16 +102,21 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
     const updated = [...localSorts];
     updated[idx] = { ...updated[idx], [key]: value };
     setLocalSorts(updated);
+    console.log('[SortBar] handleSortChange:', { idx, key, value, updated });
     onChange({ operator: localOperator, conditions: localFilters }, updated);
   };
 
   const handleAddSort = () => {
-    setLocalSorts([...localSorts, { field: 'createdAt', order: 'desc' }]);
+    const updated = [...localSorts, { field: 'createdAt', order: 'desc' as 'asc' | 'desc' }];
+    setLocalSorts(updated);
+    console.log('[SortBar] handleAddSort:', updated);
+    onChange({ operator: localOperator, conditions: localFilters }, updated);
   };
 
   const handleRemoveSort = (idx: number) => {
-    const updated = localSorts.filter((_, i) => i !== idx);
+    const updated = localSorts.filter((_, i) => i !== idx) as SortCondition[];
     setLocalSorts(updated);
+    console.log('[SortBar] handleRemoveSort:', { idx, updated });
     onChange({ operator: localOperator, conditions: localFilters }, updated);
   };
 
