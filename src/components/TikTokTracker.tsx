@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
+import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 
 interface VideoHistory {
     time: string;
@@ -541,6 +542,15 @@ export default function TikTokTracker() {
     const getChartData = (): ChartDataPoint[] => {
         if (tracked.length === 0) return [];
 
+        // Extract timeframe filter from filters
+        const timeframeFilter = filters.conditions.find(f => f.field === 'timeframe' && Array.isArray(f.value) && f.value[0] && f.value[1]);
+        let timeframeStart: Date | null = null;
+        let timeframeEnd: Date | null = null;
+        if (timeframeFilter && Array.isArray(timeframeFilter.value) && typeof timeframeFilter.value[0] === 'string' && typeof timeframeFilter.value[1] === 'string') {
+            timeframeStart = new Date(timeframeFilter.value[0]);
+            timeframeEnd = new Date(timeframeFilter.value[1]);
+        }
+
         // Filter out videos on daily cadence that haven't been scraped today for live charts
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -561,8 +571,6 @@ export default function TikTokTracker() {
             return true;
         });
 
-        console.log(`📊 Chart data: Including ${eligibleVideos.length}/${tracked.length} videos (excluding stale daily-cadence videos)`);
-
         // Collect all unique timestamps from eligible videos
         const allTimestamps = new Set<string>();
         eligibleVideos.forEach(video => {
@@ -574,43 +582,52 @@ export default function TikTokTracker() {
         });
 
         // Convert to sorted array
-        const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => 
+        let sortedTimestamps = Array.from(allTimestamps).sort((a, b) => 
             new Date(a).getTime() - new Date(b).getTime()
         );
 
-        // Filter timestamps by selected time period
-        let filteredTimestamps = sortedTimestamps;
+        // If timeframe filter is present, filter timestamps to only those within the range
+        if (timeframeStart && timeframeEnd) {
+            sortedTimestamps = sortedTimestamps.filter(ts => {
+                const t = new Date(ts).getTime();
+                return t >= timeframeStart!.getTime() && t <= timeframeEnd!.getTime();
+            });
+        }
 
-        switch (selectedTimePeriod) {
-            case 'D':
-                filteredTimestamps = sortedTimestamps.filter(timestamp =>
-                    new Date(timestamp) >= new Date(now.getTime() - 24 * 60 * 60 * 1000)
-                );
-                break;
-            case 'W':
-                filteredTimestamps = sortedTimestamps.filter(timestamp =>
-                    new Date(timestamp) >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-                );
-                break;
-            case 'M':
-                filteredTimestamps = sortedTimestamps.filter(timestamp =>
-                    new Date(timestamp) >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-                );
-                break;
-            case '3M':
-                filteredTimestamps = sortedTimestamps.filter(timestamp =>
-                    new Date(timestamp) >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-                );
-                break;
-            case '1Y':
-                filteredTimestamps = sortedTimestamps.filter(timestamp =>
-                    new Date(timestamp) >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
-                );
-                break;
-            case 'ALL':
-            default:
-                // Use all timestamps
-                break;
+        // Filter timestamps by selected time period (if no timeframe filter)
+        let filteredTimestamps = sortedTimestamps;
+        if (!timeframeStart || !timeframeEnd) {
+            switch (selectedTimePeriod) {
+                case 'D':
+                    filteredTimestamps = sortedTimestamps.filter(timestamp =>
+                        new Date(timestamp) >= new Date(now.getTime() - 24 * 60 * 60 * 1000)
+                    );
+                    break;
+                case 'W':
+                    filteredTimestamps = sortedTimestamps.filter(timestamp =>
+                        new Date(timestamp) >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+                    );
+                    break;
+                case 'M':
+                    filteredTimestamps = sortedTimestamps.filter(timestamp =>
+                        new Date(timestamp) >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+                    );
+                    break;
+                case '3M':
+                    filteredTimestamps = sortedTimestamps.filter(timestamp =>
+                        new Date(timestamp) >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+                    );
+                    break;
+                case '1Y':
+                    filteredTimestamps = sortedTimestamps.filter(timestamp =>
+                        new Date(timestamp) >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+                    );
+                    break;
+                case 'ALL':
+                default:
+                    // Use all timestamps
+                    break;
+            }
         }
 
         // Build proper aggregate data by carrying forward last known values
@@ -654,7 +671,7 @@ export default function TikTokTracker() {
             }
         });
 
-        // Calculate delta values properly
+        // Calculate delta values properly (for the selected period only)
         const chartData: ChartDataPoint[] = aggregateData.map((point, index) => {
             const previousPoint = index > 0 ? aggregateData[index - 1] : point;
             const delta = point.views - previousPoint.views;
