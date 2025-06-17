@@ -118,6 +118,12 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
     onChange({ operator: localOperator, conditions: localFilters }, updated);
   };
 
+  const platformOptions = [
+    { value: 'tiktok', label: 'TikTok' },
+    { value: 'instagram', label: 'Instagram' },
+    { value: 'youtube', label: 'YouTube' },
+  ];
+
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-col gap-4">
       {/* Filter Bar */}
@@ -150,6 +156,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
             { value: 'daily', label: 'Daily' },
             { value: 'testing', label: 'Testing' },
           ];
+          const isPlatform = filter.field === 'platform';
           return (
             <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
               <select
@@ -191,6 +198,17 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                   >
                     <option value="">Select cadence</option>
                     {cadenceOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                ) : isPlatform ? (
+                  <select
+                    className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+                    value={typeof filter.value === 'string' ? filter.value : ''}
+                    onChange={e => handleFilterChange(idx, 'value', e.target.value)}
+                  >
+                    <option value="">Select platform</option>
+                    {platformOptions.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
