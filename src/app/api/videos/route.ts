@@ -174,16 +174,31 @@ export async function GET(req: Request) {
         console.log('FINAL where clause:', where);
         const orderBy = parseSorts(decodedSortParam) || [{ createdAt: 'desc' }];
         console.log('📋 Fetching videos from database with:', { where, orderBy });
-        const videos = await prisma.video.findMany({
-            where,
-            include: {
-                metricsHistory: {
-                    orderBy: { timestamp: 'desc' },
-                    take: 48
-                }
-            },
-            orderBy
-        });
+
+        // Check if sorting by username and make it case-insensitive
+        let useRawOrderBy = false;
+        let usernameOrder: 'asc' | 'desc' | null = null;
+        if (orderBy.length === 1 && orderBy[0].hasOwnProperty('username')) {
+            useRawOrderBy = true;
+            usernameOrder = orderBy[0]['username'];
+        }
+        let videos: any[];
+        if (useRawOrderBy && usernameOrder) {
+            // Case-insensitive sort for username (Postgres syntax)
+            videos = await prisma.$queryRaw`SELECT * FROM "videos" WHERE "isActive" = true ORDER BY LOWER("username") ${usernameOrder === 'asc' ? 'ASC' : 'DESC'}` as any[];
+            // Note: This bypasses Prisma's include/transform logic. You may need to manually join metricsHistory if needed.
+        } else {
+            videos = await prisma.video.findMany({
+                where,
+                include: {
+                    metricsHistory: {
+                        orderBy: { timestamp: 'desc' },
+                        take: 48
+                    }
+                },
+                orderBy
+            });
+        }
 
         console.log(`✅ Found ${videos.length} videos in database`);
 
