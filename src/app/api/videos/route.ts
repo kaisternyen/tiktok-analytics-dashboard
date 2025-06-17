@@ -342,14 +342,14 @@ export async function GET(req: Request) {
             if (parsed && parsed.conditions) {
                 for (const cond of parsed.conditions) {
                     let field = cond.field;
-                    let op = cond.operator;
-                    let value = cond.value;
+                    const op = cond.operator;
+                    const value = cond.value;
                     // Map likes/views/comments/shares to delta fields
                     if (["likes", "views", "comments", "shares"].includes(field)) {
                         field = field + "Delta";
                     }
                     transformedVideos = transformedVideos.filter(video => {
-                        const v = (video as any)[field];
+                        const v = (video as unknown as Record<string, number>)[field];
                         switch (op) {
                             case '>': return v > value;
                             case '>=': return v >= value;
@@ -370,13 +370,13 @@ export async function GET(req: Request) {
             const sorts = JSON.parse(decodedSortParam);
             for (const sort of sorts) {
                 let field = sort.field;
-                let order = sort.order;
+                const order = sort.order;
                 if (["likes", "views", "comments", "shares"].includes(field)) {
                     field = field + "Delta";
                 }
                 transformedVideos = transformedVideos.sort((a, b) => {
-                    if (order === 'desc') return (b as any)[field] - (a as any)[field];
-                    return (a as any)[field] - (b as any)[field];
+                    if (order === 'desc') return (b as unknown as Record<string, number>)[field] - (a as unknown as Record<string, number>)[field];
+                    return (a as unknown as Record<string, number>)[field] - (b as unknown as Record<string, number>)[field];
                 });
             }
         }
