@@ -200,6 +200,10 @@ export default function TikTokTracker() {
         return () => clearInterval(interval);
     }, [fetchVideos]);
 
+    useEffect(() => {
+        fetchVideos(filters, sorts);
+    }, [filters, sorts]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -992,7 +996,6 @@ export default function TikTokTracker() {
                             onChange={(newFilters, newSorts) => {
                                 setFilters(newFilters);
                                 setSorts(newSorts);
-                                fetchVideos(newFilters, newSorts);
                             }}
                         />
                         <Card>
