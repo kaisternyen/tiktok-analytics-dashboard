@@ -38,7 +38,8 @@ async function runMigrationIfNeeded() {
 function parseFilters(filterParam: string | null): Record<string, unknown> | undefined {
     if (!filterParam) return undefined;
     try {
-        const filters: Array<{ field: string; operator: string; value: any }> = JSON.parse(filterParam);
+        type FilterValue = string | number | boolean | null | string[] | number[] | Date | Date[];
+        const filters: Array<{ field: string; operator: string; value: FilterValue }> = JSON.parse(filterParam);
         const where: Record<string, unknown> = { AND: [] };
         for (const filter of filters) {
             const { field, operator, value } = filter;
@@ -89,7 +90,9 @@ function parseFilters(filterParam: string | null): Record<string, unknown> | und
                     condition[field] = { gte: value };
                     break;
                 case 'is within':
-                    condition[field] = { gte: value[0], lte: value[1] };
+                    if (Array.isArray(value) && value.length === 2) {
+                        condition[field] = { gte: value[0], lte: value[1] };
+                    }
                     break;
                 default:
                     break;
