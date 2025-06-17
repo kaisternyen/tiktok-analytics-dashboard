@@ -10,7 +10,6 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart,
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
-import DatePicker from "react-datepicker";
 
 interface VideoHistory {
     time: string;
@@ -75,7 +74,7 @@ interface ChartDataPoint {
     originalTime: Date;
 }
 
-type TimePeriod = 'D' | 'W' | 'M' | '3M' | '1Y' | 'ALL';
+type TimePeriod = 'D' | 'W' | 'M' | '3M' | '1Y' | 'ALL' | 'custom';
 
 export default function TikTokTracker() {
     const [videoUrl, setVideoUrl] = useState("");
@@ -100,7 +99,9 @@ export default function TikTokTracker() {
     const [filters, setFilters] = useState<FilterGroup>({ operator: 'AND', conditions: [] });
     const [sorts, setSorts] = useState<SortCondition[]>([]);
 
-    const [timelinePreset, setTimelinePreset] = useState<TimePeriod | 'CUSTOM'>('W');
+    const [timelineSelection, setTimelineSelection] = useState<TimePeriod>('W');
+
+    // Add state for customTimeframe
     const [customTimeframe, setCustomTimeframe] = useState<[string, string] | null>(null);
 
     const fetchVideos = useCallback(async (customFilters: FilterGroup = filters, customSorts = sorts) => {
@@ -733,37 +734,30 @@ export default function TikTokTracker() {
     const commentsChartData = getVideoChartData('comments', showCommentsDelta);
     const sharesChartData = getVideoChartData('shares', showSharesDelta);
 
-    // Sync logic:
-    // When timelinePreset changes, update selectedTimePeriod and filters accordingly.
-    // When selectedTimePeriod changes (from aggregate graph), update timelinePreset unless it's 'CUSTOM'.
-    useEffect(() => {
-        if (timelinePreset !== 'CUSTOM') {
-            setSelectedTimePeriod(timelinePreset as TimePeriod);
-            setFilters((prev) => ({
-                ...prev,
-                conditions: prev.conditions.filter(f => f.field !== 'timeframe'),
-            }));
+    // Update setTimelineSelection to update filters accordingly
+    const handleTimelineSelection = (val: TimePeriod) => {
+        setTimelineSelection(val);
+        if (val === 'custom') {
+            if (customTimeframe) {
+                // Add/update timeframe filter
+                const otherFilters = filters.conditions.filter(f => f.field !== 'timeframe');
+                setFilters({
+                    ...filters,
+                    conditions: [
+                        ...otherFilters,
+                        { field: 'timeframe', operator: 'is on or after', value: customTimeframe },
+                    ],
+                });
+            }
+        } else {
+            // Remove timeframe filter
+            const otherFilters = filters.conditions.filter(f => f.field !== 'timeframe');
+            setFilters({
+                ...filters,
+                conditions: otherFilters,
+            });
         }
-    }, [timelinePreset]);
-
-    useEffect(() => {
-        if (selectedTimePeriod !== 'ALL' && timelinePreset !== selectedTimePeriod) {
-            setTimelinePreset(selectedTimePeriod);
-        }
-    }, [selectedTimePeriod, timelinePreset]);
-
-    // When custom range is set, update filters with timeframe
-    useEffect(() => {
-        if (timelinePreset === 'CUSTOM' && customTimeframe) {
-            setFilters((prev) => ({
-                ...prev,
-                conditions: [
-                    ...prev.conditions.filter(f => f.field !== 'timeframe'),
-                    { field: 'timeframe', operator: 'is on or after', value: customTimeframe },
-                ],
-            }));
-        }
-    }, [timelinePreset, customTimeframe]);
+    };
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -934,20 +928,14 @@ export default function TikTokTracker() {
                                             </h3>
                                             <div className="flex items-center gap-2">
                                                 {/* Time Period Selector */}
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className="text-xs text-gray-500">Timeline:</span>
+                                                <div className="flex border border-gray-200 rounded-md">
                                                     {(['D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
                                                         <button
                                                             key={period}
                                                             onClick={() => {
-                                                                setTimelinePreset(period);
-                                                                setSelectedTimePeriod(period);
-                                                                setFilters((prev) => ({
-                                                                    ...prev,
-                                                                    conditions: prev.conditions.filter(f => f.field !== 'timeframe'),
-                                                                }));
+                                                                handleTimelineSelection(period);
                                                             }}
-                                                            className={`px-3 py-1 text-xs font-medium transition-colors ${timelinePreset === period
+                                                            className={`px-3 py-1 text-xs font-medium transition-colors ${timelineSelection === period
                                                                 ? 'bg-blue-500 text-white'
                                                                 : 'text-gray-600 hover:bg-gray-100'
                                                                 } first:rounded-l-md`}
@@ -956,11 +944,9 @@ export default function TikTokTracker() {
                                                         </button>
                                                     ))}
                                                     <button
-                                                        onClick={() => {
-                                                            setTimelinePreset('CUSTOM');
-                                                            setSelectedTimePeriod('ALL');
-                                                        }}
-                                                        className={`px-3 py-1 text-xs font-medium transition-colors ${timelinePreset === 'CUSTOM'
+                                                        key="custom"
+                                                        onClick={() => setTimelineSelection('custom')}
+                                                        className={`px-3 py-1 text-xs font-medium transition-colors ${timelineSelection === 'custom'
                                                             ? 'bg-blue-500 text-white'
                                                             : 'text-gray-600 hover:bg-gray-100'
                                                             } rounded-r-md`}
@@ -968,39 +954,6 @@ export default function TikTokTracker() {
                                                         Custom
                                                     </button>
                                                 </div>
-                                                {timelinePreset === 'CUSTOM' && (
-                                                    <div className="flex items-center gap-2 mt-2">
-                                                        <DatePicker
-                                                            selected={customTimeframe?.[0] ? new Date(customTimeframe[0]) : null}
-                                                            onChange={(date) => {
-                                                                if (date) {
-                                                                    setCustomTimeframe([date.toISOString(), customTimeframe?.[1] || date.toISOString()]);
-                                                                }
-                                                            }}
-                                                            showTimeSelect
-                                                            timeFormat="HH:mm"
-                                                            timeIntervals={60}
-                                                            dateFormat="MMM d, yyyy h:mm aa"
-                                                            className="w-48"
-                                                            placeholderText="Start date"
-                                                        />
-                                                        <span>to</span>
-                                                        <DatePicker
-                                                            selected={customTimeframe?.[1] ? new Date(customTimeframe[1]) : null}
-                                                            onChange={(date) => {
-                                                                if (date) {
-                                                                    setCustomTimeframe([customTimeframe?.[0] || date.toISOString(), date.toISOString()]);
-                                                                }
-                                                            }}
-                                                            showTimeSelect
-                                                            timeFormat="HH:mm"
-                                                            timeIntervals={60}
-                                                            dateFormat="MMM d, yyyy h:mm aa"
-                                                            className="w-48"
-                                                            placeholderText="End date"
-                                                        />
-                                                    </div>
-                                                )}
                                                 {/* Delta Toggle */}
                                                 <Button
                                                     variant={showDelta ? "default" : "outline"}
@@ -1099,6 +1052,10 @@ export default function TikTokTracker() {
                                 setFilters(newFilters);
                                 setSorts(newSorts);
                             }}
+                            timelineSelection={timelineSelection}
+                            setTimelineSelection={handleTimelineSelection}
+                            customTimeframe={customTimeframe}
+                            setCustomTimeframe={setCustomTimeframe}
                         />
                         <Card>
                             <CardContent className="p-0">

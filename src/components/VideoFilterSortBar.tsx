@@ -70,13 +70,20 @@ export type SortCondition = {
   order: 'asc' | 'desc';
 };
 
+// Add TimePeriod type for timeline pills
+export type TimePeriod = 'D' | 'W' | 'M' | '3M' | '1Y' | 'ALL' | 'custom';
+
 interface VideoFilterSortBarProps {
   filters: FilterGroup;
   sorts: SortCondition[];
   onChange: (filters: FilterGroup, sorts: SortCondition[]) => void;
+  timelineSelection: TimePeriod | 'custom';
+  setTimelineSelection: (val: TimePeriod | 'custom') => void;
+  customTimeframe: [string, string] | null;
+  setCustomTimeframe: (val: [string, string]) => void;
 }
 
-export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFilterSortBarProps) {
+export default function VideoFilterSortBar({ filters, sorts, onChange, timelineSelection, setTimelineSelection, customTimeframe, setCustomTimeframe }: VideoFilterSortBarProps) {
   const [localOperator, setLocalOperator] = useState<FilterOperator>(filters.operator || 'AND');
   const [localFilters, setLocalFilters] = useState<FilterCondition[]>(filters.conditions || []);
   const [localSorts, setLocalSorts] = useState<SortCondition[]>(sorts);
@@ -90,6 +97,21 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
     setLocalSorts(sorts);
     console.log('[SortBar] useEffect sync localSorts with parent:', sorts);
   }, [sorts]);
+
+  useEffect(() => {
+    if (timelineSelection === 'custom' && customTimeframe) {
+      const otherFilters = localFilters.filter(f => f.field !== 'timeframe');
+      setLocalFilters([
+        ...otherFilters,
+        { field: 'timeframe', operator: 'is on or after', value: customTimeframe },
+      ]);
+      onChange({ operator: localOperator, conditions: [
+        ...otherFilters,
+        { field: 'timeframe', operator: 'is on or after', value: customTimeframe },
+      ] }, localSorts);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customTimeframe, timelineSelection]);
 
   const handleOperatorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setLocalOperator(e.target.value as FilterOperator);
@@ -137,6 +159,45 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
 
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-col gap-4">
+      {/* Timeline Pills */}
+      <div className="flex gap-2 mb-2">
+        {(['D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
+          <button
+            key={period}
+            onClick={() => {
+              setTimelineSelection(period);
+              // Remove timeframe filter if present
+              const otherFilters = localFilters.filter(f => f.field !== 'timeframe');
+              setLocalFilters(otherFilters);
+              onChange({ operator: localOperator, conditions: otherFilters }, localSorts);
+            }}
+            className={`px-3 py-1 text-xs font-medium transition-colors ${timelineSelection === period ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'} first:rounded-l-md`}
+          >
+            {period}
+          </button>
+        ))}
+        <button
+          key="custom"
+          onClick={() => {
+            setTimelineSelection('custom');
+            // If customTimeframe exists, add/update timeframe filter
+            if (customTimeframe) {
+              const otherFilters = localFilters.filter(f => f.field !== 'timeframe');
+              setLocalFilters([
+                ...otherFilters,
+                { field: 'timeframe', operator: 'is on or after', value: customTimeframe },
+              ]);
+              onChange({ operator: localOperator, conditions: [
+                ...otherFilters,
+                { field: 'timeframe', operator: 'is on or after', value: customTimeframe },
+              ] }, localSorts);
+            }
+          }}
+          className={`px-3 py-1 text-xs font-medium transition-colors ${timelineSelection === 'custom' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'} rounded-r-md`}
+        >
+          Custom
+        </button>
+      </div>
       {/* Filter Bar */}
       <div className="flex flex-col gap-2">
         <span className="font-medium text-gray-700">Filter:</span>
@@ -297,7 +358,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                       handleFilterChange(idx, 'value', value);
                     }}
                   />
-                ) : isTimeframe ? (
+                ) : isTimeframe && timelineSelection !== 'custom' ? null : (
                   <>
                     <DatePicker
                       selected={Array.isArray(filter.value) && filter.value[0] ? toZonedTime(new Date(filter.value[0]), 'America/New_York') : null}
@@ -326,6 +387,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                           }
                         }
                         handleFilterChange(idx, 'value', newValue);
+                        setCustomTimeframe(newValue);
                       }}
                       showTimeSelect
                       showTimeSelectOnly={false}
@@ -364,6 +426,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                           }
                         }
                         handleFilterChange(idx, 'value', newValue);
+                        setCustomTimeframe(newValue);
                       }}
                       showTimeSelect
                       showTimeSelectOnly={false}
@@ -425,17 +488,6 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                       </div>
                     )}
                   </>
-                ) : (
-                  <input
-                    type="text"
-                    className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-                    value={typeof filter.value === 'string' ? filter.value : ''}
-                    onInput={e => {
-                      const value = (e.target as HTMLInputElement).value;
-                      console.log('Filter input changed:', { idx, value });
-                      handleFilterChange(idx, 'value', value);
-                    }}
-                  />
                 )
               )}
               <button
