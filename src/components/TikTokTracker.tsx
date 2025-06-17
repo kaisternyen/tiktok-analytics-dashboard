@@ -86,7 +86,6 @@ export default function TikTokTracker() {
     const [success, setSuccess] = useState<string | null>(null);
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
-    const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('W');
     const [showDelta, setShowDelta] = useState(false);
 
     // Individual video chart states
@@ -573,7 +572,7 @@ export default function TikTokTracker() {
         // Filter timestamps by selected time period (if no timeframe filter)
         let filteredTimestamps = sortedTimestamps;
         if (!timeframeStart || !timeframeEnd) {
-            switch (selectedTimePeriod) {
+            switch (timelineSelection) {
                 case 'D':
                     filteredTimestamps = sortedTimestamps.filter(timestamp =>
                         new Date(timestamp) >= new Date(now.getTime() - 24 * 60 * 60 * 1000)
