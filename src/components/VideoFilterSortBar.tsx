@@ -196,20 +196,22 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                     <input
                       type="date"
                       className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-                      value={Array.isArray(filter.value) ? String(filter.value[0] ?? '') : ''}
+                      value={Array.isArray(filter.value) ? (typeof filter.value[0] === 'string' ? filter.value[0].split('T')[0] : '') : ''}
                       onChange={e => {
-                        const iso = e.target.value ? new Date(e.target.value).toISOString() : '';
-                        handleFilterChange(idx, 'value', [iso, Array.isArray(filter.value) ? String(filter.value[1] ?? '') : '']);
+                        // Start of first day
+                        const iso = e.target.value ? new Date(e.target.value + 'T00:00:00.000Z').toISOString() : '';
+                        handleFilterChange(idx, 'value', [iso, Array.isArray(filter.value) && typeof filter.value[1] === 'string' ? filter.value[1] : '']);
                       }}
                     />
                     <span className="mx-1 text-xs">to</span>
                     <input
                       type="date"
                       className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-                      value={Array.isArray(filter.value) ? String(filter.value[1] ?? '') : ''}
+                      value={Array.isArray(filter.value) ? (typeof filter.value[1] === 'string' ? filter.value[1].split('T')[0] : '') : ''}
                       onChange={e => {
-                        const iso = e.target.value ? new Date(e.target.value).toISOString() : '';
-                        handleFilterChange(idx, 'value', [Array.isArray(filter.value) ? String(filter.value[0] ?? '') : '', iso]);
+                        // End of second day (set to next day at midnight minus 1ms)
+                        const end = e.target.value ? new Date(new Date(e.target.value + 'T00:00:00.000Z').getTime() + 24*60*60*1000 - 1).toISOString() : '';
+                        handleFilterChange(idx, 'value', [Array.isArray(filter.value) && typeof filter.value[0] === 'string' ? filter.value[0] : '', end]);
                       }}
                     />
                   </>
@@ -219,7 +221,26 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                     className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
                     value={typeof filter.value === 'string' ? filter.value.split('T')[0] : ''}
                     onChange={e => {
-                      const iso = e.target.value ? new Date(e.target.value).toISOString() : '';
+                      let iso = '';
+                      if (e.target.value) {
+                        const date = new Date(e.target.value + 'T00:00:00.000Z');
+                        switch (filter.operator) {
+                          case 'is after':
+                            // Next day at midnight
+                            iso = new Date(date.getTime() + 24*60*60*1000).toISOString();
+                            break;
+                          case 'is before':
+                            // This day at midnight
+                            iso = date.toISOString();
+                            break;
+                          case 'is on or after':
+                          case 'is on or before':
+                          case 'is':
+                          default:
+                            iso = date.toISOString();
+                            break;
+                        }
+                      }
                       handleFilterChange(idx, 'value', iso);
                     }}
                   />
