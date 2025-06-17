@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -272,11 +272,6 @@ export default function TikTokTracker() {
         }
     }, [filters, sorts]);
 
-    // Fetch videos from database on component mount
-    useEffect(() => {
-        fetchVideos();
-    }, [fetchVideos]);
-
     // Auto-refresh status every 30 seconds AND auto-refresh video data
     useEffect(() => {
         const fetchStatus = async () => {
@@ -311,7 +306,7 @@ export default function TikTokTracker() {
         }, 30000); // Every 30 seconds for real-time feel
 
         return () => clearInterval(interval);
-    }, []);
+    }, [fetchVideos]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -1717,7 +1712,7 @@ export default function TikTokTracker() {
                             <Button onClick={() => {
                                 const field = filterField;
                                 const operator = filterOperator;
-                                let value: any = '';
+                                let value: string | number | boolean | { start: string; end: string } | null = '';
                                 const fieldDef = FILTER_FIELDS.find(f => f.key === field);
                                 if (fieldDef?.type === 'enum') {
                                     value = filterValue;
