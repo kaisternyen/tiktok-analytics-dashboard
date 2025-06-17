@@ -110,10 +110,23 @@ export default function TikTokTracker() {
             if (customSorts.length > 0) {
                 params.set('sort', encodeURIComponent(JSON.stringify(customSorts)));
             }
-            const response = await fetch(`/api/videos${params.toString() ? `?${params.toString()}` : ''}`);
+            const apiUrl = `/api/videos${params.toString() ? `?${params.toString()}` : ''}`;
+            console.log('➡️ API Request URL:', apiUrl);
+            const response = await fetch(apiUrl);
             const result = await response.json();
 
             if (result.success) {
+                console.log('✅ API returned videos:', result.videos.map((v: any) => ({
+                    id: v.id,
+                    username: v.username,
+                    views: v.views,
+                    likes: v.likes,
+                    createdAt: v.posted,
+                    currentViews: v.currentViews,
+                    currentLikes: v.currentLikes,
+                    currentComments: v.currentComments,
+                    currentShares: v.currentShares,
+                })));
                 const transformedVideos = result.videos.map((video: {
                     id: string;
                     url: string;
@@ -202,7 +215,11 @@ export default function TikTokTracker() {
 
     useEffect(() => {
         fetchVideos(filters, sorts);
-    }, [filters, sorts]);
+    }, [filters, sorts, fetchVideos]);
+
+    useEffect(() => {
+        console.log('[TikTokTracker] sorts state changed:', sorts);
+    }, [sorts]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

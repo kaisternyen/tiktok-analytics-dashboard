@@ -186,6 +186,13 @@ interface FilteredVideoWithMetrics {
   metricsHistory: MetricsHistoryPoint[];
 }
 
+// Type for filter conditions
+interface FilterCondition {
+  field: string;
+  operator: string;
+  value: string | string[] | number | number[] | boolean | null | Date | Date[];
+}
+
 export async function GET(req: Request) {
     try {
         await runMigrationIfNeeded();
@@ -202,11 +209,11 @@ export async function GET(req: Request) {
             const parsed = JSON.parse(decodedFilterParam);
             // Extract timeframe filter if present
             if (parsed && parsed.conditions) {
-                const tf = parsed.conditions.find((f: any) => f.field === 'timeframe');
+                const tf = parsed.conditions.find((f: FilterCondition) => f.field === 'timeframe');
                 if (tf && Array.isArray(tf.value) && tf.value.length === 2 && tf.value[0] && tf.value[1]) {
                     timeframe = [tf.value[0], tf.value[1]];
                     // Remove timeframe from conditions before passing to parseFilters
-                    parsed.conditions = parsed.conditions.filter((f: any) => f.field !== 'timeframe');
+                    parsed.conditions = parsed.conditions.filter((f: FilterCondition) => f.field !== 'timeframe');
                     filterParamToParse = JSON.stringify(parsed);
                 }
             }
@@ -235,7 +242,7 @@ export async function GET(req: Request) {
         if (timeframe) {
             const [start, end] = timeframe;
             filteredVideos = videos.map((video) => {
-                const filteredHistory = video.metricsHistory.map((h: any) => ({
+                const filteredHistory = video.metricsHistory.map((h) => ({
                   timestamp: h.timestamp,
                   views: h.views,
                   likes: h.likes,
@@ -250,31 +257,6 @@ export async function GET(req: Request) {
         }
 
         // Transform data for frontend
-        type VideoWithMetrics = {
-            id: string;
-            url: string;
-            username: string;
-            description: string;
-            thumbnailUrl: string | null;
-            createdAt: Date;
-            lastScrapedAt: Date;
-            isActive: boolean;
-            currentViews: number;
-            currentLikes: number;
-            currentComments: number;
-            currentShares: number;
-            hashtags: string | null;
-            music: string | null;
-            platform: string | null;
-            scrapingCadence: string | null;
-            metricsHistory: Array<{
-                timestamp: Date;
-                views: number;
-                likes: number;
-                comments: number;
-                shares: number;
-            }>;
-        };
         const transformedVideos = filteredVideos.map((video) => {
             // Parse JSON fields
             const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
