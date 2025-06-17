@@ -55,8 +55,8 @@ function parseFilters(filterParam: string | null): Record<string, unknown> | und
         }
         const where: Record<string, unknown> = { [operator]: [] };
         for (const filter of conditions) {
-            let { field, operator, value } = filter;
-            const op = operator;
+            let { field, value } = filter;
+            const op = filter.operator;
             // Map 'lastUpdate' to 'lastScrapedAt' for DB
             if (field === 'lastUpdate') field = 'lastScrapedAt';
             // Validate field
