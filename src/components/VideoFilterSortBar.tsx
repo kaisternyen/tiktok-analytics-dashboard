@@ -76,20 +76,37 @@ interface VideoFilterSortBarProps {
   onChange: (filters: FilterGroup, sorts: SortCondition[]) => void;
 }
 
+// Remove 'timeframe' from FIELD_DEFS for filters
+const FILTER_FIELD_DEFS = FIELD_DEFS.filter(f => f.name !== 'timeframe');
+
 export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFilterSortBarProps) {
   const [localOperator, setLocalOperator] = useState<FilterOperator>(filters.operator || 'AND');
-  const [localFilters, setLocalFilters] = useState<FilterCondition[]>(filters.conditions || []);
+  const [localFilters, setLocalFilters] = useState<FilterCondition[]>(filters.conditions.filter(f => f.field !== 'timeframe') || []);
   const [localSorts, setLocalSorts] = useState<SortCondition[]>(sorts);
   const [showSnapModal, setShowSnapModal] = useState(false);
   const [pendingSnapIdx, setPendingSnapIdx] = useState<number | null>(null);
   const [pendingSnapValue, setPendingSnapValue] = useState<[string, string] | null>(null);
   const [prevValue, setPrevValue] = useState<[string, string] | null>(null);
+  // Extract timeframe filter from filters
+  const initialTimeframe = filters.conditions.find(f => f.field === 'timeframe' && Array.isArray(f.value))?.value as [string, string] | undefined;
+  const [timeframe, setTimeframe] = useState<[string, string] | undefined>(initialTimeframe);
 
   // Sync localSorts with parent prop
   useEffect(() => {
     setLocalSorts(sorts);
     console.log('[SortBar] useEffect sync localSorts with parent:', sorts);
   }, [sorts]);
+
+  // Update parent on any change
+  useEffect(() => {
+    // Always AND timeframe with filters
+    const combinedFilters = [...localFilters];
+    if (timeframe && timeframe[0] && timeframe[1]) {
+      combinedFilters.push({ field: 'timeframe', operator: 'is on or after', value: timeframe });
+    }
+    onChange({ operator: localOperator, conditions: combinedFilters }, localSorts);
+    // eslint-disable-next-line
+  }, [localFilters, localSorts, localOperator, timeframe]);
 
   const handleOperatorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setLocalOperator(e.target.value as FilterOperator);
@@ -137,6 +154,58 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
 
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-col gap-4">
+      {/* Timeframe Bar */}
+      <div className="flex flex-col gap-2">
+        <span className="font-medium text-gray-700">Timeframe:</span>
+        <div className="flex items-center gap-2 mb-2">
+          <DatePicker
+            selected={timeframe && timeframe[0] ? toZonedTime(new Date(timeframe[0]), 'America/New_York') : null}
+            onChange={date => {
+              if (!date) return;
+              const d = new Date(date);
+              d.setMinutes(0, 0, 0);
+              const estIso = fromZonedTime(d, 'America/New_York').toISOString();
+              setTimeframe([estIso, timeframe && timeframe[1] ? timeframe[1] : '']);
+            }}
+            showTimeSelect
+            showTimeSelectOnly={false}
+            timeIntervals={60}
+            dateFormat="MMMM d, yyyy h aa"
+            timeCaption="Hour"
+            placeholderText="Start date/time (EST)"
+            className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+            popperPlacement="bottom"
+          />
+          <span className="mx-1 text-xs">to</span>
+          <DatePicker
+            selected={timeframe && timeframe[1] ? toZonedTime(new Date(timeframe[1]), 'America/New_York') : null}
+            onChange={date => {
+              if (!date) return;
+              const d = new Date(date);
+              d.setMinutes(0, 0, 0);
+              const estIso = fromZonedTime(d, 'America/New_York').toISOString();
+              setTimeframe([timeframe && timeframe[0] ? timeframe[0] : '', estIso]);
+            }}
+            showTimeSelect
+            showTimeSelectOnly={false}
+            timeIntervals={60}
+            dateFormat="MMMM d, yyyy h aa"
+            timeCaption="Hour"
+            placeholderText="End date/time (EST)"
+            className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+            popperPlacement="bottom"
+          />
+          {timeframe && (timeframe[0] || timeframe[1]) && (
+            <button
+              className="ml-2 text-xs text-gray-400 hover:text-red-500"
+              onClick={() => setTimeframe(['', ''])}
+              title="Clear timeframe"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
       {/* Filter Bar */}
       <div className="flex flex-col gap-2">
         <span className="font-medium text-gray-700">Filter:</span>
@@ -153,7 +222,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
           <span className="text-xs text-gray-500">of the following conditions:</span>
         </div>
         {localFilters.map((filter, idx) => {
-          const fieldDef = FIELD_DEFS.find(f => f.name === filter.field) || FIELD_DEFS[0];
+          const fieldDef = FILTER_FIELD_DEFS.find(f => f.name === filter.field) || FILTER_FIELD_DEFS[0];
           const ops = OPERATORS[fieldDef.type as keyof typeof OPERATORS];
           // Single-choice value options
           const isStatus = filter.field === 'status';
@@ -180,7 +249,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                 value={filter.field}
                 onChange={e => handleFilterChange(idx, 'field', e.target.value)}
               >
-                {FIELD_DEFS.map(f => (
+                {FILTER_FIELD_DEFS.map(f => (
                   <option key={f.name} value={f.name}>{f.label}</option>
                 ))}
               </select>
