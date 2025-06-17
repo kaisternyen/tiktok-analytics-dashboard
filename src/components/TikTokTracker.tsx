@@ -9,7 +9,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
-import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 
 interface VideoHistory {
     time: string;
