@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
-import VideoFilterSortBar, { FilterCondition, SortCondition, FilterGroup } from './VideoFilterSortBar';
+import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 
 interface VideoHistory {
     time: string;
