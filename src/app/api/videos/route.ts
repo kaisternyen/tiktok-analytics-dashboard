@@ -52,7 +52,7 @@ const FIELD_TYPE_MAP: { [key: string]: string } = {
 interface VideoFilter {
   field: string;
   operator: string;
-  value: any;
+  value: string | number | boolean | null | Date | { start: string; end: string };
 }
 
 interface VideoSort {
@@ -70,10 +70,10 @@ function buildWhere(filters: VideoFilter[] = []): Record<string, unknown> {
     if (type === 'string') {
       switch (operator) {
         case 'contains':
-          where[field] = { contains: value, mode: 'insensitive' };
+          where[field] = { contains: value as string, mode: 'insensitive' };
           break;
         case 'does_not_contain':
-          where[field] = { not: { contains: value, mode: 'insensitive' } };
+          where[field] = { not: { contains: value as string, mode: 'insensitive' } };
           break;
         case 'is':
           where[field] = value;
@@ -118,22 +118,22 @@ function buildWhere(filters: VideoFilter[] = []): Record<string, unknown> {
     } else if (type === 'date') {
       switch (operator) {
         case 'is':
-          where[field] = new Date(value);
+          where[field] = value instanceof Date ? value : new Date(value as string);
           break;
         case 'is_before':
-          where[field] = { lt: new Date(value) };
+          where[field] = { lt: value instanceof Date ? value : new Date(value as string) };
           break;
         case 'is_after':
-          where[field] = { gt: new Date(value) };
+          where[field] = { gt: value instanceof Date ? value : new Date(value as string) };
           break;
         case 'is_on_or_before':
-          where[field] = { lte: new Date(value) };
+          where[field] = { lte: value instanceof Date ? value : new Date(value as string) };
           break;
         case 'is_on_or_after':
-          where[field] = { gte: new Date(value) };
+          where[field] = { gte: value instanceof Date ? value : new Date(value as string) };
           break;
         case 'is_not':
-          where[field] = { not: new Date(value) };
+          where[field] = { not: value instanceof Date ? value : new Date(value as string) };
           break;
         case 'is_empty':
           where[field] = null;
@@ -142,8 +142,12 @@ function buildWhere(filters: VideoFilter[] = []): Record<string, unknown> {
           where[field] = { not: null };
           break;
         case 'is_within':
-          // value: { start, end }
-          where[field] = { gte: new Date(value.start), lte: new Date(value.end) };
+          if (typeof value === 'object' && value !== null && 'start' in value && 'end' in value) {
+            where[field] = { 
+              gte: new Date(value.start), 
+              lte: new Date(value.end) 
+            };
+          }
           break;
       }
     }
