@@ -283,42 +283,48 @@ export async function GET(req: Request) {
 
             // In-memory filter on timeline-sliced metrics
             if (filterConditions.length > 0) {
-                const check = (video: FilteredVideoWithMetrics, cond: FilterCondition) => {
-                    let val: number | string | undefined;
-                    switch (cond.field) {
-                      case 'views': val = video.currentViews; break;
-                      case 'likes': val = video.currentLikes; break;
-                      case 'comments': val = video.currentComments; break;
-                      case 'shares': val = video.currentShares; break;
-                      default:
-                        if (typeof video[cond.field as keyof FilteredVideoWithMetrics] === 'number' || typeof video[cond.field as keyof FilteredVideoWithMetrics] === 'string') {
-                          val = video[cond.field as keyof FilteredVideoWithMetrics] as number | string;
-                        } else {
-                          val = undefined;
+                // Remove any filter on 'timeframe' (should not be applied in-memory)
+                const nonTimeframeConditions = filterConditions.filter(cond => cond.field !== 'timeframe');
+                if (nonTimeframeConditions.length > 0) {
+                    const check = (video: FilteredVideoWithMetrics, cond: FilterCondition) => {
+                        let val: number | string | undefined;
+                        switch (cond.field) {
+                          case 'views': val = video.currentViews; break;
+                          case 'likes': val = video.currentLikes; break;
+                          case 'comments': val = video.currentComments; break;
+                          case 'shares': val = video.currentShares; break;
+                          default:
+                            if (typeof video[cond.field as keyof FilteredVideoWithMetrics] === 'number' || typeof video[cond.field as keyof FilteredVideoWithMetrics] === 'string') {
+                              val = video[cond.field as keyof FilteredVideoWithMetrics] as number | string;
+                            } else {
+                              val = undefined;
+                            }
+                            break;
                         }
-                        break;
-                    }
-                    if (cond.value === null || cond.value === undefined) return true;
-                    if (val === undefined) return false;
-                    switch (cond.operator) {
-                        case '>': return val > cond.value;
-                        case '>=': return val >= cond.value;
-                        case '<': return val < cond.value;
-                        case '<=': return val <= cond.value;
-                        case '=':
-                        case 'is': return val === cond.value;
-                        case '≠':
-                        case 'is not': return val !== cond.value;
-                        default: return true;
-                    }
-                };
-                filteredVideos = filteredVideos.filter(video => {
-                    if (filterOperator === 'AND') {
-                        return filterConditions.every(cond => check(video, cond));
-                    } else {
-                        return filterConditions.some(cond => check(video, cond));
-                    }
-                });
+                        if (cond.value === null || cond.value === undefined) return true;
+                        if (val === undefined) return false;
+                        // Debug log
+                        console.log(`[Filter] Checking field: ${cond.field}, operator: ${cond.operator}, value: ${cond.value}, video value: ${val}`);
+                        switch (cond.operator) {
+                            case '>': return val > cond.value;
+                            case '>=': return val >= cond.value;
+                            case '<': return val < cond.value;
+                            case '<=': return val <= cond.value;
+                            case '=':
+                            case 'is': return val === cond.value;
+                            case '≠':
+                            case 'is not': return val !== cond.value;
+                            default: return true;
+                        }
+                    };
+                    filteredVideos = filteredVideos.filter(video => {
+                        if (filterOperator === 'AND') {
+                            return nonTimeframeConditions.every(cond => check(video, cond));
+                        } else {
+                            return nonTimeframeConditions.some(cond => check(video, cond));
+                        }
+                    });
+                }
             }
         }
 
