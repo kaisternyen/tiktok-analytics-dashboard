@@ -121,11 +121,14 @@ export async function GET(req: Request) {
         const url = new URL(req.url);
         const filterParam = url.searchParams.get('filter');
         const sortParam = url.searchParams.get('sort');
+        console.log('RAW filterParam:', filterParam);
         let where: Record<string, unknown> = { isActive: true };
         if (filterParam) {
             const parsed = parseFilters(filterParam);
+            console.log('PARSED filters:', parsed);
             if (parsed) where = { ...parsed, isActive: true };
         }
+        console.log('FINAL where clause:', where);
         const orderBy = parseSorts(sortParam) || [{ createdAt: 'desc' }];
         console.log('📋 Fetching videos from database with:', { where, orderBy });
         const videos = await prisma.video.findMany({
