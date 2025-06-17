@@ -283,9 +283,17 @@ export async function GET(req: Request) {
 
             // In-memory filter on timeline-sliced metrics
             if (filterConditions.length > 0) {
-                const check = (video: any, cond: FilterCondition) => {
-                    const val = video[`current${cond.field.charAt(0).toUpperCase() + cond.field.slice(1)}`] ?? video[cond.field];
+                const check = (video: FilteredVideoWithMetrics, cond: FilterCondition) => {
+                    let val: number | string | undefined;
+                    switch (cond.field) {
+                      case 'views': val = video.currentViews; break;
+                      case 'likes': val = video.currentLikes; break;
+                      case 'comments': val = video.currentComments; break;
+                      case 'shares': val = video.currentShares; break;
+                      default: val = (video as any)[cond.field]; // fallback for other fields
+                    }
                     if (cond.value === null || cond.value === undefined) return true;
+                    if (val === undefined) return false;
                     switch (cond.operator) {
                         case '>': return val > cond.value;
                         case '>=': return val >= cond.value;
