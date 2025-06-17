@@ -328,6 +328,38 @@ export async function GET(req: Request) {
             }
         }
 
+        let sortConditions: { field: string; order: 'asc' | 'desc' }[] = [];
+        if (decodedSortParam) {
+            try {
+                sortConditions = JSON.parse(decodedSortParam);
+            } catch {}
+        }
+        if (timeframe) {
+            // In-memory sort on timeline-sliced metrics
+            if (sortConditions.length > 0) {
+                filteredVideos.sort((a, b) => {
+                    for (const sort of sortConditions) {
+                        let aVal: number | string | undefined;
+                        let bVal: number | string | undefined;
+                        switch (sort.field) {
+                            case 'views': aVal = a.currentViews; bVal = b.currentViews; break;
+                            case 'likes': aVal = a.currentLikes; bVal = b.currentLikes; break;
+                            case 'comments': aVal = a.currentComments; bVal = b.currentComments; break;
+                            case 'shares': aVal = a.currentShares; bVal = b.currentShares; break;
+                            default:
+                                aVal = a[sort.field as keyof FilteredVideoWithMetrics] as number | string;
+                                bVal = b[sort.field as keyof FilteredVideoWithMetrics] as number | string;
+                                break;
+                        }
+                        if (aVal === undefined || bVal === undefined) return 0;
+                        if (aVal < bVal) return sort.order === 'asc' ? -1 : 1;
+                        if (aVal > bVal) return sort.order === 'asc' ? 1 : -1;
+                    }
+                    return 0;
+                });
+            }
+        }
+
         // Transform data for frontend
         const transformedVideos = filteredVideos.map((video) => {
             // Parse JSON fields
