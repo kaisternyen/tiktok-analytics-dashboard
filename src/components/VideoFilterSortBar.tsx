@@ -10,7 +10,7 @@ const FIELD_DEFS = [
   { name: 'currentLikes', label: 'Likes', type: 'number' },
   { name: 'currentComments', label: 'Comments', type: 'number' },
   { name: 'currentShares', label: 'Shares', type: 'number' },
-  { name: 'posted', label: 'Posted', type: 'date' },
+  { name: 'createdAt', label: 'Posted', type: 'date' },
   { name: 'lastUpdate', label: 'Last Updated', type: 'date' },
   { name: 'scrapingCadence', label: 'Cadence', type: 'text' },
 ];
