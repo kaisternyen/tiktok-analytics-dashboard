@@ -1033,7 +1033,7 @@ export default function TikTokTracker() {
                                                     >
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-3">
-                                                                {video.thumbnailUrl ? (
+                                                                {video.thumbnailUrl && typeof video.thumbnailUrl === 'string' && video.thumbnailUrl.trim() !== '' && video.thumbnailUrl.startsWith('http') ? (
                                                                     <div 
                                                                         className="relative w-10 h-14 cursor-pointer hover:opacity-80 transition-opacity"
                                                                         onClick={(e) => openVideoInNewTab(video.url, e)}
