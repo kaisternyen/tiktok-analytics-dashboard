@@ -99,6 +99,9 @@ export default function TikTokTracker() {
     const [filters, setFilters] = useState<FilterGroup>({ operator: 'AND', conditions: [] });
     const [sorts, setSorts] = useState<SortCondition[]>([]);
 
+    const [timelinePreset, setTimelinePreset] = useState<TimePeriod | 'CUSTOM'>('W');
+    const [customTimeframe, setCustomTimeframe] = useState<[string, string] | null>(null);
+
     const fetchVideos = useCallback(async (customFilters: FilterGroup = filters, customSorts = sorts) => {
         console.log('fetchVideos called with:', { customFilters, customSorts });
         try {
@@ -729,6 +732,38 @@ export default function TikTokTracker() {
     const commentsChartData = getVideoChartData('comments', showCommentsDelta);
     const sharesChartData = getVideoChartData('shares', showSharesDelta);
 
+    // Sync logic:
+    // When timelinePreset changes, update selectedTimePeriod and filters accordingly.
+    // When selectedTimePeriod changes (from aggregate graph), update timelinePreset unless it's 'CUSTOM'.
+    useEffect(() => {
+        if (timelinePreset !== 'CUSTOM') {
+            setSelectedTimePeriod(timelinePreset as TimePeriod);
+            setFilters((prev) => ({
+                ...prev,
+                conditions: prev.conditions.filter(f => f.field !== 'timeframe'),
+            }));
+        }
+    }, [timelinePreset]);
+
+    useEffect(() => {
+        if (selectedTimePeriod !== 'ALL' && timelinePreset !== selectedTimePeriod) {
+            setTimelinePreset(selectedTimePeriod);
+        }
+    }, [selectedTimePeriod]);
+
+    // When custom range is set, update filters with timeframe
+    useEffect(() => {
+        if (timelinePreset === 'CUSTOM' && customTimeframe) {
+            setFilters((prev) => ({
+                ...prev,
+                conditions: [
+                    ...prev.conditions.filter(f => f.field !== 'timeframe'),
+                    { field: 'timeframe', operator: 'is on or after', value: customTimeframe },
+                ],
+            }));
+        }
+    }, [timelinePreset, customTimeframe]);
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
@@ -898,19 +933,39 @@ export default function TikTokTracker() {
                                             </h3>
                                             <div className="flex items-center gap-2">
                                                 {/* Time Period Selector */}
-                                                <div className="flex border border-gray-200 rounded-md">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="text-xs text-gray-500">Timeline:</span>
                                                     {(['D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
                                                         <button
                                                             key={period}
-                                                            onClick={() => setSelectedTimePeriod(period)}
-                                                            className={`px-3 py-1 text-xs font-medium transition-colors ${selectedTimePeriod === period
+                                                            onClick={() => {
+                                                                setTimelinePreset(period);
+                                                                setSelectedTimePeriod(period);
+                                                                setFilters((prev) => ({
+                                                                    ...prev,
+                                                                    conditions: prev.conditions.filter(f => f.field !== 'timeframe'),
+                                                                }));
+                                                            }}
+                                                            className={`px-3 py-1 text-xs font-medium transition-colors ${timelinePreset === period
                                                                 ? 'bg-blue-500 text-white'
                                                                 : 'text-gray-600 hover:bg-gray-100'
-                                                                } first:rounded-l-md last:rounded-r-md`}
+                                                                } first:rounded-l-md`}
                                                         >
                                                             {period}
                                                         </button>
                                                     ))}
+                                                    <button
+                                                        onClick={() => {
+                                                            setTimelinePreset('CUSTOM');
+                                                            setSelectedTimePeriod('ALL');
+                                                        }}
+                                                        className={`px-3 py-1 text-xs font-medium transition-colors ${timelinePreset === 'CUSTOM'
+                                                            ? 'bg-blue-500 text-white'
+                                                            : 'text-gray-600 hover:bg-gray-100'
+                                                            } rounded-r-md`}
+                                                    >
+                                                        Custom
+                                                    </button>
                                                 </div>
                                                 {/* Delta Toggle */}
                                                 <Button
