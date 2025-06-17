@@ -99,7 +99,6 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
 
   // Update parent on any change
   useEffect(() => {
-    let combinedFilters: FilterGroup;
     const hasTimeframe = timeframe && timeframe[0] && timeframe[1];
     const hasFilters = localFilters.length > 0;
     let conditions: FilterCondition[] = [];
@@ -109,7 +108,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
     if (hasFilters) {
       conditions = conditions.concat(localFilters);
     }
-    combinedFilters = {
+    const combinedFilters: FilterGroup = {
       operator: 'AND',
       conditions
     };
