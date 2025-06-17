@@ -288,34 +288,53 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
       {/* Sort Bar */}
       <div className="flex flex-col gap-2">
         <span className="font-medium text-gray-700">Sort:</span>
-        {localSorts.map((sort, idx) => (
-          <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
-            <select
-              className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-              value={sort.field}
-              onChange={e => handleSortChange(idx, 'field', e.target.value)}
-            >
-              {FIELD_DEFS.map(f => (
-                <option key={f.name} value={f.name}>{f.label}</option>
-              ))}
-            </select>
-            <select
-              className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-              value={sort.order}
-              onChange={e => handleSortChange(idx, 'order', e.target.value as 'asc' | 'desc')}
-            >
-              <option value="asc">A → Z / 0 → 9</option>
-              <option value="desc">Z → A / 9 → 0</option>
-            </select>
-            <button
-              className="ml-1 text-xs text-gray-400 hover:text-red-500"
-              onClick={() => handleRemoveSort(idx)}
-              title="Remove sort"
-            >
-              ×
-            </button>
-          </div>
-        ))}
+        {localSorts.map((sort, idx) => {
+          const fieldDef = FIELD_DEFS.find(f => f.name === sort.field) || FIELD_DEFS[0];
+          let orderOptions = [
+            { value: 'asc', label: 'A → Z' },
+            { value: 'desc', label: 'Z → A' },
+          ];
+          if (fieldDef.type === 'number') {
+            orderOptions = [
+              { value: 'asc', label: 'Lowest to Highest' },
+              { value: 'desc', label: 'Highest to Lowest' },
+            ];
+          } else if (fieldDef.type === 'date') {
+            orderOptions = [
+              { value: 'asc', label: 'First to Last' },
+              { value: 'desc', label: 'Last to First' },
+            ];
+          }
+          return (
+            <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
+              <select
+                className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+                value={sort.field}
+                onChange={e => handleSortChange(idx, 'field', e.target.value)}
+              >
+                {FIELD_DEFS.map(f => (
+                  <option key={f.name} value={f.name}>{f.label}</option>
+                ))}
+              </select>
+              <select
+                className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+                value={sort.order}
+                onChange={e => handleSortChange(idx, 'order', e.target.value as 'asc' | 'desc')}
+              >
+                {orderOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <button
+                className="ml-1 text-xs text-gray-400 hover:text-red-500"
+                onClick={() => handleRemoveSort(idx)}
+                title="Remove sort"
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
         <button
           className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 self-start"
           onClick={handleAddSort}
