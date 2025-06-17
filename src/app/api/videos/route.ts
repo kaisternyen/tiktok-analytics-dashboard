@@ -54,32 +54,38 @@ function parseFilters(filterParam: string | null): Record<string, unknown> | und
         for (const filter of conditions) {
             const { field, operator: op, value } = filter;
             const condition: Record<string, unknown> = {};
+            // Convert string date values to Date objects for date fields
+            const dateFields = ['createdAt', 'lastUpdate'];
+            let filterValue = value;
+            if (dateFields.includes(field) && typeof value === 'string' && value) {
+                filterValue = new Date(value);
+            }
             switch (op) {
                 case '=':
                 case 'is':
-                    condition[field] = value;
+                    condition[field] = filterValue;
                     break;
                 case '≠':
                 case 'is not':
-                    condition[field] = { not: value };
+                    condition[field] = { not: filterValue };
                     break;
                 case '<':
-                    condition[field] = { lt: value };
+                    condition[field] = { lt: filterValue };
                     break;
                 case '≤':
-                    condition[field] = { lte: value };
+                    condition[field] = { lte: filterValue };
                     break;
                 case '>':
-                    condition[field] = { gt: value };
+                    condition[field] = { gt: filterValue };
                     break;
                 case '≥':
-                    condition[field] = { gte: value };
+                    condition[field] = { gte: filterValue };
                     break;
                 case 'contains':
-                    condition[field] = { contains: value, mode: 'insensitive' };
+                    condition[field] = { contains: filterValue, mode: 'insensitive' };
                     break;
                 case 'does not contain':
-                    condition[field] = { not: { contains: value, mode: 'insensitive' } };
+                    condition[field] = { not: { contains: filterValue, mode: 'insensitive' } };
                     break;
                 case 'is empty':
                     condition[field] = null;
@@ -88,20 +94,20 @@ function parseFilters(filterParam: string | null): Record<string, unknown> | und
                     condition[field] = { not: null };
                     break;
                 case 'is before':
-                    condition[field] = { lt: value };
+                    condition[field] = { lt: filterValue };
                     break;
                 case 'is after':
-                    condition[field] = { gt: value };
+                    condition[field] = { gt: filterValue };
                     break;
                 case 'is on or before':
-                    condition[field] = { lte: value };
+                    condition[field] = { lte: filterValue };
                     break;
                 case 'is on or after':
-                    condition[field] = { gte: value };
+                    condition[field] = { gte: filterValue };
                     break;
                 case 'is within':
-                    if (Array.isArray(value) && value.length === 2) {
-                        condition[field] = { gte: value[0], lte: value[1] };
+                    if (Array.isArray(filterValue) && filterValue.length === 2) {
+                        condition[field] = { gte: filterValue[0], lte: filterValue[1] };
                     }
                     break;
                 default:

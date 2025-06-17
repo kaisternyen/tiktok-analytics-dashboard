@@ -197,22 +197,31 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                       type="date"
                       className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
                       value={Array.isArray(filter.value) ? String(filter.value[0] ?? '') : ''}
-                      onChange={e => handleFilterChange(idx, 'value', [e.target.value, Array.isArray(filter.value) ? String(filter.value[1] ?? '') : ''])}
+                      onChange={e => {
+                        const iso = e.target.value ? new Date(e.target.value).toISOString() : '';
+                        handleFilterChange(idx, 'value', [iso, Array.isArray(filter.value) ? String(filter.value[1] ?? '') : '']);
+                      }}
                     />
                     <span className="mx-1 text-xs">to</span>
                     <input
                       type="date"
                       className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
                       value={Array.isArray(filter.value) ? String(filter.value[1] ?? '') : ''}
-                      onChange={e => handleFilterChange(idx, 'value', [Array.isArray(filter.value) ? String(filter.value[0] ?? '') : '', e.target.value])}
+                      onChange={e => {
+                        const iso = e.target.value ? new Date(e.target.value).toISOString() : '';
+                        handleFilterChange(idx, 'value', [Array.isArray(filter.value) ? String(filter.value[0] ?? '') : '', iso]);
+                      }}
                     />
                   </>
                 ) : fieldDef.type === 'date' ? (
                   <input
                     type="date"
                     className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-                    value={typeof filter.value === 'string' ? filter.value : ''}
-                    onChange={e => handleFilterChange(idx, 'value', e.target.value)}
+                    value={typeof filter.value === 'string' ? filter.value.split('T')[0] : ''}
+                    onChange={e => {
+                      const iso = e.target.value ? new Date(e.target.value).toISOString() : '';
+                      handleFilterChange(idx, 'value', iso);
+                    }}
                   />
                 ) : fieldDef.type === 'number' ? (
                   <input

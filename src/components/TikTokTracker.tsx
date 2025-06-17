@@ -1015,6 +1015,7 @@ export default function TikTokTracker() {
                                                     <th className="text-left p-4 font-medium text-gray-900">Comments</th>
                                                     <th className="text-left p-4 font-medium text-gray-900">Shares</th>
                                                     <th className="text-left p-4 font-medium text-gray-900">Growth</th>
+                                                    <th className="text-left p-4 font-medium text-gray-900">Posted</th>
                                                     <th className="text-left p-4 font-medium text-gray-900">Cadence</th>
                                                     <th className="text-left p-4 font-medium text-gray-900">Status</th>
                                                     <th className="text-left p-4 font-medium text-gray-900">Actions</th>
@@ -1108,6 +1109,7 @@ export default function TikTokTracker() {
                                                             {video.platform === 'instagram' || video.platform === 'youtube' ? 'N/A' : formatNumber(video.shares)}
                                                         </td>
                                                         <td className="p-4">{formatGrowth(video.growth.views)}</td>
+                                                        <td className="p-4">{new Date(video.posted).toLocaleDateString()}</td>
                                                         <td className="p-4">
                                                             <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                                                                 video.scrapingCadence === 'hourly' 
