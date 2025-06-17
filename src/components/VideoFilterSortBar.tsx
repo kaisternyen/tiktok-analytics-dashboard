@@ -107,7 +107,8 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
   const [pendingSnapValue, setPendingSnapValue] = useState<[string, string] | null>(null);
   const [prevValue, setPrevValue] = useState<[string, string] | null>(null);
   // Extract timeframe filter from filters
-  const initialTimeframe = filters.conditions.find(f => f.field === 'timeframe' && Array.isArray(f.value))?.value as [string, string] | undefined;
+  const allConditions: FilterCondition[] = extractFilterConditions(filters.conditions);
+  const initialTimeframe = allConditions.find(f => f.field === 'timeframe' && Array.isArray(f.value))?.value as [string, string] | undefined;
   const [timeframe, setTimeframe] = useState<[string, string] | undefined>(initialTimeframe);
 
   // Sync localSorts with parent prop
