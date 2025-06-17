@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
-import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
+import VideoFilterSortBar, { SortCondition, FilterGroup, FilterCondition } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
 
 interface VideoHistory {
@@ -76,6 +76,17 @@ interface ChartDataPoint {
 
 type TimePeriod = 'D' | 'W' | 'M' | '3M' | '1Y' | 'ALL';
 
+// Utility to extract only FilterCondition objects from a (possibly nested) conditions array
+function extractFilterConditions(conditions: (FilterCondition | FilterGroup)[]): FilterCondition[] {
+  return conditions.flatMap((cond): FilterCondition[] =>
+    (typeof cond === 'object' && 'field' in cond)
+      ? [cond as FilterCondition]
+      : (typeof cond === 'object' && 'conditions' in cond)
+        ? extractFilterConditions((cond as FilterGroup).conditions)
+        : []
+  );
+}
+
 export default function TikTokTracker() {
     const [videoUrl, setVideoUrl] = useState("");
     const [tracked, setTracked] = useState<TrackedVideo[]>([]);
@@ -116,8 +127,9 @@ export default function TikTokTracker() {
             const response = await fetch(apiUrl);
             const result = await response.json();
 
-            // Extract timeframe filter if present
-            const timeframeFilter = customFilters.conditions.find(f => f.field === 'timeframe' && Array.isArray(f.value) && f.value[0] && f.value[1]);
+            // Extract timeframe filter from filters
+            const allFilterConditions: FilterCondition[] = extractFilterConditions(customFilters.conditions);
+            const timeframeFilter = allFilterConditions.find(f => f.field === 'timeframe' && Array.isArray(f.value) && f.value[0] && f.value[1]);
             let timeframeStart: Date | null = null;
             let timeframeEnd: Date | null = null;
             if (timeframeFilter && Array.isArray(timeframeFilter.value) && typeof timeframeFilter.value[0] === 'string' && typeof timeframeFilter.value[1] === 'string') {
@@ -514,7 +526,8 @@ export default function TikTokTracker() {
         if (tracked.length === 0) return [];
 
         // Extract timeframe filter from filters
-        const timeframeFilter = filters.conditions.find(f => f.field === 'timeframe' && Array.isArray(f.value) && f.value[0] && f.value[1]);
+        const allFilterConditions: FilterCondition[] = extractFilterConditions(filters.conditions);
+        const timeframeFilter = allFilterConditions.find(f => f.field === 'timeframe' && Array.isArray(f.value) && f.value[0] && f.value[1]);
         let timeframeStart: Date | null = null;
         let timeframeEnd: Date | null = null;
         if (timeframeFilter && Array.isArray(timeframeFilter.value) && typeof timeframeFilter.value[0] === 'string' && typeof timeframeFilter.value[1] === 'string') {
