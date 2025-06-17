@@ -156,6 +156,54 @@ function parseSorts(sortParam: string | null): Array<Record<string, 'asc' | 'des
     }
 }
 
+// Move VideoWithMetrics type to top-level for reuse
+type VideoWithMetrics = {
+    id: string;
+    url: string;
+    username: string;
+    description: string;
+    thumbnailUrl: string | null;
+    createdAt: Date;
+    lastScrapedAt: Date;
+    isActive: boolean;
+    currentViews: number;
+    currentLikes: number;
+    currentComments: number;
+    currentShares: number;
+    hashtags: string | null;
+    music: string | null;
+    platform: string | null;
+    scrapingCadence: string | null;
+    metricsHistory: Array<{
+        timestamp: Date;
+        views: number;
+        likes: number;
+        comments: number;
+        shares: number;
+    }>;
+};
+
+// For raw query, define a type matching the DB fields (no metricsHistory)
+type VideoRaw = {
+    id: string;
+    url: string;
+    username: string;
+    description: string;
+    thumbnailUrl: string | null;
+    createdAt: Date;
+    lastScrapedAt: Date;
+    isActive: boolean;
+    currentViews: number;
+    currentLikes: number;
+    currentComments: number;
+    currentShares: number;
+    hashtags: string | null;
+    music: string | null;
+    platform: string | null;
+    scrapingCadence: string | null;
+    // No metricsHistory in raw query
+};
+
 export async function GET(req: Request) {
     try {
         await runMigrationIfNeeded();
@@ -182,11 +230,11 @@ export async function GET(req: Request) {
             useRawOrderBy = true;
             usernameOrder = orderBy[0]['username'];
         }
-        let videos: any[];
+        let videos: VideoWithMetrics[] | VideoRaw[];
         if (useRawOrderBy && usernameOrder) {
             // Case-insensitive sort for username (Postgres syntax)
-            videos = await prisma.$queryRaw`SELECT * FROM "videos" WHERE "isActive" = true ORDER BY LOWER("username") ${usernameOrder === 'asc' ? 'ASC' : 'DESC'}` as any[];
             // Note: This bypasses Prisma's include/transform logic. You may need to manually join metricsHistory if needed.
+            videos = await prisma.$queryRaw<VideoRaw[]>`SELECT * FROM "videos" WHERE "isActive" = true ORDER BY LOWER("username") ${usernameOrder === 'asc' ? 'ASC' : 'DESC'}`;
         } else {
             videos = await prisma.video.findMany({
                 where,
@@ -203,38 +251,15 @@ export async function GET(req: Request) {
         console.log(`✅ Found ${videos.length} videos in database`);
 
         // Transform data for frontend
-        type VideoWithMetrics = {
-            id: string;
-            url: string;
-            username: string;
-            description: string;
-            thumbnailUrl: string | null;
-            createdAt: Date;
-            lastScrapedAt: Date;
-            isActive: boolean;
-            currentViews: number;
-            currentLikes: number;
-            currentComments: number;
-            currentShares: number;
-            hashtags: string | null;
-            music: string | null;
-            platform: string | null;
-            scrapingCadence: string | null;
-            metricsHistory: Array<{
-                timestamp: Date;
-                views: number;
-                likes: number;
-                comments: number;
-                shares: number;
-            }>;
-        };
-        const transformedVideos = videos.map((video: VideoWithMetrics) => {
+        const transformedVideos = (videos as (VideoWithMetrics | VideoRaw)[]).map((video) => {
+            // If metricsHistory is missing (raw query), add empty array
+            const metricsHistory = 'metricsHistory' in video && video.metricsHistory ? video.metricsHistory : [];
             // Parse JSON fields
             const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
             const music = video.music ? JSON.parse(video.music) : null;
 
             // Calculate growth from last 2 data points
-            const history = video.metricsHistory;
+            const history = metricsHistory;
             let growth = { views: 0, likes: 0, comments: 0, shares: 0 };
 
             if (history.length >= 2) {
