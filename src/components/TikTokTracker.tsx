@@ -1619,8 +1619,8 @@ export default function TikTokTracker() {
                 </Tabs>
             </div>
             {showFilterModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-                    <div className="bg-white p-4 rounded-lg shadow-xl w-full max-w-md mx-auto" style={{ minWidth: 340 }}>
+                <div className="absolute z-50 left-0 mt-2 ml-2" style={{ minWidth: 340, width: 360 }}>
+                    <div className="bg-white p-4 rounded-lg shadow-xl border border-gray-200" style={{ minWidth: 320 }}>
                         <h2 className="font-bold mb-3 text-lg">Add Filter</h2>
                         <div className="flex flex-col gap-3 mb-4">
                             {/* Field Dropdown */}
