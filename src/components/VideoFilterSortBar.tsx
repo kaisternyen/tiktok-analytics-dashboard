@@ -47,8 +47,7 @@ const OPERATORS = {
     { value: 'is not empty', label: 'is not empty' },
   ],
   datetime: [
-    { value: 'is on or after', label: 'on and after...' },
-    { value: 'is on or before', label: 'on and before...' },
+    { value: 'is on or after', label: 'from...' },
   ],
 };
 
@@ -78,6 +77,10 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
   const [localOperator, setLocalOperator] = useState<FilterOperator>(filters.operator || 'AND');
   const [localFilters, setLocalFilters] = useState<FilterCondition[]>(filters.conditions || []);
   const [localSorts, setLocalSorts] = useState<SortCondition[]>(sorts);
+  const [showSnapModal, setShowSnapModal] = useState(false);
+  const [pendingSnapIdx, setPendingSnapIdx] = useState<number | null>(null);
+  const [pendingSnapValue, setPendingSnapValue] = useState<[string, string] | null>(null);
+  const [prevValue, setPrevValue] = useState<[string, string] | null>(null);
 
   // Sync localSorts with parent prop
   useEffect(() => {
@@ -290,25 +293,100 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                   <>
                     <input
                       type="datetime-local"
+                      step="3600"
                       className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-                      value={Array.isArray(filter.value) ? (typeof filter.value[0] === 'string' ? filter.value[0].slice(0, 16) : '') : ''}
+                      value={Array.isArray(filter.value) ? (typeof filter.value[0] === 'string' ? filter.value[0].slice(0, 13) + ':00' : '') : ''}
                       onChange={e => {
-                        const iso = e.target.value ? new Date(e.target.value).toISOString() : '';
-                        handleFilterChange(idx, 'value', [iso, Array.isArray(filter.value) && typeof filter.value[1] === 'string' ? filter.value[1] : '']);
+                        // Snap to top of the hour
+                        const d = new Date(e.target.value);
+                        d.setMinutes(0, 0, 0);
+                        const iso = d.toISOString();
+                        const end = Array.isArray(filter.value) && typeof filter.value[1] === 'string' ? filter.value[1] : '';
+                        const newValue: [string, string] = [iso, end];
+                        // Check if range > 24h
+                        if (end && Math.abs(new Date(end).getTime() - d.getTime()) > 24*60*60*1000) {
+                          setShowSnapModal(true);
+                          setPendingSnapIdx(idx);
+                          setPendingSnapValue(newValue);
+                          setPrevValue([Array.isArray(filter.value) && typeof filter.value[0] === 'string' ? filter.value[0] : '', end]);
+                        } else {
+                          handleFilterChange(idx, 'value', newValue);
+                        }
                       }}
                       required
                     />
                     <span className="mx-1 text-xs">to</span>
                     <input
                       type="datetime-local"
+                      step="3600"
                       className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-                      value={Array.isArray(filter.value) ? (typeof filter.value[1] === 'string' ? filter.value[1].slice(0, 16) : '') : ''}
+                      value={Array.isArray(filter.value) ? (typeof filter.value[1] === 'string' ? filter.value[1].slice(0, 13) + ':00' : '') : ''}
                       onChange={e => {
-                        const iso = e.target.value ? new Date(e.target.value).toISOString() : '';
-                        handleFilterChange(idx, 'value', [Array.isArray(filter.value) && typeof filter.value[0] === 'string' ? filter.value[0] : '', iso]);
+                        // Snap to top of the hour
+                        const d = new Date(e.target.value);
+                        d.setMinutes(0, 0, 0);
+                        const iso = d.toISOString();
+                        const start = Array.isArray(filter.value) && typeof filter.value[0] === 'string' ? filter.value[0] : '';
+                        const newValue: [string, string] = [start, iso];
+                        // Check if range > 24h
+                        if (start && Math.abs(new Date(iso).getTime() - new Date(start).getTime()) > 24*60*60*1000) {
+                          setShowSnapModal(true);
+                          setPendingSnapIdx(idx);
+                          setPendingSnapValue(newValue);
+                          setPrevValue([start, Array.isArray(filter.value) && typeof filter.value[1] === 'string' ? filter.value[1] : '']);
+                        } else {
+                          handleFilterChange(idx, 'value', newValue);
+                        }
                       }}
                       required
                     />
+                    {/* Snap Modal */}
+                    {showSnapModal && pendingSnapIdx === idx && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+                        <div className="bg-white rounded-lg shadow-lg p-6 w-80 flex flex-col items-center">
+                          <div className="mb-4 text-center">
+                            <div className="font-semibold mb-2">Range exceeds 24 hours</div>
+                            <div className="text-sm text-gray-600">Convert to daily? This will snap both dates to 12:00 AM.</div>
+                          </div>
+                          <div className="flex gap-4">
+                            <button
+                              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                              onClick={() => {
+                                // Snap both to 12:00 AM
+                                if (pendingSnapValue) {
+                                  const start = new Date(pendingSnapValue[0]);
+                                  const end = new Date(pendingSnapValue[1]);
+                                  start.setHours(0, 0, 0, 0);
+                                  end.setHours(0, 0, 0, 0);
+                                  handleFilterChange(idx, 'value', [start.toISOString(), end.toISOString()]);
+                                }
+                                setShowSnapModal(false);
+                                setPendingSnapIdx(null);
+                                setPendingSnapValue(null);
+                                setPrevValue(null);
+                              }}
+                            >
+                              Convert to daily
+                            </button>
+                            <button
+                              className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                              onClick={() => {
+                                // Revert to previous value
+                                if (prevValue) {
+                                  handleFilterChange(idx, 'value', prevValue);
+                                }
+                                setShowSnapModal(false);
+                                setPendingSnapIdx(null);
+                                setPendingSnapValue(null);
+                                setPrevValue(null);
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <input
