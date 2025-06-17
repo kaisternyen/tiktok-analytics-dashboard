@@ -45,10 +45,9 @@ function parseFilters(filterParam: string | null): Record<string, unknown> | und
         type FilterValue = string | number | boolean | null | string[] | number[] | Date | Date[];
         // Accept new format: { operator: 'AND' | 'OR', conditions: [...] }
         const parsed = JSON.parse(filterParam);
-        let operator = 'AND';
+        const operator = parsed.operator;
         let conditions: Array<{ field: string; operator: string; value: FilterValue }> = [];
         if (parsed && typeof parsed === 'object' && parsed.operator && Array.isArray(parsed.conditions)) {
-            operator = parsed.operator;
             conditions = parsed.conditions;
         } else if (Array.isArray(parsed)) {
             // fallback for old array format
