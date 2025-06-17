@@ -201,179 +201,98 @@ export async function GET(req: Request) {
         const sortParam = url.searchParams.get('sort');
         const decodedFilterParam = filterParam ? decodeURIComponent(filterParam) : null;
         const decodedSortParam = sortParam ? decodeURIComponent(sortParam) : null;
-        console.log('RAW filterParam:', filterParam);
-        let where: Record<string, unknown> = { isActive: true };
+        let filterGroup: { operator: string; conditions: FilterCondition[] } = { operator: 'AND', conditions: [] };
         let timeframe: [string, string] | null = null;
-        let filterParamToParse = decodedFilterParam;
         if (decodedFilterParam) {
             const parsed = JSON.parse(decodedFilterParam);
-            // Extract timeframe filter if present
-            if (parsed && parsed.conditions) {
-                const tf = parsed.conditions.find((f: FilterCondition) => f.field === 'timeframe');
-                if (tf && Array.isArray(tf.value) && tf.value.length === 2 && tf.value[0] && tf.value[1]) {
-                    timeframe = [tf.value[0], tf.value[1]];
-                    // Remove timeframe from conditions before passing to parseFilters
-                    parsed.conditions = parsed.conditions.filter((f: FilterCondition) => f.field !== 'timeframe');
-                    filterParamToParse = JSON.stringify(parsed);
-                }
+            if (parsed && parsed.timeframe && Array.isArray(parsed.timeframe) && parsed.timeframe[0] && parsed.timeframe[1]) {
+                timeframe = [parsed.timeframe[0], parsed.timeframe[1]];
             }
-            const parsedFilters = parseFilters(filterParamToParse);
-            console.log('PARSED filters:', parsedFilters);
-            if (parsedFilters) where = { ...parsedFilters, isActive: true };
+            if (parsed && parsed.operator && Array.isArray(parsed.conditions)) {
+                filterGroup = { operator: parsed.operator, conditions: parsed.conditions };
+            }
         }
-        console.log('FINAL where clause:', where);
+        // Build DB where clause for non-history fields
+        const dbFilters = filterGroup.conditions.filter(f => !['currentViews','currentLikes','currentComments','currentShares'].includes(f.field));
+        const dbFilterGroup = { operator: filterGroup.operator, conditions: dbFilters };
+        const where = parseFilters(JSON.stringify(dbFilterGroup)) || { isActive: true };
+        where.isActive = true;
         const orderBy = parseSorts(decodedSortParam) || [{ createdAt: 'desc' }];
-        console.log('📋 Fetching videos from database with:', { where, orderBy });
         const videos = await prisma.video.findMany({
             where,
             include: {
                 metricsHistory: {
-                    orderBy: { timestamp: 'desc' },
+                    orderBy: { timestamp: 'asc' },
                     take: 48
                 }
             },
             orderBy
         });
-
-        console.log(`✅ Found ${videos.length} videos in database`);
-
-        // If timeframe filter is present, filter metricsHistory and videos accordingly
-        let filteredVideos: FilteredVideoWithMetrics[] = videos;
-        let filterConditions: FilterCondition[] = [];
-        let filterOperator: 'AND' | 'OR' = 'AND';
-        if (decodedFilterParam) {
-            const parsed = JSON.parse(decodedFilterParam);
-            if (parsed && parsed.conditions) {
-                filterConditions = parsed.conditions;
-                filterOperator = parsed.operator || 'AND';
-            }
-        }
-        if (timeframe) {
-            const [start, end] = timeframe;
-            filteredVideos = videos.map((video) => {
-                const filteredHistory = video.metricsHistory.map((h) => ({
-                  timestamp: h.timestamp,
-                  views: h.views,
-                  likes: h.likes,
-                  comments: h.comments,
-                  shares: h.shares
-                })).filter((h: MetricsHistoryPoint) => {
+        // Slice metricsHistory by timeframe
+        let filteredVideos = videos.map((video) => {
+            let filteredHistory = video.metricsHistory;
+            if (timeframe) {
+                const [start, end] = timeframe;
+                filteredHistory = filteredHistory.filter((h: MetricsHistoryPoint) => {
                     const t = new Date(h.timestamp).getTime();
                     return t >= new Date(start).getTime() && t <= new Date(end).getTime();
                 });
-                // Compute delta for each metric in the timeframe
-                let currentViews = 0, currentLikes = 0, currentComments = 0, currentShares = 0;
-                if (filteredHistory.length > 1) {
-                    const sorted = [...filteredHistory].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-                    const first = sorted[0];
-                    const last = sorted[sorted.length - 1];
-                    currentViews = last.views - first.views;
-                    currentLikes = last.likes - first.likes;
-                    currentComments = last.comments - first.comments;
-                    currentShares = last.shares - first.shares;
-                } else if (filteredHistory.length === 1) {
-                    // Only one point in range, treat as no change
-                    currentViews = 0;
-                    currentLikes = 0;
-                    currentComments = 0;
-                    currentShares = 0;
-                }
-                return { ...video, metricsHistory: filteredHistory, currentViews, currentLikes, currentComments, currentShares };
-            }).filter((video) => video.metricsHistory.length > 0);
-
-            // In-memory filter on timeline-sliced metrics
-            if (filterConditions.length > 0) {
-                // Remove any filter on 'timeframe' (should not be applied in-memory)
-                const nonTimeframeConditions = filterConditions.filter(cond => cond.field !== 'timeframe');
-                if (nonTimeframeConditions.length > 0) {
-                    const check = (video: FilteredVideoWithMetrics, cond: FilterCondition) => {
-                        let val: number | string | undefined;
-                        switch (cond.field) {
-                          case 'views': val = video.currentViews; break;
-                          case 'likes': val = video.currentLikes; break;
-                          case 'comments': val = video.currentComments; break;
-                          case 'shares': val = video.currentShares; break;
-                          default:
-                            if (typeof video[cond.field as keyof FilteredVideoWithMetrics] === 'number' || typeof video[cond.field as keyof FilteredVideoWithMetrics] === 'string') {
-                              val = video[cond.field as keyof FilteredVideoWithMetrics] as number | string;
-                            } else {
-                              val = undefined;
-                            }
-                            break;
-                        }
-                        if (cond.value === null || cond.value === undefined) return true;
-                        if (val === undefined) return false;
-                        // Debug log
-                        console.log(`[Filter] Checking field: ${cond.field}, operator: ${cond.operator}, value: ${cond.value}, video value: ${val}`);
-                        switch (cond.operator) {
-                            case '>': return val > cond.value;
-                            case '>=': return val >= cond.value;
-                            case '<': return val < cond.value;
-                            case '<=': return val <= cond.value;
-                            case '=':
-                            case 'is': return val === cond.value;
-                            case '≠':
-                            case 'is not': return val !== cond.value;
-                            default: return true;
-                        }
-                    };
-                    filteredVideos = filteredVideos.filter(video => {
-                        if (filterOperator === 'AND') {
-                            return nonTimeframeConditions.every(cond => check(video, cond));
-                        } else {
-                            return nonTimeframeConditions.some(cond => check(video, cond));
-                        }
+            }
+            return { ...video, metricsHistory: filteredHistory };
+        }).filter((video) => video.metricsHistory.length > 0);
+        // Apply history-based filters (e.g., likes > 1000) to the sliced history
+        const historyFilters = filterGroup.conditions.filter(f => ['currentViews','currentLikes','currentComments','currentShares'].includes(f.field));
+        if (historyFilters.length > 0) {
+            filteredVideos = filteredVideos.filter(video => {
+                const last = video.metricsHistory[video.metricsHistory.length - 1];
+                if (!last) return false;
+                return historyFilters.every(f => {
+                    const val =
+                        f.field === 'currentViews' ? last.views :
+                        f.field === 'currentLikes' ? last.likes :
+                        f.field === 'currentComments' ? last.comments :
+                        f.field === 'currentShares' ? last.shares : undefined;
+                    if (typeof val !== 'number' || typeof f.value !== 'number') return false;
+                    switch (f.operator) {
+                        case '>': return val > f.value;
+                        case '>=': return val >= f.value;
+                        case '<': return val < f.value;
+                        case '<=': return val <= f.value;
+                        case '=':
+                        case 'is': return val === f.value;
+                        case '≠':
+                        case 'is not': return val !== f.value;
+                        default: return true;
+                    }
+                });
+            });
+        }
+        // Apply sorting to the filtered videos based on the last value in the sliced history
+        if (orderBy && orderBy.length > 0) {
+            for (const sort of orderBy) {
+                const field = Object.keys(sort)[0];
+                const dir = sort[field];
+                if (["currentViews","currentLikes","currentComments","currentShares"].includes(field)) {
+                    filteredVideos = filteredVideos.sort((a, b) => {
+                        const aLast = a.metricsHistory[a.metricsHistory.length - 1];
+                        const bLast = b.metricsHistory[b.metricsHistory.length - 1];
+                        const aVal = field === 'currentViews' ? aLast?.views : field === 'currentLikes' ? aLast?.likes : field === 'currentComments' ? aLast?.comments : aLast?.shares;
+                        const bVal = field === 'currentViews' ? bLast?.views : field === 'currentLikes' ? bLast?.likes : field === 'currentComments' ? bLast?.comments : bLast?.shares;
+                        if (aVal === undefined || bVal === undefined) return 0;
+                        return dir === 'desc' ? bVal - aVal : aVal - bVal;
                     });
                 }
             }
         }
-
-        let sortConditions: { field: string; order: 'asc' | 'desc' }[] = [];
-        if (decodedSortParam) {
-            try {
-                sortConditions = JSON.parse(decodedSortParam);
-            } catch {}
-        }
-        if (timeframe) {
-            // In-memory sort on timeline-sliced metrics
-            if (sortConditions.length > 0) {
-                filteredVideos.sort((a, b) => {
-                    for (const sort of sortConditions) {
-                        let aVal: number | string | undefined;
-                        let bVal: number | string | undefined;
-                        switch (sort.field) {
-                            case 'views': aVal = a.currentViews; bVal = b.currentViews; break;
-                            case 'likes': aVal = a.currentLikes; bVal = b.currentLikes; break;
-                            case 'comments': aVal = a.currentComments; bVal = b.currentComments; break;
-                            case 'shares': aVal = a.currentShares; bVal = b.currentShares; break;
-                            default:
-                                aVal = a[sort.field as keyof FilteredVideoWithMetrics] as number | string;
-                                bVal = b[sort.field as keyof FilteredVideoWithMetrics] as number | string;
-                                break;
-                        }
-                        if (aVal === undefined || bVal === undefined) return 0;
-                        if (aVal < bVal) return sort.order === 'asc' ? -1 : 1;
-                        if (aVal > bVal) return sort.order === 'asc' ? 1 : -1;
-                    }
-                    return 0;
-                });
-            }
-        }
-
         // Transform data for frontend
         const transformedVideos = filteredVideos.map((video) => {
-            // Parse JSON fields
             const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
             const music = video.music ? JSON.parse(video.music) : null;
-
-            // Calculate growth from last 2 data points (in filtered history)
             const history = video.metricsHistory;
             let growth = { views: 0, likes: 0, comments: 0, shares: 0 };
-
             if (history.length >= 2) {
-                const latest = history[0];
-                const previous = history[1];
-
+                const latest = history[history.length - 1];
+                const previous = history[0];
                 growth = {
                     views: previous.views > 0 ? ((latest.views - previous.views) / previous.views) * 100 : 0,
                     likes: previous.likes > 0 ? ((latest.likes - previous.likes) / previous.likes) * 100 : 0,
@@ -381,7 +300,6 @@ export async function GET(req: Request) {
                     shares: previous.shares > 0 ? ((latest.shares - previous.shares) / previous.shares) * 100 : 0,
                 };
             }
-
             return {
                 id: video.id,
                 url: video.url,
@@ -391,10 +309,10 @@ export async function GET(req: Request) {
                 posted: video.createdAt.toISOString(),
                 lastUpdate: video.lastScrapedAt.toISOString(),
                 status: video.isActive ? 'Active' : 'Paused',
-                views: video.currentViews,
-                likes: video.currentLikes,
-                comments: video.currentComments,
-                shares: video.currentShares,
+                views: history.length > 0 ? history[history.length - 1].views : video.currentViews,
+                likes: history.length > 0 ? history[history.length - 1].likes : video.currentLikes,
+                comments: history.length > 0 ? history[history.length - 1].comments : video.currentComments,
+                shares: history.length > 0 ? history[history.length - 1].shares : video.currentShares,
                 hashtags,
                 music,
                 platform: video.platform || 'tiktok',
@@ -406,15 +324,13 @@ export async function GET(req: Request) {
                     likes: h.likes,
                     comments: h.comments,
                     shares: h.shares
-                })).reverse() // Oldest first for charts
+                }))
             };
         });
-
         return NextResponse.json({
             success: true,
             videos: transformedVideos
         });
-
     } catch (error) {
         console.error('💥 Error fetching videos:', error);
         return NextResponse.json(

@@ -98,16 +98,21 @@ export default function TikTokTracker() {
 
     const [filters, setFilters] = useState<FilterGroup>({ operator: 'AND', conditions: [] });
     const [sorts, setSorts] = useState<SortCondition[]>([]);
+    const [timeframe, setTimeframe] = useState<[string, string] | undefined>(undefined);
 
-    const fetchVideos = useCallback(async (customFilters: FilterGroup = filters, customSorts = sorts) => {
-        console.log('fetchVideos called with:', { customFilters, customSorts });
+    const fetchVideos = useCallback(async (customFilters: FilterGroup = filters, customSorts = sorts, customTimeframe: [string, string] | undefined = timeframe) => {
+        console.log('fetchVideos called with:', { customFilters, customSorts, customTimeframe });
         try {
             console.log('📋 Fetching videos from API...');
             // Build query params for filters and sorts
             const params = new URLSearchParams();
-            if (customFilters.conditions.length > 0) {
-                params.set('filter', encodeURIComponent(JSON.stringify(customFilters)));
+            let filterGroup = { ...customFilters };
+            // Do not include timeframe in filterGroup.conditions
+            if (customTimeframe && customTimeframe[0] && customTimeframe[1]) {
+                // Send as a separate top-level filter
+                filterGroup = { ...filterGroup };
             }
+            params.set('filter', encodeURIComponent(JSON.stringify({ ...filterGroup, timeframe: customTimeframe })));
             if (customSorts.length > 0) {
                 params.set('sort', encodeURIComponent(JSON.stringify(customSorts)));
             }
@@ -205,7 +210,7 @@ export default function TikTokTracker() {
         } catch (err) {
             console.error('💥 Error fetching videos:', err);
         }
-    }, [filters, sorts]);
+    }, [filters, sorts, timeframe]);
 
     // Fetch videos from database on component mount
     useEffect(() => {
@@ -249,8 +254,8 @@ export default function TikTokTracker() {
     }, [fetchVideos]);
 
     useEffect(() => {
-        fetchVideos(filters, sorts);
-    }, [filters, sorts, fetchVideos]);
+        fetchVideos(filters, sorts, timeframe);
+    }, [filters, sorts, timeframe, fetchVideos]);
 
     useEffect(() => {
         console.log('[TikTokTracker] sorts state changed:', sorts);
@@ -1006,9 +1011,12 @@ export default function TikTokTracker() {
                         <VideoFilterSortBar
                             filters={filters}
                             sorts={sorts}
-                            onChange={(newFilters, newSorts) => {
+                            timeframe={timeframe}
+                            onChange={(newFilters, newSorts, newTimeframe) => {
                                 setFilters(newFilters);
                                 setSorts(newSorts);
+                                setTimeframe(newTimeframe);
+                                fetchVideos(newFilters, newSorts, newTimeframe);
                             }}
                         />
                         <Card>
