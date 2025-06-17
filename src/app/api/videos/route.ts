@@ -35,6 +35,10 @@ async function runMigrationIfNeeded() {
     }
 }
 
+const ALLOWED_FIELDS = [
+  'username', 'description', 'status', 'platform', 'currentViews', 'currentLikes', 'currentComments', 'currentShares', 'createdAt', 'lastScrapedAt', 'scrapingCadence'
+];
+
 function parseFilters(filterParam: string | null): Record<string, unknown> | undefined {
     if (!filterParam) return undefined;
     try {
@@ -52,14 +56,25 @@ function parseFilters(filterParam: string | null): Record<string, unknown> | und
         }
         const where: Record<string, unknown> = { [operator]: [] };
         for (const filter of conditions) {
-            const { field, operator: op, value } = filter;
-            const condition: Record<string, unknown> = {};
+            let { field, operator: op, value } = filter;
+            // Map 'lastUpdate' to 'lastScrapedAt' for DB
+            if (field === 'lastUpdate') field = 'lastScrapedAt';
+            // Validate field
+            if (!ALLOWED_FIELDS.includes(field)) {
+                console.warn(`[API] Filter field '${field}' is not a valid DB field.`);
+                continue;
+            }
+            // Normalize platform/status/cadence values
+            if (['platform', 'status', 'scrapingCadence'].includes(field) && typeof value === 'string') {
+                value = value.toLowerCase();
+            }
             // Convert string date values to Date objects for date fields
-            const dateFields = ['createdAt', 'lastUpdate'];
+            const dateFields = ['createdAt', 'lastScrapedAt'];
             let filterValue = value;
             if (dateFields.includes(field) && typeof value === 'string' && value) {
                 filterValue = new Date(value);
             }
+            const condition: Record<string, unknown> = {};
             switch (op) {
                 case '=':
                 case 'is':
@@ -125,7 +140,17 @@ function parseSorts(sortParam: string | null): Array<Record<string, 'asc' | 'des
     if (!sortParam) return undefined;
     try {
         const sorts: Array<{ field: string; order: string }> = JSON.parse(sortParam);
-        return sorts.map((s) => ({ [s.field]: s.order === 'desc' ? 'desc' : 'asc' }));
+        return sorts.map((s) => {
+            let field = s.field;
+            // Map 'lastUpdate' to 'lastScrapedAt' for DB
+            if (field === 'lastUpdate') field = 'lastScrapedAt';
+            // Validate field
+            if (!ALLOWED_FIELDS.includes(field)) {
+                console.warn(`[API] Sort field '${field}' is not a valid DB field.`);
+                return null;
+            }
+            return { [field]: s.order === 'desc' ? 'desc' : 'asc' };
+        }).filter(Boolean) as Array<Record<string, 'asc' | 'desc'>>;
     } catch {
         return undefined;
     }
