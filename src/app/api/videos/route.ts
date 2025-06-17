@@ -138,6 +138,7 @@ export async function GET(req: Request) {
         const filterParam = url.searchParams.get('filter');
         const sortParam = url.searchParams.get('sort');
         const decodedFilterParam = filterParam ? decodeURIComponent(filterParam) : null;
+        const decodedSortParam = sortParam ? decodeURIComponent(sortParam) : null;
         console.log('RAW filterParam:', filterParam);
         let where: Record<string, unknown> = { isActive: true };
         if (decodedFilterParam) {
@@ -146,7 +147,7 @@ export async function GET(req: Request) {
             if (parsed) where = { ...parsed, isActive: true };
         }
         console.log('FINAL where clause:', where);
-        const orderBy = parseSorts(sortParam) || [{ createdAt: 'desc' }];
+        const orderBy = parseSorts(decodedSortParam) || [{ createdAt: 'desc' }];
         console.log('📋 Fetching videos from database with:', { where, orderBy });
         const videos = await prisma.video.findMany({
             where,
