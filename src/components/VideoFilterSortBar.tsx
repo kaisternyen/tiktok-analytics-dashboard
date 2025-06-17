@@ -322,8 +322,11 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
                 className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
                 value={sort.field}
                 onChange={e => {
-                  console.log('[SortBar] Dropdown field changed:', e.target.value);
-                  handleSortChange(idx, 'field', e.target.value);
+                  const updated = [...localSorts];
+                  updated[idx] = { ...updated[idx], field: e.target.value };
+                  setLocalSorts(updated);
+                  console.log('[SortBar] Dropdown field changed:', e.target.value, updated);
+                  onChange({ operator: localOperator, conditions: localFilters }, updated);
                 }}
               >
                 {FIELD_DEFS.map(f => (
@@ -333,7 +336,13 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
               <select
                 className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
                 value={sort.order}
-                onChange={e => handleSortChange(idx, 'order', e.target.value as 'asc' | 'desc')}
+                onChange={e => {
+                  const updated = [...localSorts];
+                  updated[idx] = { ...updated[idx], order: e.target.value as 'asc' | 'desc' };
+                  setLocalSorts(updated);
+                  console.log('[SortBar] Dropdown order changed:', e.target.value, updated);
+                  onChange({ operator: localOperator, conditions: localFilters }, updated);
+                }}
               >
                 {orderOptions.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
