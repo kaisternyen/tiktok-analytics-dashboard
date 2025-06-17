@@ -145,40 +145,57 @@ export default function TikTokTracker() {
                     history: VideoHistory[];
                     growth: { views: number; likes: number; comments: number; shares: number };
                 }) => {
-                    let filteredHistory = video.history;
+                    // If timeframe filter is present, use delta logic
                     if (timeframeStart && timeframeEnd) {
-                        filteredHistory = video.history.filter(h => {
+                        let filteredHistory = video.history.filter(h => {
                             const t = new Date(h.time).getTime();
                             return t >= timeframeStart!.getTime() && t <= timeframeEnd!.getTime();
                         });
+                        const sortedHistory = [...filteredHistory].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                        const start = sortedHistory[0];
+                        const end = sortedHistory[sortedHistory.length - 1];
+                        if (!start || !end || start === end) return null;
+                        const views = end.views - start.views;
+                        const likes = end.likes - start.likes;
+                        const comments = end.comments - start.comments;
+                        const shares = end.shares - start.shares;
+                        const growth = {
+                            views: start.views > 0 ? ((end.views - start.views) / start.views) * 100 : 0,
+                            likes: start.likes > 0 ? ((end.likes - start.likes) / start.likes) * 100 : 0,
+                            comments: start.comments > 0 ? ((end.comments - start.comments) / start.comments) * 100 : 0,
+                            shares: start.shares > 0 ? ((end.shares - start.shares) / start.shares) * 100 : 0,
+                        };
+                        return {
+                            ...video,
+                            views,
+                            likes,
+                            comments,
+                            shares,
+                            growth,
+                            history: filteredHistory,
+                        };
+                    } else {
+                        // No timeframe filter: use full history and stats
+                        const sortedHistory = [...video.history].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                        const start = sortedHistory[0];
+                        const end = sortedHistory[sortedHistory.length - 1];
+                        if (!start || !end) return null;
+                        const views = end.views;
+                        const likes = end.likes;
+                        const comments = end.comments;
+                        const shares = end.shares;
+                        const growth = video.growth || { views: 0, likes: 0, comments: 0, shares: 0 };
+                        return {
+                            ...video,
+                            views,
+                            likes,
+                            comments,
+                            shares,
+                            growth,
+                            history: video.history,
+                        };
                     }
-                    // Find start and end points
-                    const sortedHistory = [...filteredHistory].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                    const start = sortedHistory[0];
-                    const end = sortedHistory[sortedHistory.length - 1];
-                    // If missing either, return null (will be filtered out)
-                    if (!start || !end || start === end) return null;
-                    // Calculate deltas
-                    const views = end.views - start.views;
-                    const likes = end.likes - start.likes;
-                    const comments = end.comments - start.comments;
-                    const shares = end.shares - start.shares;
-                    const growth = {
-                        views: start.views > 0 ? ((end.views - start.views) / start.views) * 100 : 0,
-                        likes: start.likes > 0 ? ((end.likes - start.likes) / start.likes) * 100 : 0,
-                        comments: start.comments > 0 ? ((end.comments - start.comments) / start.comments) * 100 : 0,
-                        shares: start.shares > 0 ? ((end.shares - start.shares) / start.shares) * 100 : 0,
-                    };
-                    return {
-                        ...video,
-                        views,
-                        likes,
-                        comments,
-                        shares,
-                        growth,
-                        history: filteredHistory,
-                    };
-                }).filter(Boolean); // Remove nulls (videos missing start/end)
+                }).filter(Boolean); // Remove nulls
 
                 setTracked(transformedVideos);
                 console.log(`✅ Loaded ${transformedVideos.length} videos from database`);
