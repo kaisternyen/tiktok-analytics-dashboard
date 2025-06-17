@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,48 +98,7 @@ export default function TikTokTracker() {
     const [filters, setFilters] = useState<FilterCondition[]>([]);
     const [sorts, setSorts] = useState<SortCondition[]>([]);
 
-    // Fetch videos from database on component mount
-    useEffect(() => {
-        fetchVideos();
-    }, []);
-
-    // Auto-refresh status every 30 seconds AND auto-refresh video data
-    useEffect(() => {
-        const fetchStatus = async () => {
-            try {
-                const response = await fetch('/api/status');
-                if (response.ok) {
-                    const data = await response.json();
-                    setCronStatus(data.status);
-                }
-            } catch (error) {
-                console.error('Failed to fetch status:', error);
-            }
-        };
-
-        // Auto-refresh videos data every 30 seconds for real-time updates
-        const autoRefreshVideos = async () => {
-            try {
-                await fetchVideos();
-                console.log('🔄 Auto-refreshed video data');
-            } catch (error) {
-                console.error('Failed to auto-refresh videos:', error);
-            }
-        };
-
-        // Fetch immediately
-        fetchStatus();
-
-        // Set up interval for auto-refresh (30 seconds)
-        const interval = setInterval(() => {
-            fetchStatus();
-            autoRefreshVideos();
-        }, 30000); // Every 30 seconds for real-time feel
-
-        return () => clearInterval(interval);
-    }, []);
-
-    const fetchVideos = async (customFilters = filters, customSorts = sorts) => {
+    const fetchVideos = useCallback(async (customFilters = filters, customSorts = sorts) => {
         try {
             console.log('📋 Fetching videos from API...');
             // Build query params for filters and sorts
@@ -197,7 +156,48 @@ export default function TikTokTracker() {
         } catch (err) {
             console.error('💥 Error fetching videos:', err);
         }
-    };
+    }, [filters, sorts]);
+
+    // Fetch videos from database on component mount
+    useEffect(() => {
+        fetchVideos();
+    }, [fetchVideos]);
+
+    // Auto-refresh status every 30 seconds AND auto-refresh video data
+    useEffect(() => {
+        const fetchStatus = async () => {
+            try {
+                const response = await fetch('/api/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    setCronStatus(data.status);
+                }
+            } catch (error) {
+                console.error('Failed to fetch status:', error);
+            }
+        };
+
+        // Auto-refresh videos data every 30 seconds for real-time updates
+        const autoRefreshVideos = async () => {
+            try {
+                await fetchVideos();
+                console.log('🔄 Auto-refreshed video data');
+            } catch (error) {
+                console.error('Failed to auto-refresh videos:', error);
+            }
+        };
+
+        // Fetch immediately
+        fetchStatus();
+
+        // Set up interval for auto-refresh (30 seconds)
+        const interval = setInterval(() => {
+            fetchStatus();
+            autoRefreshVideos();
+        }, 30000); // Every 30 seconds for real-time feel
+
+        return () => clearInterval(interval);
+    }, [fetchVideos]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

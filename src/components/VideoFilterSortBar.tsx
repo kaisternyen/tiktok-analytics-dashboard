@@ -68,7 +68,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
   const [localFilters, setLocalFilters] = useState<FilterCondition[]>(filters);
   const [localSorts, setLocalSorts] = useState<SortCondition[]>(sorts);
 
-  const handleFilterChange = (idx: number, key: keyof FilterCondition, value: any) => {
+  const handleFilterChange = (idx: number, key: keyof FilterCondition, value: string | number | null | [string, string] | [number, number]) => {
     const updated = [...localFilters];
     updated[idx] = { ...updated[idx], [key]: value };
     setLocalFilters(updated);
@@ -85,7 +85,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
     onChange(updated, localSorts);
   };
 
-  const handleSortChange = (idx: number, key: keyof SortCondition, value: any) => {
+  const handleSortChange = (idx: number, key: keyof SortCondition, value: 'asc' | 'desc' | string) => {
     const updated = [...localSorts];
     updated[idx] = { ...updated[idx], [key]: value };
     setLocalSorts(updated);
@@ -205,7 +205,7 @@ export default function VideoFilterSortBar({ filters, sorts, onChange }: VideoFi
             <select
               className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
               value={sort.order}
-              onChange={e => handleSortChange(idx, 'order', e.target.value)}
+              onChange={e => handleSortChange(idx, 'order', e.target.value as 'asc' | 'desc')}
             >
               <option value="asc">A → Z / 0 → 9</option>
               <option value="desc">Z → A / 9 → 0</option>
