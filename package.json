@@ -10,6 +10,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.830.0",
     "@neondatabase/api-client": "^2.0.0",
     "@prisma/client": "^6.8.2",
     "@radix-ui/react-slot": "^1.2.3",
