@@ -104,16 +104,61 @@ export async function GET() {
                 } else if (account.platform === 'youtube') {
                     const apiKey = process.env.YOUTUBE_API_KEY;
                     if (apiKey) {
+                        // First, get channel ID from username if needed using enhanced logic
                         let channelId = account.username;
-                        if (!account.username.startsWith('UC')) {
-                            const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forUsername=${account.username}&key=${apiKey}`);
-                            if (res.ok) {
-                                const data = await res.json();
-                                if (data.items && data.items.length > 0) {
-                                    channelId = data.items[0].id;
+                        
+                        if (!account.username.startsWith('UC') || account.username.length !== 24) {
+                            // Clean the identifier - remove @ if present and any URL parts
+                            let cleanIdentifier = account.username;
+                            if (cleanIdentifier.startsWith('@')) {
+                                cleanIdentifier = cleanIdentifier.substring(1);
+                            }
+                            // Handle full URLs like https://www.youtube.com/@touchgrassdaily
+                            if (cleanIdentifier.includes('youtube.com/@')) {
+                                const match = cleanIdentifier.match(/youtube\.com\/@([^\/?\s]+)/);
+                                if (match) {
+                                    cleanIdentifier = match[1];
+                                }
+                            }
+                            
+                            // Try to get channel by handle first (modern approach)
+                            const handleResponse = await fetch(
+                                `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forHandle=@${cleanIdentifier}&key=${apiKey}`
+                            );
+                            
+                            if (handleResponse.ok) {
+                                const handleData = await handleResponse.json();
+                                if (handleData.items && handleData.items.length > 0) {
+                                    channelId = handleData.items[0].id;
+                                } else {
+                                    // Try legacy username lookup
+                                    const usernameResponse = await fetch(
+                                        `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forUsername=${cleanIdentifier}&key=${apiKey}`
+                                    );
+                                    
+                                    if (usernameResponse.ok) {
+                                        const usernameData = await usernameResponse.json();
+                                        if (usernameData.items && usernameData.items.length > 0) {
+                                            channelId = usernameData.items[0].id;
+                                        } else {
+                                            // Try search as fallback
+                                            const searchResponse = await fetch(
+                                                `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(cleanIdentifier)}&type=channel&maxResults=1&key=${apiKey}`
+                                            );
+                                            
+                                            if (searchResponse.ok) {
+                                                const searchData = await searchResponse.json();
+                                                if (searchData.items && searchData.items.length > 0) {
+                                                    channelId = searchData.items[0].snippet.channelId;
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
+                        
+                        // Now get channel statistics using the resolved channel ID
                         const res2 = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelId}&key=${apiKey}`);
                         if (res2.ok) {
                             const data2 = await res2.json();
@@ -122,6 +167,15 @@ export async function GET() {
                                 if (data2.items[0].snippet && data2.items[0].snippet.thumbnails && data2.items[0].snippet.thumbnails.default) {
                                     pfpUrl = data2.items[0].snippet.thumbnails.default.url;
                                 }
+                                if (data2.items[0].snippet && data2.items[0].snippet.title) {
+                                    displayName = data2.items[0].snippet.title;
+                                }
+                                if (data2.items[0].statistics && data2.items[0].statistics.subscriberCount) {
+                                    followers = parseInt(data2.items[0].statistics.subscriberCount || '0', 10);
+                                }
+                                profileUrl = `https://www.youtube.com/@${account.username}`;
+                                lookedUpUsername = account.username;
+                                apiStatus = 200;
                             }
                         }
                     }
@@ -240,16 +294,62 @@ export async function POST(request: NextRequest) {
             const apiKey = process.env.YOUTUBE_API_KEY;
             if (apiKey) {
                 let channelId = username;
-                if (!username.startsWith('UC')) {
-                    const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forUsername=${username}&key=${apiKey}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.items && data.items.length > 0) {
-                            channelId = data.items[0].id;
+                
+                // If not a direct channel ID, try to resolve it using the enhanced logic
+                if (!username.startsWith('UC') || username.length !== 24) {
+                    // Clean the identifier - remove @ if present and any URL parts
+                    let cleanIdentifier = username;
+                    if (cleanIdentifier.startsWith('@')) {
+                        cleanIdentifier = cleanIdentifier.substring(1);
+                    }
+                    // Handle full URLs like https://www.youtube.com/@touchgrassdaily
+                    if (cleanIdentifier.includes('youtube.com/@')) {
+                        const match = cleanIdentifier.match(/youtube\.com\/@([^\/?\s]+)/);
+                        if (match) {
+                            cleanIdentifier = match[1];
+                        }
+                    }
+                    
+                    // Try to get channel by handle first (modern approach)
+                    const handleResponse = await fetch(
+                        `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forHandle=@${cleanIdentifier}&key=${apiKey}`
+                    );
+                    
+                    if (handleResponse.ok) {
+                        const handleData = await handleResponse.json();
+                        if (handleData.items && handleData.items.length > 0) {
+                            channelId = handleData.items[0].id;
                             accountExists = true;
+                        } else {
+                            // Try legacy username lookup
+                            const usernameResponse = await fetch(
+                                `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forUsername=${cleanIdentifier}&key=${apiKey}`
+                            );
+                            
+                            if (usernameResponse.ok) {
+                                const usernameData = await usernameResponse.json();
+                                if (usernameData.items && usernameData.items.length > 0) {
+                                    channelId = usernameData.items[0].id;
+                                    accountExists = true;
+                                } else {
+                                    // Try search as fallback
+                                    const searchResponse = await fetch(
+                                        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(cleanIdentifier)}&type=channel&maxResults=1&key=${apiKey}`
+                                    );
+                                    
+                                    if (searchResponse.ok) {
+                                        const searchData = await searchResponse.json();
+                                        if (searchData.items && searchData.items.length > 0) {
+                                            channelId = searchData.items[0].snippet.channelId;
+                                            accountExists = true;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {
+                    // Direct channel ID lookup
                     const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&id=${channelId}&key=${apiKey}`);
                     if (res.ok) {
                         const data = await res.json();
@@ -391,19 +491,61 @@ export async function POST(request: NextRequest) {
                 // YouTube: Use YouTube Data API
                 const apiKey = process.env.YOUTUBE_API_KEY;
                 if (apiKey) {
-                    // First, get channel ID from username if needed
+                    // First, get channel ID from username if needed using enhanced logic
                     let channelId = username;
-                    if (!username.startsWith('UC')) {
-                        // If not a channel ID, resolve to channel ID
-                        const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forUsername=${username}&key=${apiKey}`);
-                        if (res.ok) {
-                            const data = await res.json();
-                            if (data.items && data.items.length > 0) {
-                                channelId = data.items[0].id;
+                    
+                    if (!username.startsWith('UC') || username.length !== 24) {
+                        // Clean the identifier - remove @ if present and any URL parts
+                        let cleanIdentifier = username;
+                        if (cleanIdentifier.startsWith('@')) {
+                            cleanIdentifier = cleanIdentifier.substring(1);
+                        }
+                        // Handle full URLs like https://www.youtube.com/@touchgrassdaily
+                        if (cleanIdentifier.includes('youtube.com/@')) {
+                            const match = cleanIdentifier.match(/youtube\.com\/@([^\/?\s]+)/);
+                            if (match) {
+                                cleanIdentifier = match[1];
+                            }
+                        }
+                        
+                        // Try to get channel by handle first (modern approach)
+                        const handleResponse = await fetch(
+                            `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forHandle=@${cleanIdentifier}&key=${apiKey}`
+                        );
+                        
+                        if (handleResponse.ok) {
+                            const handleData = await handleResponse.json();
+                            if (handleData.items && handleData.items.length > 0) {
+                                channelId = handleData.items[0].id;
+                            } else {
+                                // Try legacy username lookup
+                                const usernameResponse = await fetch(
+                                    `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forUsername=${cleanIdentifier}&key=${apiKey}`
+                                );
+                                
+                                if (usernameResponse.ok) {
+                                    const usernameData = await usernameResponse.json();
+                                    if (usernameData.items && usernameData.items.length > 0) {
+                                        channelId = usernameData.items[0].id;
+                                    } else {
+                                        // Try search as fallback
+                                        const searchResponse = await fetch(
+                                            `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(cleanIdentifier)}&type=channel&maxResults=1&key=${apiKey}`
+                                        );
+                                        
+                                        if (searchResponse.ok) {
+                                            const searchData = await searchResponse.json();
+                                            if (searchData.items && searchData.items.length > 0) {
+                                                channelId = searchData.items[0].snippet.channelId;
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
-                    // Now get channel statistics
+                    
+                    // Now get channel statistics using the resolved channel ID
                     const res2 = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelId}&key=${apiKey}`);
                     if (res2.ok) {
                         const data2 = await res2.json();
@@ -412,6 +554,15 @@ export async function POST(request: NextRequest) {
                             if (data2.items[0].snippet && data2.items[0].snippet.thumbnails && data2.items[0].snippet.thumbnails.default) {
                                 pfpUrl = data2.items[0].snippet.thumbnails.default.url;
                             }
+                            if (data2.items[0].snippet && data2.items[0].snippet.title) {
+                                displayName = data2.items[0].snippet.title;
+                            }
+                            if (data2.items[0].statistics && data2.items[0].statistics.subscriberCount) {
+                                followers = parseInt(data2.items[0].statistics.subscriberCount || '0', 10);
+                            }
+                            profileUrl = `https://www.youtube.com/@${username}`;
+                            lookedUpUsername = username;
+                            apiStatus = 200;
                         }
                     }
                 }
