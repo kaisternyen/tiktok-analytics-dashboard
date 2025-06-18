@@ -63,3 +63,20 @@ model MetricsHistory {
   
   @@map("metrics_history")
 }
+
+model TrackedAccount {
+  id          String   @id @default(cuid())
+  username    String   // The account username/handle
+  platform    String   // "tiktok", "instagram", or "youtube"
+  accountType String   @default("all") // "all" or "keyword"
+  keyword     String?  // Required for keyword type accounts
+  isActive    Boolean  @default(true)
+  lastChecked DateTime @default(now())
+  createdAt   DateTime @default(now())
+  
+  // Track the last video ID we've seen to avoid duplicates
+  lastVideoId String?
+  
+  @@unique([username, platform])
+  @@map("tracked_accounts")
+}

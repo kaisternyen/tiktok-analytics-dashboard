@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
-import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw, ExternalLink, Users } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
+import Link from 'next/link';
 
 interface VideoHistory {
     time: string;
@@ -761,11 +762,29 @@ export default function TikTokTracker() {
                 <div className="max-w-7xl mx-auto">
                     {/* Main Header Row */}
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
-                                <Play className="w-4 h-4 text-white" />
+                        <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
+                                    <Play className="w-4 h-4 text-white" />
+                                </div>
+                                <h1 className="text-xl font-semibold text-gray-900">Social Media Analytics</h1>
                             </div>
-                            <h1 className="text-xl font-semibold text-gray-900">Social Media Analytics</h1>
+                            {/* Navigation */}
+                            <nav className="flex items-center gap-4">
+                                <Link 
+                                    href="/" 
+                                    className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                                >
+                                    Dashboard
+                                </Link>
+                                <Link 
+                                    href="/tracked-accounts" 
+                                    className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+                                >
+                                    <Users className="w-4 h-4" />
+                                    Tracked Accounts
+                                </Link>
+                            </nav>
                         </div>
                         <div className="flex items-center gap-3">
                             <Button

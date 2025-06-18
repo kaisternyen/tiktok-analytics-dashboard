@@ -133,31 +133,34 @@ export async function POST(request: NextRequest) {
 
         // Always upload thumbnail to S3 if present
         if (thumbnailUrl) {
-            console.log('🖼️ Starting S3 upload for thumbnail:', thumbnailUrl);
+            console.log('🖼️ [DEBUG] Initial thumbnailUrl:', thumbnailUrl);
             try {
-                console.log('📥 Fetching thumbnail from original URL...');
+                console.log('📥 [DEBUG] Fetching thumbnail from original URL:', thumbnailUrl);
                 const res = await fetch(thumbnailUrl);
+                console.log('📥 [DEBUG] Fetch response status:', res.status);
                 if (res.ok) {
-                    console.log('✅ Thumbnail fetch successful, uploading to S3...');
+                    console.log('✅ [DEBUG] Thumbnail fetch successful, preparing to upload to S3...');
                     const buffer = await res.buffer();
+                    console.log('📦 [DEBUG] Buffer created, size:', buffer.length);
                     const key = `thumbnails/${existingVideo ? existingVideo.id : result.data.id}.jpg`;
-                    console.log('🔑 S3 key:', key);
+                    console.log('🔑 [DEBUG] S3 key to use:', key);
                     const s3Url = await uploadToS3(buffer, key, 'image/jpeg');
+                    console.log('🔗 [DEBUG] S3 URL returned:', s3Url);
                     thumbnailUrl = s3Url;
-                    console.log('✅ Thumbnail uploaded to S3 successfully:', s3Url);
+                    console.log('✅ [DEBUG] Thumbnail uploaded to S3 and thumbnailUrl updated:', thumbnailUrl);
                 } else {
-                    console.error('❌ Failed to fetch thumbnail, status:', res.status);
+                    console.error('❌ [DEBUG] Failed to fetch thumbnail, status:', res.status, 'statusText:', res.statusText);
                 }
             } catch (err) {
-                console.error('❌ Failed to upload thumbnail to S3:', err);
+                console.error('❌ [DEBUG] Exception during S3 upload:', err);
             }
         } else {
-            console.log('⚠️ No thumbnail URL found, skipping S3 upload');
+            console.log('⚠️ [DEBUG] No thumbnail URL found, skipping S3 upload');
         }
-        console.log('📋 Final thumbnail URL to be stored:', thumbnailUrl);
+        console.log('📋 [DEBUG] Final thumbnail URL to be stored in DB:', thumbnailUrl);
 
         if (existingVideo) {
-            console.log('📋 Media already exists, updating with latest data...');
+            console.log('📋 [DEBUG] Media already exists, updating with latest data...');
 
             // Update existing video with latest data
             const updatedVideo = await prisma.video.update({
@@ -236,7 +239,7 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        console.log('📝 Creating new media record in database...');
+        console.log('📝 [DEBUG] Creating new media record in database with thumbnailUrl:', thumbnailUrl);
 
         // Create new video record
         const newVideo = await prisma.video.create({
