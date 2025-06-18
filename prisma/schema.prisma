@@ -13,6 +13,7 @@ datasource db {
 model Video {
   id          String   @id @default(cuid())
   url         String   @unique
+  videoId     String?  // Platform-specific video ID (e.g., TikTok aweme_id, Instagram media_id, YouTube video_id)
   username    String
   description String
   thumbnailUrl String?
@@ -42,6 +43,9 @@ model Video {
   // Relationship
   metricsHistory MetricsHistory[]
   
+  // Create a unique constraint on videoId and platform combination
+  // This prevents the same video from being tracked multiple times on the same platform
+  @@unique([videoId, platform], name: "unique_video_per_platform")
   @@map("videos")
 }
 

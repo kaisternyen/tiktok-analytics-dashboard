@@ -114,15 +114,52 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Check if video already exists
-      const existingVideo = await prisma.video.findUnique({
+      // Determine platform first for duplicate detection
+      let platform = 'tiktok';
+      if (url.includes('instagram.com')) {
+        platform = 'instagram';
+      } else if (url.includes('youtube.com')) {
+        platform = 'youtube';
+      }
+
+      // Check for existing video by URL first
+      const existingVideoByUrl = await prisma.video.findFirst({
         where: { url: url }
       });
 
+      // Extract platform-specific video ID
+      let platformVideoId: string | undefined;
+      if (url.includes('tiktok.com')) {
+        const videoIdMatch = url.match(/\/video\/(\d+)/);
+        platformVideoId = videoIdMatch ? videoIdMatch[1] : undefined;
+      } else if (url.includes('instagram.com')) {
+        // Instagram video ID extraction would be more complex
+        platformVideoId = undefined;
+      } else if (url.includes('youtube.com')) {
+        const videoIdMatch = url.match(/[?&]v=([^&]+)/);
+        platformVideoId = videoIdMatch ? videoIdMatch[1] : undefined;
+      }
+
+      // Check for existing video by platform video ID
+      let existingVideoById = null;
+      if (platformVideoId) {
+        existingVideoById = await prisma.video.findFirst({
+          where: { 
+            videoId: platformVideoId,
+            platform: platform 
+          }
+        });
+      }
+
+      const existingVideo = existingVideoByUrl || existingVideoById;
+
       if (existingVideo) {
+        const duplicateMethod = existingVideoByUrl ? 'URL' : 'videoId';
         return NextResponse.json({
           type: 4,
-          data: { content: `⚠️ Video by @${existingVideo.username} is already being tracked.` }
+          data: {
+            content: `❌ Video already being tracked (detected by ${duplicateMethod}): ${url}`
+          }
         });
       }
 
@@ -139,20 +176,17 @@ export async function POST(req: NextRequest) {
       const mediaData = scrapingResult.data as MediaData;
       
       // Determine platform and extract data
-      let platform = 'tiktok';
       let platformName = 'TikTok';
       let views = 0;
       let shares = 0;
       let thumbnailUrl = getThumbnailUrl(mediaData);
       
       if (url.includes('instagram.com')) {
-        platform = 'instagram';
         platformName = 'Instagram';
         const instaData = mediaData as InstagramPostData;
         views = instaData.plays || instaData.views || 0;
         shares = 0; // Instagram doesn't track shares
       } else if (url.includes('youtube.com')) {
-        platform = 'youtube';
         platformName = 'YouTube';
         const youtubeData = mediaData as YouTubeVideoData;
         views = youtubeData.views || 0;
@@ -185,6 +219,7 @@ export async function POST(req: NextRequest) {
       const newVideo = await prisma.video.create({
         data: {
           url: url,
+          videoId: platformVideoId, // Store platform-specific video ID
           username: getUsername(mediaData),
           description: getDescription(mediaData),
           thumbnailUrl: thumbnailUrl,

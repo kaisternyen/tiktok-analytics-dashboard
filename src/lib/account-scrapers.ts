@@ -258,13 +258,29 @@ async function fetchYouTubeAccountContent(channelId: string): Promise<AccountCon
 // Add video to tracking system
 async function addVideoToTracking(content: AccountContent, accountType: 'all' | 'keyword', keyword?: string): Promise<boolean> {
     try {
-        // Check if video already exists
-        const existingVideo = await prisma.video.findUnique({
+        // Extract platform-specific video ID from content
+        const videoId = content.id;
+        
+        // Check for duplicates using multiple methods
+        let existingVideo = null;
+        
+        // First check by URL (existing method)
+        existingVideo = await prisma.video.findUnique({
             where: { url: content.url }
         });
 
+        // If not found by URL and we have a videoId, check by videoId + platform
+        if (!existingVideo && videoId) {
+            existingVideo = await prisma.video.findFirst({
+                where: { 
+                    videoId: videoId,
+                    platform: content.platform 
+                }
+            });
+        }
+
         if (existingVideo) {
-            console.log(`⚠️ Video already tracked: ${content.url}`);
+            console.log(`⚠️ Video already tracked (${existingVideo.videoId ? 'by videoId' : 'by URL'}): ${content.url}`);
             return false;
         }
 
@@ -326,10 +342,11 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
             }
         }
 
-        // Create video record
+        // Create video record with enhanced duplicate prevention
         const newVideo = await prisma.video.create({
             data: {
                 url: content.url,
+                videoId: videoId, // Store platform-specific video ID
                 username: getUsername(mediaData),
                 description: getDescription(mediaData),
                 thumbnailUrl: thumbnailUrl,
@@ -359,7 +376,7 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
             }
         });
 
-        console.log(`✅ Added new video to tracking: @${getUsername(mediaData)} - ${getDescription(mediaData).substring(0, 50)}...`);
+        console.log(`✅ Added new video to tracking: @${getUsername(mediaData)} - ${getDescription(mediaData).substring(0, 50)}... (videoId: ${videoId})`);
         return true;
 
     } catch (error) {
