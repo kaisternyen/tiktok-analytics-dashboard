@@ -24,7 +24,7 @@ interface AddAccountForm {
 
 // Add a helper to extract username/handle from a pasted URL
 function extractHandle(input: string, platform: string): string {
-    let value = input.trim();
+    const value = input.trim();
     if (platform === 'tiktok') {
         // Accept @handle or full URL
         if (value.startsWith('@')) return value.slice(1);
