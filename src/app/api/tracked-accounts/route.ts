@@ -41,6 +41,7 @@ export async function GET() {
                         });
                         if (res.ok) {
                             const data = await res.json();
+                            console.log('🐛 TikHub API response for', account.username, JSON.stringify(data, null, 2));
                             if (data.data && typeof data.data.total === 'number') {
                                 totalPosts = data.data.total;
                             } else if (Array.isArray(data.data?.aweme_list)) {
@@ -208,6 +209,7 @@ export async function POST(request: NextRequest) {
                 });
                 if (res.ok) {
                     const data = await res.json();
+                    console.log('🐛 TikHub API response for', username, JSON.stringify(data, null, 2));
                     if (data.data && data.data.user && data.data.user.nickname) {
                         accountExists = true;
                     }
@@ -316,6 +318,7 @@ export async function POST(request: NextRequest) {
                     });
                     if (res.ok) {
                         const data = await res.json();
+                        console.log('🐛 TikHub API response for', username, JSON.stringify(data, null, 2));
                         // Try to get total post count from response
                         if (data.data && typeof data.data.total === 'number') {
                             totalPosts = data.data.total;
