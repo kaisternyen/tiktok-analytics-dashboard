@@ -128,6 +128,15 @@ export default function TikTokTracker() {
             }
 
             if (result.success) {
+                console.log('📦 Raw API response:', {
+                    totalVideos: result.videos.length,
+                    sampleVideo: result.videos[0] ? {
+                        username: result.videos[0].username,
+                        views: result.videos[0].views,
+                        likes: result.videos[0].likes
+                    } : null
+                });
+                
                 const transformedVideos = result.videos.map((video: {
                     id: string;
                     url: string;
@@ -195,6 +204,15 @@ export default function TikTokTracker() {
                         };
                     }
                 }).filter(Boolean); // Remove nulls
+
+                console.log('🔄 After frontend transformation:', {
+                    totalVideos: transformedVideos.length,
+                    sampleVideo: transformedVideos[0] ? {
+                        username: transformedVideos[0].username,
+                        views: transformedVideos[0].views,
+                        likes: transformedVideos[0].likes
+                    } : null
+                });
 
                 setTracked(transformedVideos);
                 console.log(`✅ Loaded ${transformedVideos.length} videos from database`);
