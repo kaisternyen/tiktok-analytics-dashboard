@@ -36,30 +36,36 @@ export async function GET() {
                 if (account.platform === 'tiktok') {
                     const apiKey = process.env.TIKHUB_API_KEY;
                     if (apiKey) {
-                        const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos?unique_id=${account.username}`, {
+                        const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/web/fetch_user_profile?uniqueId=${account.username}`, {
                             headers: { 'Authorization': `Bearer ${apiKey}` }
                         });
                         if (res.ok) {
                             const data = await res.json();
-                            console.log('🐛 TikHub API response for', account.username, JSON.stringify(data, null, 2));
-                            if (data.data && typeof data.data.total === 'number') {
-                                totalPosts = data.data.total;
-                            } else if (Array.isArray(data.data?.aweme_list)) {
-                                totalPosts = data.data.aweme_list.length;
-                            }
-                            if (data.data && data.data.user && data.data.user.avatar_url) {
-                                pfpUrl = data.data.user.avatar_url;
-                            }
-                            apiStatus = data.status;
-                            apiError = data.error;
-                            if (data.data && data.data.user && data.data.user.nickname) {
-                                displayName = data.data.user.nickname;
-                            }
-                            if (data.data && data.data.user && data.data.user.follower_count) {
-                                followers = data.data.user.follower_count;
-                            }
-                            if (data.data && data.data.user && data.data.user.profile_url) {
-                                profileUrl = data.data.user.profile_url;
+                            console.log('🐛 TikHub Web Profile API response for', account.username, JSON.stringify(data, null, 2));
+                            if (data.data && data.data.userInfo) {
+                                const userInfo = data.data.userInfo;
+                                if (userInfo.stats && typeof userInfo.stats.videoCount === 'number') {
+                                    totalPosts = userInfo.stats.videoCount;
+                                } else if (userInfo.statsV2 && userInfo.statsV2.videoCount) {
+                                    totalPosts = parseInt(userInfo.statsV2.videoCount, 10);
+                                }
+                                if (userInfo.user && userInfo.user.avatarLarger) {
+                                    pfpUrl = userInfo.user.avatarLarger;
+                                } else if (userInfo.user && userInfo.user.avatarMedium) {
+                                    pfpUrl = userInfo.user.avatarMedium;
+                                } else if (userInfo.user && userInfo.user.avatarThumb) {
+                                    pfpUrl = userInfo.user.avatarThumb;
+                                }
+                                apiStatus = data.code;
+                                if (userInfo.user && userInfo.user.nickname) {
+                                    displayName = userInfo.user.nickname;
+                                }
+                                if (userInfo.stats && userInfo.stats.followerCount) {
+                                    followers = userInfo.stats.followerCount;
+                                } else if (userInfo.statsV2 && userInfo.statsV2.followerCount) {
+                                    followers = parseInt(userInfo.statsV2.followerCount, 10);
+                                }
+                                profileUrl = `https://www.tiktok.com/@${account.username}`;
                             }
                             lookedUpUsername = account.username;
                         }
@@ -201,17 +207,25 @@ export async function POST(request: NextRequest) {
 
         // Validate account exists before creating
         let accountExists = false;
+        let profileData = null;
         if (platform === 'tiktok') {
             const apiKey = process.env.TIKHUB_API_KEY;
             if (apiKey) {
-                const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos?unique_id=${username}`, {
+                const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/web/fetch_user_profile?uniqueId=${username}`, {
                     headers: { 'Authorization': `Bearer ${apiKey}` }
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    console.log('🐛 TikHub API response for', username, JSON.stringify(data, null, 2));
-                    if (data.data && data.data.user && data.data.user.nickname) {
+                    console.log('🐛 TikHub Web Profile API response for', username, JSON.stringify(data, null, 2));
+                    if (data.data && data.data.userInfo && data.data.userInfo.user && data.data.userInfo.user.nickname) {
                         accountExists = true;
+                        profileData = {
+                            nickname: data.data.userInfo.user.nickname,
+                            avatarUrl: data.data.userInfo.user.avatarLarger || data.data.userInfo.user.avatarMedium || data.data.userInfo.user.avatarThumb,
+                            followerCount: data.data.userInfo.stats?.followerCount || data.data.userInfo.statsV2?.followerCount,
+                            verified: data.data.userInfo.user.verified || false,
+                            signature: data.data.userInfo.user.signature || ''
+                        };
                     }
                 }
             }
@@ -313,31 +327,37 @@ export async function POST(request: NextRequest) {
                 // TikTok: Use TikHub API
                 const apiKey = process.env.TIKHUB_API_KEY;
                 if (apiKey) {
-                    const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos?unique_id=${username}`, {
+                    const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/web/fetch_user_profile?uniqueId=${username}`, {
                         headers: { 'Authorization': `Bearer ${apiKey}` }
                     });
                     if (res.ok) {
                         const data = await res.json();
-                        console.log('🐛 TikHub API response for', username, JSON.stringify(data, null, 2));
-                        // Try to get total post count from response
-                        if (data.data && typeof data.data.total === 'number') {
-                            totalPosts = data.data.total;
-                        } else if (Array.isArray(data.data?.aweme_list)) {
-                            totalPosts = data.data.aweme_list.length;
-                        }
-                        if (data.data && data.data.user && data.data.user.avatar_url) {
-                            pfpUrl = data.data.user.avatar_url;
-                        }
-                        apiStatus = data.status;
-                        apiError = data.error;
-                        if (data.data && data.data.user && data.data.user.nickname) {
-                            displayName = data.data.user.nickname;
-                        }
-                        if (data.data && data.data.user && data.data.user.follower_count) {
-                            followers = data.data.user.follower_count;
-                        }
-                        if (data.data && data.data.user && data.data.user.profile_url) {
-                            profileUrl = data.data.user.profile_url;
+                        console.log('🐛 TikHub Web Profile API response for', username, JSON.stringify(data, null, 2));
+                        if (data.data && data.data.userInfo) {
+                            const userInfo = data.data.userInfo;
+                            // Try to get total post count from response
+                            if (userInfo.stats && typeof userInfo.stats.videoCount === 'number') {
+                                totalPosts = userInfo.stats.videoCount;
+                            } else if (userInfo.statsV2 && userInfo.statsV2.videoCount) {
+                                totalPosts = parseInt(userInfo.statsV2.videoCount, 10);
+                            }
+                            if (userInfo.user && userInfo.user.avatarLarger) {
+                                pfpUrl = userInfo.user.avatarLarger;
+                            } else if (userInfo.user && userInfo.user.avatarMedium) {
+                                pfpUrl = userInfo.user.avatarMedium;
+                            } else if (userInfo.user && userInfo.user.avatarThumb) {
+                                pfpUrl = userInfo.user.avatarThumb;
+                            }
+                            apiStatus = data.code;
+                            if (userInfo.user && userInfo.user.nickname) {
+                                displayName = userInfo.user.nickname;
+                            }
+                            if (userInfo.stats && userInfo.stats.followerCount) {
+                                followers = userInfo.stats.followerCount;
+                            } else if (userInfo.statsV2 && userInfo.statsV2.followerCount) {
+                                followers = parseInt(userInfo.statsV2.followerCount, 10);
+                            }
+                            profileUrl = `https://www.tiktok.com/@${username}`;
                         }
                         lookedUpUsername = username;
                     }
