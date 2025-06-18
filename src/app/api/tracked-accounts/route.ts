@@ -207,7 +207,6 @@ export async function POST(request: NextRequest) {
 
         // Validate account exists before creating
         let accountExists = false;
-        let profileData = null;
         if (platform === 'tiktok') {
             const apiKey = process.env.TIKHUB_API_KEY;
             if (apiKey) {
@@ -219,13 +218,6 @@ export async function POST(request: NextRequest) {
                     console.log('🐛 TikHub Web Profile API response for', username, JSON.stringify(data, null, 2));
                     if (data.data && data.data.userInfo && data.data.userInfo.user && data.data.userInfo.user.nickname) {
                         accountExists = true;
-                        profileData = {
-                            nickname: data.data.userInfo.user.nickname,
-                            avatarUrl: data.data.userInfo.user.avatarLarger || data.data.userInfo.user.avatarMedium || data.data.userInfo.user.avatarThumb,
-                            followerCount: data.data.userInfo.stats?.followerCount || data.data.userInfo.statsV2?.followerCount,
-                            verified: data.data.userInfo.user.verified || false,
-                            signature: data.data.userInfo.user.signature || ''
-                        };
                     }
                 }
             }
