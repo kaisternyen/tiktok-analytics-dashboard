@@ -423,7 +423,7 @@ export function TrackedAccountsTab() {
                                     <div className="flex items-center gap-4">
                                         {account.pfpUrl ? (
                                             <Image 
-                                                src={account.pfpUrl} 
+                                                src={`/api/image-proxy?url=${encodeURIComponent(account.pfpUrl)}`}
                                                 alt="Profile" 
                                                 width={48}
                                                 height={48}

@@ -2,13 +2,14 @@ import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData }
 import { prisma } from './prisma';
 import { getCurrentNormalizedTimestamp } from './timestamp-utils';
 import { uploadToS3 } from './s3';
+import { InstagramAPI } from './instagram-enhanced';
 
 export interface AccountContent {
     id: string;
     url: string;
     username: string;
     description: string;
-    platform: string;
+    platform: 'tiktok' | 'instagram' | 'youtube';
     timestamp: string;
 }
 
@@ -20,6 +21,61 @@ export interface AccountCheckResult {
     newVideos: number;
     error?: string;
     addedVideos?: AccountContent[];
+}
+
+export interface InstagramContent {
+    profile: {
+        id: string;
+        username: string;
+        displayName: string;
+        bio: string;
+        profilePicture: string;
+        followersCount: number;
+        followingCount: number;
+        postsCount: number;
+        isVerified: boolean;
+        isPrivate: boolean;
+        isBusiness: boolean;
+        externalUrl?: string;
+    };
+    posts: Array<{
+        id: string;
+        url: string;
+        caption: string;
+        mediaUrl: string;
+        thumbnailUrl: string;
+        likeCount: number;
+        commentCount: number;
+        timestamp: string;
+        mediaType: 'photo' | 'video' | 'carousel';
+        hashtags: string[];
+        mentions: string[];
+        location?: {
+            id: string;
+            name: string;
+        };
+    }>;
+    stories: Array<{
+        id: string;
+        mediaUrl: string;
+        mediaType: 'photo' | 'video';
+        timestamp: string;
+        expiresAt: string;
+    }>;
+    highlights: Array<{
+        id: string;
+        title: string;
+        coverUrl: string;
+        mediaCount: number;
+    }>;
+    metadata: {
+        totalPosts: number;
+        hasMorePosts: boolean;
+        nextCursor?: string;
+        lastUpdated: string;
+        storiesCount: number;
+        highlightsCount: number;
+    };
 }
 
 // Helper function to check if content matches keyword(s)
@@ -215,98 +271,29 @@ async function fetchTikTokAccountContent(username: string, lastVideoId?: string)
 
 // Instagram account content fetching
 async function fetchInstagramAccountContent(username: string, lastVideoId?: string): Promise<AccountContent[]> {
-    console.log(`🔍 Fetching Instagram content for @${username}...`);
-    
     const apiKey = process.env.TIKHUB_API_KEY;
     if (!apiKey) {
-        console.error('❌ TIKHUB_API_KEY environment variable is required');
-        return [];
+        throw new Error('TikHub API key not configured');
     }
 
     try {
-        const allContent: AccountContent[] = [];
-        let maxCursor: string | undefined = undefined;
-        let hasMore = true;
-        let pageCount = 0;
-        const maxPages = 5; // Limit to prevent infinite loops
-
-        while (hasMore && pageCount < maxPages) {
-            pageCount++;
-            
-            // Use the working Instagram API endpoint
-            let apiUrl = `https://api.tikhub.io/api/v1/instagram/web_app/fetch_user_posts_and_reels_by_username?username=${username}`;
-            if (maxCursor) {
-                apiUrl += `&cursor=${maxCursor}`;
-            }
-
-            console.log(`📄 Fetching Instagram page ${pageCount} for @${username}${maxCursor ? ` (cursor: ${maxCursor.substring(0, 20)}...)` : ''}`);
-
-            const response = await fetch(apiUrl, {
-                headers: { 
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (!response.ok) {
-                console.error(`❌ TikHub API error: ${response.status} ${response.statusText}`);
-                if (response.status === 404) {
-                    throw new Error(`Instagram account @${username} not found or TikHub API endpoint issue`);
-                } else if (response.status === 400) {
-                    throw new Error(`Bad request for Instagram account @${username}. Please verify the username is correct.`);
-                }
-                throw new Error(`TikHub API error: ${response.status} ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            
-            if (!data.data || !data.data.data || !Array.isArray(data.data.data.items)) {
-                console.warn(`⚠️ No items found in response for @${username}`);
-                break;
-            }
-
-            const posts = data.data.data.items;
-            console.log(`✅ Found ${posts.length} Instagram posts on page ${pageCount} for @${username}`);
-
-            // Process posts and convert to AccountContent format
-            for (const post of posts) {
-                // Stop if we've reached the last processed video
-                if (lastVideoId && post.id === lastVideoId) {
-                    console.log(`🛑 Reached last processed video ${lastVideoId} for @${username}`);
-                    hasMore = false;
-                    break;
-                }
-
-                // Extract post data
-                const postId = post.id || post.pk || '';
-                const postUrl = post.permalink || `https://www.instagram.com/p/${post.code}/`;
-                const caption = post.caption?.text || '';
-                const timestamp = post.taken_at ? new Date(post.taken_at * 1000).toISOString() : new Date().toISOString();
-
-                allContent.push({
-                    id: postId,
-                    url: postUrl,
-                    username: username,
-                    description: caption,
-                    platform: 'instagram',
-                    timestamp: timestamp
-                });
-            }
-
-            // Check for pagination
-            hasMore = data.data.pagination_token && data.data.pagination_token !== '';
-            maxCursor = data.data.pagination_token;
-            
-            if (!hasMore || !maxCursor) {
-                console.log(`✅ Reached end of content for @${username} (has_more: ${hasMore}, cursor: ${maxCursor})`);
-                break;
-            }
-
-            // Add a small delay between requests to be respectful
-            await new Promise(resolve => setTimeout(resolve, 200));
-        }
-
-        console.log(`✅ Total Instagram posts fetched for @${username}: ${allContent.length} across ${pageCount} pages`);
+        const instagramAPI = new InstagramAPI(apiKey);
+        
+        // Get comprehensive profile data
+        const profile = await instagramAPI.getUserProfile(username);
+        
+        // Get posts and reels
+        const postsData = await instagramAPI.getUserPosts(username, undefined, 20);
+        
+        // Transform posts to AccountContent format for compatibility
+        const allContent: AccountContent[] = postsData.posts.map(post => ({
+            id: post.id,
+            url: post.url,
+            username: username,
+            description: post.caption,
+            platform: 'instagram' as const,
+            timestamp: post.timestamp
+        }));
 
         // Filter out posts we've already processed if we have a lastVideoId
         let newContent = allContent;
@@ -314,15 +301,98 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
             const lastIndex = allContent.findIndex(content => content.id === lastVideoId);
             if (lastIndex !== -1) {
                 newContent = allContent.slice(0, lastIndex);
-                console.log(`📋 Found ${newContent.length} new posts since last check (videoId: ${lastVideoId})`);
+                console.log(`📋 Found ${newContent.length} new Instagram posts since last check (videoId: ${lastVideoId})`);
             }
         }
 
+        console.log(`✅ Total Instagram posts fetched for @${username}: ${newContent.length}`);
         return newContent;
 
     } catch (error) {
-        console.error(`❌ Error fetching Instagram content for @${username}:`, error);
-        return [];
+        console.error('Instagram API Error:', error);
+        throw new Error(`Failed to fetch Instagram content for @${username}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+}
+
+// Enhanced Instagram API function for detailed data
+export async function fetchInstagramAccountDetails(username: string): Promise<InstagramContent> {
+    const apiKey = process.env.TIKHUB_API_KEY;
+    if (!apiKey) {
+        throw new Error('TikHub API key not configured');
+    }
+
+    try {
+        const instagramAPI = new InstagramAPI(apiKey);
+        
+        // Get comprehensive profile data
+        const profile = await instagramAPI.getUserProfile(username);
+        
+        // Get posts and reels
+        const postsData = await instagramAPI.getUserPosts(username, undefined, 20);
+        
+        // Get additional content types
+        const [stories, highlights] = await Promise.all([
+            instagramAPI.getUserStories(username).catch(() => []),
+            instagramAPI.getUserHighlights(username).catch(() => [])
+        ]);
+
+        // Transform posts to match interface
+        const posts = postsData.posts.map(post => ({
+            id: post.id,
+            url: post.url,
+            caption: post.caption,
+            mediaUrl: post.media_url,
+            thumbnailUrl: post.thumbnail_url || post.media_url,
+            likeCount: post.like_count,
+            commentCount: post.comment_count,
+            timestamp: post.timestamp,
+            mediaType: post.media_type,
+            hashtags: post.hashtags,
+            mentions: post.mentions,
+            location: post.location
+        }));
+
+        return {
+            profile: {
+                id: profile.id,
+                username: profile.username,
+                displayName: profile.full_name,
+                bio: profile.biography,
+                profilePicture: profile.profile_pic_url,
+                followersCount: profile.follower_count,
+                followingCount: profile.following_count,
+                postsCount: profile.post_count,
+                isVerified: profile.is_verified,
+                isPrivate: profile.is_private,
+                isBusiness: profile.is_business_account,
+                externalUrl: profile.external_url
+            },
+            posts,
+            stories: stories.map(story => ({
+                id: story.id,
+                mediaUrl: story.media_url,
+                mediaType: story.media_type,
+                timestamp: story.timestamp,
+                expiresAt: story.expires_at
+            })),
+            highlights: highlights.map(highlight => ({
+                id: highlight.id,
+                title: highlight.title,
+                coverUrl: highlight.cover_media_url,
+                mediaCount: highlight.media_count
+            })),
+            metadata: {
+                totalPosts: profile.post_count,
+                hasMorePosts: postsData.has_more,
+                nextCursor: postsData.next_cursor,
+                lastUpdated: new Date().toISOString(),
+                storiesCount: stories.length,
+                highlightsCount: highlights.length
+            }
+        };
+    } catch (error) {
+        console.error('Instagram API Error:', error);
+        throw new Error(`Failed to fetch Instagram content for @${username}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 }
 

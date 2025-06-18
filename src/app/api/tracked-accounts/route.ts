@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { uploadToS3 } from '@/lib/s3';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +57,7 @@ export async function GET() {
                                 } else if (userInfo.user && userInfo.user.avatarThumb) {
                                     pfpUrl = userInfo.user.avatarThumb;
                                 }
+                                
                                 apiStatus = data.code;
                                 if (userInfo.user && userInfo.user.nickname) {
                                     displayName = userInfo.user.nickname;
@@ -86,6 +88,7 @@ export async function GET() {
                             } else if (data.data && data.data.profile_pic_url) {
                                 pfpUrl = data.data.profile_pic_url;
                             }
+                            
                             apiStatus = data.code;
                             if (data.data && data.data.full_name) {
                                 displayName = data.data.full_name;
@@ -112,7 +115,7 @@ export async function GET() {
                                 }
                             }
                         }
-                        const res2 = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${channelId}&key=${apiKey}`);
+                        const res2 = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelId}&key=${apiKey}`);
                         if (res2.ok) {
                             const data2 = await res2.json();
                             if (data2.items && data2.items.length > 0) {
@@ -340,6 +343,7 @@ export async function POST(request: NextRequest) {
                             } else if (userInfo.user && userInfo.user.avatarThumb) {
                                 pfpUrl = userInfo.user.avatarThumb;
                             }
+                            
                             apiStatus = data.code;
                             if (userInfo.user && userInfo.user.nickname) {
                                 displayName = userInfo.user.nickname;
@@ -372,6 +376,7 @@ export async function POST(request: NextRequest) {
                         } else if (data.data && data.data.profile_pic_url) {
                             pfpUrl = data.data.profile_pic_url;
                         }
+                        
                         apiStatus = data.code;
                         if (data.data && data.data.full_name) {
                             displayName = data.data.full_name;
@@ -400,7 +405,7 @@ export async function POST(request: NextRequest) {
                         }
                     }
                     // Now get channel statistics
-                    const res2 = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${channelId}&key=${apiKey}`);
+                    const res2 = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelId}&key=${apiKey}`);
                     if (res2.ok) {
                         const data2 = await res2.json();
                         if (data2.items && data2.items.length > 0) {
