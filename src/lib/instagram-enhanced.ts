@@ -126,8 +126,11 @@ export class InstagramAPI {
         const data = await this.makeRequest('fetch_user_posts_and_reels_by_username', params);
         
         if (!data.data?.data?.items) {
+            console.log(`⚠️ No Instagram posts data found for @${username}`);
             return { posts: [], has_more: false };
         }
+
+        console.log(`📋 Raw Instagram API returned ${data.data.data.items.length} posts for @${username}`);
 
         const posts = data.data.data.items.map((item: any): InstagramPost => ({
             id: item.id,
@@ -146,7 +149,15 @@ export class InstagramAPI {
             } : undefined,
             hashtags: this.extractHashtags(item.caption?.text || ''),
             mentions: this.extractMentions(item.caption?.text || '')
-        }));
+        }))
+        // Sort by timestamp descending (newest first) to ensure proper ordering
+        .sort((a: InstagramPost, b: InstagramPost) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+        console.log(`📅 Instagram posts for @${username} sorted by timestamp (newest first)`);
+        if (posts.length > 0) {
+            console.log(`  - Newest: ${posts[0].timestamp} (${posts[0].id})`);
+            console.log(`  - Oldest: ${posts[posts.length - 1].timestamp} (${posts[posts.length - 1].id})`);
+        }
 
         return {
             posts,

@@ -3,6 +3,36 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
+// Standardize username to prevent duplicate tracking
+function standardizeUsername(username: string, platform: string): string {
+    let standardized = username.toLowerCase().trim();
+    
+    // Remove @ prefix if present
+    if (standardized.startsWith('@')) {
+        standardized = standardized.substring(1);
+    }
+    
+    // Extract username from full URLs
+    if (platform === 'tiktok' && standardized.includes('tiktok.com')) {
+        const match = standardized.match(/tiktok\.com\/@([^\/?\s]+)/);
+        if (match) {
+            standardized = match[1];
+        }
+    } else if (platform === 'instagram' && standardized.includes('instagram.com')) {
+        const match = standardized.match(/instagram\.com\/([^\/?\s]+)/);
+        if (match) {
+            standardized = match[1];
+        }
+    } else if (platform === 'youtube' && standardized.includes('youtube.com/@')) {
+        const match = standardized.match(/youtube\.com\/@([^\/?\s]+)/);
+        if (match) {
+            standardized = match[1];
+        }
+    }
+    
+    return standardized;
+}
+
 // GET - List all tracked accounts
 export async function GET() {
     try {
@@ -371,7 +401,7 @@ export async function POST(request: NextRequest) {
         const existingAccount = await prisma.trackedAccount.findUnique({
             where: {
                 username_platform: {
-                    username: username.toLowerCase(),
+                    username: standardizeUsername(username, platform),
                     platform
                 }
             }
@@ -387,7 +417,7 @@ export async function POST(request: NextRequest) {
         // Create the tracked account
         const newAccount = await prisma.trackedAccount.create({
             data: {
-                username: username.toLowerCase(),
+                username: standardizeUsername(username, platform),
                 platform,
                 accountType,
                 keyword: keyword ? keyword.toLowerCase() : null,
@@ -412,7 +442,7 @@ export async function POST(request: NextRequest) {
             // Count tracked posts in DB
             trackedPosts = await prisma.video.count({
                 where: {
-                    username: username.toLowerCase(),
+                    username: standardizeUsername(username, platform),
                     platform: platform
                 }
             });
@@ -591,7 +621,7 @@ export async function POST(request: NextRequest) {
                     // Update tracked posts count
                     trackedPosts = await prisma.video.count({
                         where: {
-                            username: username.toLowerCase(),
+                            username: standardizeUsername(username, platform),
                             platform: platform
                         }
                     });

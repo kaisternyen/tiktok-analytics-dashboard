@@ -283,18 +283,26 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const profile = await instagramAPI.getUserProfile(username);
         
-        // Get posts and reels
-        const postsData = await instagramAPI.getUserPosts(username, undefined, 20);
+        // Get posts and reels - fetch more to ensure we get recent content
+        const postsData = await instagramAPI.getUserPosts(username, undefined, 50);
         
-        // Transform posts to AccountContent format
-        const posts = postsData.posts.map(post => ({
-            id: post.id,
-            url: post.url,
-            username: username,
-            description: post.caption,
-            platform: 'instagram' as const,
-            timestamp: post.timestamp
-        }));
+        // Transform posts to AccountContent format and sort by timestamp (newest first)
+        const posts = postsData.posts
+            .map(post => ({
+                id: post.id,
+                url: post.url,
+                username: username,
+                description: post.caption,
+                platform: 'instagram' as const,
+                timestamp: post.timestamp
+            }))
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+        console.log(`📋 Instagram posts fetched for @${username}: ${posts.length} total`);
+        if (posts.length > 0) {
+            console.log(`📅 Most recent post: ${posts[0].timestamp} (ID: ${posts[0].id})`);
+            console.log(`📅 Oldest post: ${posts[posts.length - 1].timestamp} (ID: ${posts[posts.length - 1].id})`);
+        }
 
         // Filter out posts we've already processed if we have a lastVideoId
         let newContent = posts;
@@ -303,10 +311,12 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
             if (lastIndex !== -1) {
                 newContent = posts.slice(0, lastIndex);
                 console.log(`📋 Found ${newContent.length} new Instagram posts since last check (videoId: ${lastVideoId})`);
+            } else {
+                console.log(`⚠️ LastVideoId ${lastVideoId} not found in current posts - returning all ${posts.length} posts as potentially new`);
             }
         }
 
-        console.log(`✅ Total Instagram posts fetched for @${username}: ${newContent.length}`);
+        console.log(`✅ Total Instagram posts to process for @${username}: ${newContent.length}`);
         return newContent;
 
     } catch (error) {

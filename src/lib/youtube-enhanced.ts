@@ -108,7 +108,7 @@ export class YouTubeAPI {
             throw new Error(`YouTube API error: ${response.status} ${response.statusText}`);
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         return response.json();
     }
 
