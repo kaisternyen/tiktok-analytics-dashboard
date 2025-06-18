@@ -14,9 +14,73 @@ export async function GET() {
 
         console.log(`✅ Found ${accounts.length} tracked accounts`);
 
-        return NextResponse.json({
-            success: true,
-            accounts: accounts.map(account => ({
+        // For each account, fetch trackedPosts and totalPosts
+        const accountsWithCounts = await Promise.all(accounts.map(async (account) => {
+            let trackedPosts = 0;
+            let totalPosts = null;
+            try {
+                trackedPosts = await prisma.video.count({
+                    where: {
+                        username: account.username,
+                        platform: account.platform
+                    }
+                });
+                if (account.platform === 'tiktok') {
+                    const apiKey = process.env.TIKHUB_API_KEY;
+                    if (apiKey) {
+                        const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_videos?unique_id=${account.username}`, {
+                            headers: { 'Authorization': `Bearer ${apiKey}` }
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.data && typeof data.data.total === 'number') {
+                                totalPosts = data.data.total;
+                            } else if (Array.isArray(data.data?.aweme_list)) {
+                                totalPosts = data.data.aweme_list.length;
+                            }
+                        }
+                    }
+                } else if (account.platform === 'instagram') {
+                    const apiKey = process.env.TIKHUB_API_KEY;
+                    if (apiKey) {
+                        const res = await fetch(`https://api.tikhub.io/api/v1/instagram/web_app/fetch_user_posts?username=${account.username}`, {
+                            headers: { 'Authorization': `Bearer ${apiKey}` }
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.data && typeof data.data.total === 'number') {
+                                totalPosts = data.data.total;
+                            } else if (Array.isArray(data.data?.items)) {
+                                totalPosts = data.data.items.length;
+                            }
+                        }
+                    }
+                } else if (account.platform === 'youtube') {
+                    const apiKey = process.env.YOUTUBE_API_KEY;
+                    if (apiKey) {
+                        let channelId = account.username;
+                        if (!account.username.startsWith('UC')) {
+                            const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forUsername=${account.username}&key=${apiKey}`);
+                            if (res.ok) {
+                                const data = await res.json();
+                                if (data.items && data.items.length > 0) {
+                                    channelId = data.items[0].id;
+                                }
+                            }
+                        }
+                        const res2 = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${channelId}&key=${apiKey}`);
+                        if (res2.ok) {
+                            const data2 = await res2.json();
+                            if (data2.items && data2.items.length > 0) {
+                                totalPosts = parseInt(data2.items[0].statistics?.videoCount || '0', 10);
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Error fetching tracked/total posts for account', account.username, account.platform, err);
+            }
+            return {
                 id: account.id,
                 username: account.username,
                 platform: account.platform,
@@ -25,8 +89,15 @@ export async function GET() {
                 isActive: account.isActive,
                 lastChecked: account.lastChecked.toISOString(),
                 createdAt: account.createdAt.toISOString(),
-                lastVideoId: account.lastVideoId
-            }))
+                lastVideoId: account.lastVideoId,
+                trackedPosts,
+                totalPosts
+            };
+        }));
+
+        return NextResponse.json({
+            success: true,
+            accounts: accountsWithCounts
         });
 
     } catch (error) {

@@ -11,6 +11,8 @@ interface TrackedAccount {
     lastChecked: string;
     createdAt: string;
     lastVideoId?: string;
+    trackedPosts?: number;
+    totalPosts?: number;
 }
 
 interface AddAccountForm {
@@ -18,6 +20,31 @@ interface AddAccountForm {
     platform: 'tiktok' | 'instagram' | 'youtube';
     accountType: 'all' | 'keyword';
     keyword: string;
+}
+
+// Add a helper to extract username/handle from a pasted URL
+function extractHandle(input: string, platform: string): string {
+    let value = input.trim();
+    if (platform === 'tiktok') {
+        // Accept @handle or full URL
+        if (value.startsWith('@')) return value.slice(1);
+        const match = value.match(/tiktok\.com\/@([\w.\-]+)/);
+        if (match) return match[1];
+        return value;
+    } else if (platform === 'instagram') {
+        // Accept handle or full URL
+        if (value.startsWith('@')) return value.slice(1);
+        const match = value.match(/instagram\.com\/(?:@)?([\w.\-]+)/);
+        if (match) return match[1].replace(/\/$/, '');
+        return value.replace(/\/$/, '');
+    } else if (platform === 'youtube') {
+        // Accept handle, channel ID, or full URL
+        if (value.startsWith('@')) return value.slice(1);
+        const match = value.match(/youtube\.com\/(?:c|user|channel)\/([\w\-@]+)/);
+        if (match) return match[1];
+        return value;
+    }
+    return value;
 }
 
 export function TrackedAccountsTab() {
@@ -58,10 +85,12 @@ export function TrackedAccountsTab() {
     const addAccount = async () => {
         try {
             setError(null);
+            // Always extract handle before submitting
+            const cleanUsername = extractHandle(formData.username, formData.platform);
             const response = await fetch('/api/tracked-accounts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify({ ...formData, username: cleanUsername })
             });
             
             const data = await response.json();
@@ -368,6 +397,12 @@ export function TrackedAccountsTab() {
                                                     </div>
                                                 )}
                                             </div>
+                                            {/* Tracked/Total Posts Info */}
+                                            {(typeof account.trackedPosts === 'number' && typeof account.totalPosts === 'number') ? (
+                                                <div className="text-xs text-gray-500 mt-1">Tracked: {account.trackedPosts} / {account.totalPosts} posts</div>
+                                            ) : typeof account.trackedPosts === 'number' ? (
+                                                <div className="text-xs text-gray-500 mt-1">Tracked: {account.trackedPosts} posts</div>
+                                            ) : null}
                                             <p className="text-sm text-gray-600">
                                                 Last checked: {formatTimeAgo(account.lastChecked)}
                                             </p>
