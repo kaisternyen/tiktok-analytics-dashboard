@@ -73,31 +73,30 @@ export async function GET() {
                 } else if (account.platform === 'instagram') {
                     const apiKey = process.env.TIKHUB_API_KEY;
                     if (apiKey) {
-                        const res = await fetch(`https://api.tikhub.io/api/v1/instagram/web_app/fetch_user_posts?username=${account.username}`, {
+                        const res = await fetch(`https://api.tikhub.io/api/v1/instagram/web_app/fetch_user_info_by_username?username=${account.username}`, {
                             headers: { 'Authorization': `Bearer ${apiKey}` }
                         });
                         if (res.ok) {
                             const data = await res.json();
-                            if (data.data && typeof data.data.total === 'number') {
-                                totalPosts = data.data.total;
-                            } else if (Array.isArray(data.data?.items)) {
-                                totalPosts = data.data.items.length;
+                            if (data.data && data.data.edge_owner_to_timeline_media) {
+                                totalPosts = data.data.edge_owner_to_timeline_media.count;
                             }
-                            if (data.data && data.data.user && data.data.user.avatar_url) {
-                                pfpUrl = data.data.user.avatar_url;
+                            if (data.data && data.data.profile_pic_url_hd) {
+                                pfpUrl = data.data.profile_pic_url_hd;
+                            } else if (data.data && data.data.profile_pic_url) {
+                                pfpUrl = data.data.profile_pic_url;
                             }
-                            apiStatus = data.status;
-                            apiError = data.error;
-                            if (data.data && data.data.user && data.data.user.username) {
-                                displayName = data.data.user.username;
+                            apiStatus = data.code;
+                            if (data.data && data.data.full_name) {
+                                displayName = data.data.full_name;
                             }
-                            if (data.data && data.data.user && data.data.user.follower_count) {
-                                followers = data.data.user.follower_count;
+                            if (data.data && data.data.edge_followed_by) {
+                                followers = data.data.edge_followed_by.count;
                             }
-                            if (data.data && data.data.user && data.data.user.profile_url) {
-                                profileUrl = data.data.user.profile_url;
-                            }
+                            profileUrl = `https://www.instagram.com/${account.username}/`;
                             lookedUpUsername = account.username;
+                        } else {
+                            apiError = `${res.status}: ${res.statusText}`;
                         }
                     }
                 } else if (account.platform === 'youtube') {
@@ -225,12 +224,12 @@ export async function POST(request: NextRequest) {
         } else if (platform === 'instagram') {
             const apiKey = process.env.TIKHUB_API_KEY;
             if (apiKey) {
-                const res = await fetch(`https://api.tikhub.io/api/v1/instagram/web_app/fetch_user_posts?username=${username}`, {
+                const res = await fetch(`https://api.tikhub.io/api/v1/instagram/web_app/fetch_user_info_by_username?username=${username}`, {
                     headers: { 'Authorization': `Bearer ${apiKey}` }
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    if (data.data && data.data.user && data.data.user.username) {
+                    if (data.data && data.data.edge_owner_to_timeline_media) {
                         accountExists = true;
                     }
                 }
@@ -359,31 +358,28 @@ export async function POST(request: NextRequest) {
                 // Instagram: Use TikHub API
                 const apiKey = process.env.TIKHUB_API_KEY;
                 if (apiKey) {
-                    const res = await fetch(`https://api.tikhub.io/api/v1/instagram/web_app/fetch_user_posts?username=${username}`, {
+                    const res = await fetch(`https://api.tikhub.io/api/v1/instagram/web_app/fetch_user_info_by_username?username=${username}`, {
                         headers: { 'Authorization': `Bearer ${apiKey}` }
                     });
                     if (res.ok) {
                         const data = await res.json();
                         // Try to get total post count from response
-                        if (data.data && typeof data.data.total === 'number') {
-                            totalPosts = data.data.total;
-                        } else if (Array.isArray(data.data?.items)) {
-                            totalPosts = data.data.items.length;
+                        if (data.data && data.data.edge_owner_to_timeline_media) {
+                            totalPosts = data.data.edge_owner_to_timeline_media.count;
                         }
-                        if (data.data && data.data.user && data.data.user.avatar_url) {
-                            pfpUrl = data.data.user.avatar_url;
+                        if (data.data && data.data.profile_pic_url_hd) {
+                            pfpUrl = data.data.profile_pic_url_hd;
+                        } else if (data.data && data.data.profile_pic_url) {
+                            pfpUrl = data.data.profile_pic_url;
                         }
-                        apiStatus = data.status;
-                        apiError = data.error;
-                        if (data.data && data.data.user && data.data.user.username) {
-                            displayName = data.data.user.username;
+                        apiStatus = data.code;
+                        if (data.data && data.data.full_name) {
+                            displayName = data.data.full_name;
                         }
-                        if (data.data && data.data.user && data.data.user.follower_count) {
-                            followers = data.data.user.follower_count;
+                        if (data.data && data.data.edge_followed_by) {
+                            followers = data.data.edge_followed_by.count;
                         }
-                        if (data.data && data.data.user && data.data.user.profile_url) {
-                            profileUrl = data.data.user.profile_url;
-                        }
+                        profileUrl = `https://www.instagram.com/${username}/`;
                         lookedUpUsername = username;
                     }
                 }

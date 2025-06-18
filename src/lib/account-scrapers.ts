@@ -233,8 +233,8 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
         while (hasMore && pageCount < maxPages) {
             pageCount++;
             
-            // Construct API URL for Instagram user posts
-            let apiUrl = `https://api.tikhub.io/api/v1/instagram/web_app/fetch_user_posts?username=${username}`;
+            // Use the working Instagram API endpoint
+            let apiUrl = `https://api.tikhub.io/api/v1/instagram/web_app/fetch_user_posts_and_reels_by_username?username=${username}`;
             if (maxCursor) {
                 apiUrl += `&cursor=${maxCursor}`;
             }
@@ -251,19 +251,21 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
             if (!response.ok) {
                 console.error(`❌ TikHub API error: ${response.status} ${response.statusText}`);
                 if (response.status === 404) {
-                    throw new Error(`TikHub Instagram API is currently non-functional. All Instagram endpoints return 404 errors regardless of account validity. Consider using alternative Instagram data sources.`);
+                    throw new Error(`Instagram account @${username} not found or TikHub API endpoint issue`);
+                } else if (response.status === 400) {
+                    throw new Error(`Bad request for Instagram account @${username}. Please verify the username is correct.`);
                 }
                 throw new Error(`TikHub API error: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
             
-            if (!data.data || !Array.isArray(data.data.items)) {
+            if (!data.data || !data.data.data || !Array.isArray(data.data.data.items)) {
                 console.warn(`⚠️ No items found in response for @${username}`);
                 break;
             }
 
-            const posts = data.data.items;
+            const posts = data.data.data.items;
             console.log(`✅ Found ${posts.length} Instagram posts on page ${pageCount} for @${username}`);
 
             // Process posts and convert to AccountContent format
@@ -292,8 +294,8 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
             }
 
             // Check for pagination
-            hasMore = data.data.more_available || false;
-            maxCursor = data.data.next_max_id;
+            hasMore = data.data.pagination_token && data.data.pagination_token !== '';
+            maxCursor = data.data.pagination_token;
             
             if (!hasMore || !maxCursor) {
                 console.log(`✅ Reached end of content for @${username} (has_more: ${hasMore}, cursor: ${maxCursor})`);
