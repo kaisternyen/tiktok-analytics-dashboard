@@ -300,7 +300,7 @@ export async function POST(request: NextRequest) {
         let trackedPosts = 0;
         let pfpUrl = null;
         let apiStatus = null;
-        let apiError = null;
+        const apiError = null;
         let displayName = null;
         let followers = null;
         let profileUrl = null;
