@@ -89,9 +89,10 @@ function getMusic(mediaData: TikTokVideoData | InstagramPostData | YouTubeVideoD
         if ('name' in mediaData.music && 'author' in mediaData.music) {
             return mediaData.music as { name: string; author: string };
         } else if ('songName' in mediaData.music && 'artistName' in mediaData.music) {
+            const musicData = mediaData.music as { songName: string; artistName: string };
             return {
-                name: (mediaData.music as any).songName,
-                author: (mediaData.music as any).artistName
+                name: musicData.songName,
+                author: musicData.artistName
             };
         }
     }
