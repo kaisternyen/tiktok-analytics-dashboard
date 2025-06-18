@@ -33,7 +33,13 @@ export async function GET() {
         let totalNewVideos = 0;
 
         for (const account of accounts) {
-            const result = await checkTrackedAccount(account);
+            const result = await checkTrackedAccount({
+                id: account.id,
+                username: account.username,
+                platform: account.platform,
+                accountType: account.accountType as 'all' | 'keyword',
+                keyword: account.keyword || undefined
+            });
             results.push(result);
             totalNewVideos += result.newVideos;
 
