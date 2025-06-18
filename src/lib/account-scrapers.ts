@@ -250,7 +250,10 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
 
             if (!response.ok) {
                 console.error(`❌ TikHub API error: ${response.status} ${response.statusText}`);
-                break;
+                if (response.status === 404) {
+                    throw new Error(`404: Instagram account @${username} not found or does not exist`);
+                }
+                throw new Error(`TikHub API error: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
@@ -530,21 +533,26 @@ export async function checkTrackedAccount(account: { id: string; username: strin
             result.newVideos = addedCount;
             result.addedVideos = addedVideos;
 
-            // Update lastVideoId if we found new content
+            // Update lastVideoId and lastPostAdded if we found new content
             if (recentContent.length > 0) {
-                // Set the lastVideoId to the most recent video so future checks
-                // will only pick up content newer than this
+                const updateData: any = { 
+                    lastVideoId: recentContent[0].id,
+                    lastChecked: new Date()
+                };
+                
+                // Only update lastPostAdded if we actually added new videos
+                if (addedCount > 0) {
+                    updateData.lastPostAdded = new Date();
+                }
+                
                 await prisma.trackedAccount.update({
                     where: { id: account.id },
-                    data: { 
-                        lastVideoId: recentContent[0].id,
-                        lastChecked: new Date()
-                    }
+                    data: updateData
                 });
             }
         }
 
-        // Update lastChecked timestamp
+        // Update lastChecked timestamp (always update this)
         await prisma.trackedAccount.update({
             where: { id: account.id },
             data: { lastChecked: new Date() }
@@ -553,7 +561,13 @@ export async function checkTrackedAccount(account: { id: string; username: strin
     } catch (error) {
         console.error(`❌ Error checking account @${account.username}:`, error);
         result.status = 'failed';
-        result.error = error instanceof Error ? error.message : 'Unknown error';
+        
+        // Provide better error messages for Instagram
+        if (account.platform === 'instagram' && error instanceof Error && error.message.includes('404')) {
+            result.error = `Instagram account @${account.username} not found. The account may not exist on Instagram, or Instagram API access may be limited.`;
+        } else {
+            result.error = error instanceof Error ? error.message : 'Unknown error';
+        }
     }
 
     return result;

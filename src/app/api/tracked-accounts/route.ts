@@ -138,6 +138,7 @@ export async function GET() {
                 lastChecked: account.lastChecked.toISOString(),
                 createdAt: account.createdAt.toISOString(),
                 lastVideoId: account.lastVideoId,
+                lastPostAdded: account.lastPostAdded?.toISOString(),
                 trackedPosts,
                 totalPosts,
                 pfpUrl,

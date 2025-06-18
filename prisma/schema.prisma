@@ -50,15 +50,16 @@ model MetricsHistory {
 }
 
 model TrackedAccount {
-  id          String   @id @default(cuid())
-  username    String
-  platform    String
-  accountType String   @default("all")
-  keyword     String?
-  isActive    Boolean  @default(true)
-  lastChecked DateTime @default(now())
-  createdAt   DateTime @default(now())
-  lastVideoId String?
+  id              String   @id @default(cuid())
+  username        String
+  platform        String
+  accountType     String   @default("all")
+  keyword         String?
+  isActive        Boolean  @default(true)
+  lastChecked     DateTime @default(now())
+  createdAt       DateTime @default(now())
+  lastVideoId     String?
+  lastPostAdded   DateTime?  // Track when new posts were actually added
 
   @@unique([username, platform])
   @@map("tracked_accounts")

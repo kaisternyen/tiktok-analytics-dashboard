@@ -11,6 +11,7 @@ interface TrackedAccount {
     lastChecked: string;
     createdAt: string;
     lastVideoId?: string;
+    lastPostAdded?: string;  // Track when new posts were actually added
     trackedPosts?: number;
     totalPosts?: number;
     pfpUrl?: string;
@@ -33,27 +34,50 @@ interface AddAccountForm {
 
 // Add a helper to extract username/handle from a pasted URL
 function extractHandle(input: string, platform: string): string {
-    const value = input.trim();
-    if (platform === 'tiktok') {
-        // Accept @handle or full URL
-        if (value.startsWith('@')) return value.slice(1);
-        const match = value.match(/tiktok\.com\/@([\w.\-]+)/);
-        if (match) return match[1];
-        return value;
-    } else if (platform === 'instagram') {
-        // Accept handle or full URL
-        if (value.startsWith('@')) return value.slice(1);
-        const match = value.match(/instagram\.com\/(?:@)?([\w.\-]+)/);
-        if (match) return match[1].replace(/\/$/, '');
-        return value.replace(/\/$/, '');
-    } else if (platform === 'youtube') {
-        // Accept handle, channel ID, or full URL
-        if (value.startsWith('@')) return value.slice(1);
-        const match = value.match(/youtube\.com\/(?:c|user|channel)\/([\w\-@]+)/);
-        if (match) return match[1];
-        return value;
+    // Remove @ symbol if present
+    let handle = input.startsWith('@') ? input.slice(1) : input;
+    
+    // For TikTok, extract handle from full URL if needed
+    if (platform === 'tiktok' && handle.includes('tiktok.com')) {
+        const match = handle.match(/tiktok\.com\/@([^/?]+)/);
+        if (match) {
+            handle = match[1];
+        }
     }
-    return value;
+    
+    // For Instagram, extract handle from full URL if needed
+    if (platform === 'instagram' && handle.includes('instagram.com')) {
+        const match = handle.match(/instagram\.com\/([^/?]+)/);
+        if (match) {
+            handle = match[1];
+        }
+    }
+    
+    return handle;
+}
+
+// Helper function to format "time ago"
+function formatTimeAgo(dateString?: string): string {
+    if (!dateString) return 'Never';
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    if (diffInWeeks < 4) return `${diffInWeeks}w ago`;
+    
+    const diffInMonths = Math.floor(diffInDays / 30);
+    return `${diffInMonths}mo ago`;
 }
 
 // Restore getPlatformIcon
@@ -421,7 +445,15 @@ export function TrackedAccountsTab() {
                                                         ) : account.totalPosts === null ? (
                                                             <span className="text-gray-400">Loading...</span>
                                                         ) : (
-                                                            <span className="text-green-700">Tracked: {account.trackedPosts} / {account.totalPosts} posts</span>
+                                                            <div className="space-y-1">
+                                                                <span className="text-green-700">Tracked: {account.trackedPosts} / {account.totalPosts} posts</span>
+                                                                <div className="flex gap-4 text-xs text-gray-500">
+                                                                    <span>Last checked: {formatTimeAgo(account.lastChecked)}</span>
+                                                                    {account.lastPostAdded && (
+                                                                        <span className="font-medium text-blue-600">Last post: {formatTimeAgo(account.lastPostAdded)}</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         )}
                                                     </div>
                                         </div>
