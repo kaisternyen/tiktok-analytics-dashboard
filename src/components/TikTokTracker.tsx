@@ -98,36 +98,33 @@ export default function TikTokTracker() {
 
     const [filters, setFilters] = useState<FilterGroup>({ operator: 'AND', conditions: [] });
     const [sorts, setSorts] = useState<SortCondition[]>([]);
-    const [timeframe, setTimeframe] = useState<[string, string] | undefined>(undefined);
+    const [timeframe, setTimeframe] = useState<[string, string] | null>(null);
 
-    const fetchVideos = useCallback(async (customFilters: FilterGroup = filters, customSorts = sorts, customTimeframe: [string, string] | undefined = timeframe) => {
-        console.log('fetchVideos called with:', { customFilters, customSorts, customTimeframe });
+    const fetchVideos = useCallback(async (customFilters: FilterGroup = filters, customSorts = sorts, customTimeframe: [string, string] | null = timeframe) => {
+        console.log('fetchVideos called with:', { customFilters, customSorts });
         try {
             console.log('📋 Fetching videos from API...');
             // Build query params for filters and sorts
             const params = new URLSearchParams();
-            let filterGroup = { ...customFilters };
-            // Do not include timeframe in filterGroup.conditions
-            if (customTimeframe && customTimeframe[0] && customTimeframe[1]) {
-                // Send as a separate top-level filter
-                filterGroup = { ...filterGroup };
+            if (customFilters.conditions.length > 0) {
+                params.set('filter', encodeURIComponent(JSON.stringify(customFilters)));
             }
-            params.set('filter', encodeURIComponent(JSON.stringify({ ...filterGroup, timeframe: customTimeframe })));
             if (customSorts.length > 0) {
                 params.set('sort', encodeURIComponent(JSON.stringify(customSorts)));
+            }
+            if (customTimeframe && customTimeframe[0] && customTimeframe[1]) {
+                params.set('timeframe', encodeURIComponent(JSON.stringify(customTimeframe)));
             }
             const apiUrl = `/api/videos${params.toString() ? `?${params.toString()}` : ''}`;
             console.log('➡️ API Request URL:', apiUrl);
             const response = await fetch(apiUrl);
             const result = await response.json();
 
-            // Extract timeframe filter if present
-            const timeframeFilter = customFilters.conditions.find(f => f.field === 'timeframe' && Array.isArray(f.value) && f.value[0] && f.value[1]);
             let timeframeStart: Date | null = null;
             let timeframeEnd: Date | null = null;
-            if (timeframeFilter && Array.isArray(timeframeFilter.value) && typeof timeframeFilter.value[0] === 'string' && typeof timeframeFilter.value[1] === 'string') {
-                timeframeStart = new Date(timeframeFilter.value[0]);
-                timeframeEnd = new Date(timeframeFilter.value[1]);
+            if (customTimeframe && customTimeframe[0] && customTimeframe[1]) {
+                timeframeStart = new Date(customTimeframe[0]);
+                timeframeEnd = new Date(customTimeframe[1]);
             }
 
             if (result.success) {
@@ -180,15 +177,12 @@ export default function TikTokTracker() {
                             history: filteredHistory,
                         };
                     } else {
-                        // No timeframe filter: use full history and stats
-                        const sortedHistory = [...video.history].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                        const start = sortedHistory[0];
-                        const end = sortedHistory[sortedHistory.length - 1];
-                        if (!start || !end) return null;
-                        const views = end.views;
-                        const likes = end.likes;
-                        const comments = end.comments;
-                        const shares = end.shares;
+                        // No timeframe filter: use the current values from the API response
+                        // The API already provides the correct current values
+                        const views = video.views;
+                        const likes = video.likes;
+                        const comments = video.comments;
+                        const shares = video.shares;
                         const growth = video.growth || { views: 0, likes: 0, comments: 0, shares: 0 };
                         return {
                             ...video,
@@ -518,13 +512,11 @@ export default function TikTokTracker() {
     const getChartData = (): ChartDataPoint[] => {
         if (tracked.length === 0) return [];
 
-        // Extract timeframe filter from filters
-        const timeframeFilter = filters.conditions.find(f => f.field === 'timeframe' && Array.isArray(f.value) && f.value[0] && f.value[1]);
         let timeframeStart: Date | null = null;
         let timeframeEnd: Date | null = null;
-        if (timeframeFilter && Array.isArray(timeframeFilter.value) && typeof timeframeFilter.value[0] === 'string' && typeof timeframeFilter.value[1] === 'string') {
-            timeframeStart = new Date(timeframeFilter.value[0]);
-            timeframeEnd = new Date(timeframeFilter.value[1]);
+        if (timeframe && timeframe[0] && timeframe[1]) {
+            timeframeStart = new Date(timeframe[0]);
+            timeframeEnd = new Date(timeframe[1]);
         }
 
         // Filter out videos on daily cadence that haven't been scraped today for live charts
@@ -1016,7 +1008,6 @@ export default function TikTokTracker() {
                                 setFilters(newFilters);
                                 setSorts(newSorts);
                                 setTimeframe(newTimeframe);
-                                fetchVideos(newFilters, newSorts, newTimeframe);
                             }}
                         />
                         <Card>
