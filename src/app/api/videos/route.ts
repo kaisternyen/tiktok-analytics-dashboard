@@ -190,7 +190,6 @@ export async function GET(req: Request) {
                     filterParamToParse = JSON.stringify(parsed);
                 }
             }
-            
             // Only apply database-level filtering if there's no timeframe filter
             // When timeframe is present, we'll apply filtering after calculating deltas
             if (!hasTimeframeFilter) {
@@ -198,6 +197,8 @@ export async function GET(req: Request) {
                 console.log('PARSED filters:', parsedFilters);
                 if (parsedFilters) where = { ...parsedFilters, isActive: true };
             } else {
+                // Only filter by isActive in DB, all other filters after delta calculation
+                where = { isActive: true };
                 console.log('⏰ Timeframe filter detected - will apply other filters after delta calculation');
             }
         }
@@ -240,88 +241,95 @@ export async function GET(req: Request) {
         }
 
         // Transform data for frontend
-        const transformedVideos = filteredVideos.map((video) => {
-            // Parse JSON fields
-            const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
-            const music = video.music ? JSON.parse(video.music) : null;
+        let transformedVideos;
+        try {
+            transformedVideos = filteredVideos.map((video) => {
+                // Parse JSON fields
+                const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
+                const music = video.music ? JSON.parse(video.music) : null;
 
-            // Calculate growth from last 2 data points (in filtered history)
-            const history = video.metricsHistory;
-            let growth = { views: 0, likes: 0, comments: 0, shares: 0 };
+                // Calculate growth from last 2 data points (in filtered history)
+                const history = video.metricsHistory;
+                let growth = { views: 0, likes: 0, comments: 0, shares: 0 };
 
-            if (history.length >= 2) {
-                const latest = history[0];
-                const previous = history[1];
-
-                growth = {
-                    views: previous.views > 0 ? ((latest.views - previous.views) / previous.views) * 100 : 0,
-                    likes: previous.likes > 0 ? ((latest.likes - previous.likes) / previous.likes) * 100 : 0,
-                    comments: previous.comments > 0 ? ((latest.comments - previous.comments) / previous.comments) * 100 : 0,
-                    shares: previous.shares > 0 ? ((latest.shares - previous.shares) / previous.shares) * 100 : 0,
-                };
-            }
-
-            // If timeframe filter is present, calculate delta values
-            let views = 0;
-            let likes = 0;
-            let comments = 0;
-            let shares = 0;
-
-            if (timeframe) {
                 if (history.length >= 2) {
-                    // Sort history by timestamp (oldest first)
-                    const sortedHistory = [...history].sort((a, b) => 
-                        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-                    );
-                    const start = sortedHistory[0];
-                    const end = sortedHistory[sortedHistory.length - 1];
-                    // Calculate deltas
-                    views = end.views - start.views;
-                    likes = end.likes - start.likes;
-                    comments = end.comments - start.comments;
-                    shares = end.shares - start.shares;
-                } else {
-                    // Not enough data points in timeframe, delta is 0
-                    views = 0;
-                    likes = 0;
-                    comments = 0;
-                    shares = 0;
-                }
-            } else {
-                // No timeframe, use current values
-                views = video.currentViews;
-                likes = video.currentLikes;
-                comments = video.currentComments;
-                shares = video.currentShares;
-            }
+                    const latest = history[0];
+                    const previous = history[1];
 
-            return {
-                id: video.id,
-                url: video.url,
-                username: video.username,
-                description: video.description,
-                thumbnailUrl: video.thumbnailUrl,
-                posted: video.createdAt.toISOString(),
-                lastUpdate: video.lastScrapedAt.toISOString(),
-                status: video.isActive ? 'Active' : 'Paused',
-                views,
-                likes,
-                comments,
-                shares,
-                hashtags,
-                music,
-                platform: video.platform || 'tiktok',
-                scrapingCadence: video.scrapingCadence || 'hourly',
-                growth,
-                history: history.map((h) => ({
-                    time: h.timestamp.toISOString(),
-                    views: h.views,
-                    likes: h.likes,
-                    comments: h.comments,
-                    shares: h.shares
-                })).reverse() // Oldest first for charts
-            };
-        });
+                    growth = {
+                        views: previous.views > 0 ? ((latest.views - previous.views) / previous.views) * 100 : 0,
+                        likes: previous.likes > 0 ? ((latest.likes - previous.likes) / previous.likes) * 100 : 0,
+                        comments: previous.comments > 0 ? ((latest.comments - previous.comments) / previous.comments) * 100 : 0,
+                        shares: previous.shares > 0 ? ((latest.shares - previous.shares) / previous.shares) * 100 : 0,
+                    };
+                }
+
+                // If timeframe filter is present, calculate delta values
+                let views = 0;
+                let likes = 0;
+                let comments = 0;
+                let shares = 0;
+
+                if (timeframe) {
+                    if (history.length >= 2) {
+                        // Sort history by timestamp (oldest first)
+                        const sortedHistory = [...history].sort((a, b) => 
+                            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                        );
+                        const start = sortedHistory[0];
+                        const end = sortedHistory[sortedHistory.length - 1];
+                        // Calculate deltas
+                        views = end.views - start.views;
+                        likes = end.likes - start.likes;
+                        comments = end.comments - start.comments;
+                        shares = end.shares - start.shares;
+                    } else {
+                        // Not enough data points in timeframe, delta is 0
+                        views = 0;
+                        likes = 0;
+                        comments = 0;
+                        shares = 0;
+                    }
+                } else {
+                    // No timeframe, use current values
+                    views = video.currentViews;
+                    likes = video.currentLikes;
+                    comments = video.currentComments;
+                    shares = video.currentShares;
+                }
+
+                return {
+                    id: video.id,
+                    url: video.url,
+                    username: video.username,
+                    description: video.description,
+                    thumbnailUrl: video.thumbnailUrl,
+                    posted: video.createdAt.toISOString(),
+                    lastUpdate: video.lastScrapedAt.toISOString(),
+                    status: video.isActive ? 'Active' : 'Paused',
+                    views,
+                    likes,
+                    comments,
+                    shares,
+                    hashtags,
+                    music,
+                    platform: video.platform || 'tiktok',
+                    scrapingCadence: video.scrapingCadence || 'hourly',
+                    growth,
+                    history: history.map((h) => ({
+                        time: h.timestamp.toISOString(),
+                        views: h.views,
+                        likes: h.likes,
+                        comments: h.comments,
+                        shares: h.shares
+                    })).reverse() // Oldest first for charts
+                };
+            });
+            console.log('Videos after delta transformation:', transformedVideos.length, transformedVideos.map(v => ({ username: v.username, views: v.views })));
+        } catch (err) {
+            console.error('Error during delta transformation:', err);
+            throw err;
+        }
 
         // Apply sorting after transformation if timeframe filter is present
         let finalVideos = transformedVideos;
@@ -332,71 +340,75 @@ export async function GET(req: Request) {
             if (parsed && parsed.conditions) {
                 const nonTimeframeConditions = parsed.conditions.filter((f: FilterCondition) => f.field !== 'timeframe');
                 if (nonTimeframeConditions.length > 0) {
-                    console.log('🔍 Applying post-transformation filtering for timeframe:', nonTimeframeConditions);
-                    finalVideos = finalVideos.filter((video) => {
-                        return nonTimeframeConditions.every((condition: FilterCondition) => {
-                            const { field, operator, value } = condition;
-                            let videoValue: string | number;
-                            
-                            // Map database fields to transformed fields
-                            switch (field) {
-                                case 'currentViews':
-                                    videoValue = video.views;
-                                    break;
-                                case 'currentLikes':
-                                    videoValue = video.likes;
-                                    break;
-                                case 'currentComments':
-                                    videoValue = video.comments;
-                                    break;
-                                case 'currentShares':
-                                    videoValue = video.shares;
-                                    break;
-                                case 'username':
-                                    videoValue = video.username.toLowerCase();
-                                    break;
-                                case 'description':
-                                    videoValue = video.description.toLowerCase();
-                                    break;
-                                case 'status':
-                                    videoValue = video.status.toLowerCase();
-                                    break;
-                                case 'platform':
-                                    videoValue = video.platform.toLowerCase();
-                                    break;
-                                case 'scrapingCadence':
-                                    videoValue = video.scrapingCadence.toLowerCase();
-                                    break;
-                                default:
-                                    videoValue = (video as Record<string, unknown>)[field] as string | number;
-                            }
-                            
-                            const filterValue = typeof value === 'string' ? value.toLowerCase() : value;
-                            
-                            switch (operator) {
-                                case '=':
-                                case 'is':
-                                    return videoValue === filterValue;
-                                case '≠':
-                                case 'is not':
-                                    return videoValue !== filterValue;
-                                case '<':
-                                    return videoValue < (filterValue ?? 0);
-                                case '≤':
-                                    return videoValue <= (filterValue ?? 0);
-                                case '>':
-                                    return videoValue > (filterValue ?? 0);
-                                case '≥':
-                                    return videoValue >= (filterValue ?? 0);
-                                case 'contains':
-                                    return String(videoValue).includes(String(filterValue || ''));
-                                case 'does not contain':
-                                    return !String(videoValue).includes(String(filterValue || ''));
-                                default:
-                                    return true;
-                            }
+                    try {
+                        console.log('🔍 Applying post-transformation filtering for timeframe:', nonTimeframeConditions);
+                        const beforeFilter = finalVideos.length;
+                        finalVideos = finalVideos.filter((video) => {
+                            return nonTimeframeConditions.every((condition: FilterCondition) => {
+                                const { field, operator, value } = condition;
+                                let videoValue: string | number;
+                                // Map database fields to transformed fields
+                                switch (field) {
+                                    case 'currentViews':
+                                        videoValue = video.views;
+                                        break;
+                                    case 'currentLikes':
+                                        videoValue = video.likes;
+                                        break;
+                                    case 'currentComments':
+                                        videoValue = video.comments;
+                                        break;
+                                    case 'currentShares':
+                                        videoValue = video.shares;
+                                        break;
+                                    case 'username':
+                                        videoValue = video.username.toLowerCase();
+                                        break;
+                                    case 'description':
+                                        videoValue = video.description.toLowerCase();
+                                        break;
+                                    case 'status':
+                                        videoValue = video.status.toLowerCase();
+                                        break;
+                                    case 'platform':
+                                        videoValue = video.platform.toLowerCase();
+                                        break;
+                                    case 'scrapingCadence':
+                                        videoValue = video.scrapingCadence.toLowerCase();
+                                        break;
+                                    default:
+                                        videoValue = (video as Record<string, unknown>)[field] as string | number;
+                                }
+                                const filterValue = typeof value === 'string' ? value.toLowerCase() : value;
+                                switch (operator) {
+                                    case '=':
+                                    case 'is':
+                                        return videoValue === filterValue;
+                                    case '≠':
+                                    case 'is not':
+                                        return videoValue !== filterValue;
+                                    case '<':
+                                        return videoValue < (filterValue ?? 0);
+                                    case '≤':
+                                        return videoValue <= (filterValue ?? 0);
+                                    case '>':
+                                        return videoValue > (filterValue ?? 0);
+                                    case '≥':
+                                        return videoValue >= (filterValue ?? 0);
+                                    case 'contains':
+                                        return String(videoValue).includes(String(filterValue || ''));
+                                    case 'does not contain':
+                                        return !String(videoValue).includes(String(filterValue || ''));
+                                    default:
+                                        return true;
+                                }
+                            });
                         });
-                    });
+                        console.log('Videos after delta filtering:', finalVideos.length, finalVideos.map(v => ({ username: v.username, views: v.views })));
+                    } catch (err) {
+                        console.error('Error during delta filtering:', err);
+                        throw err;
+                    }
                 }
             }
         }
