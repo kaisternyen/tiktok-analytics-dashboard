@@ -175,6 +175,8 @@ export async function GET(req: Request) {
         let where: Record<string, unknown> = { isActive: true };
         let timeframe: [string, string] | null = null;
         let filterParamToParse = decodedFilterParam;
+        let hasTimeframeFilter = false;
+        
         if (decodedFilterParam) {
             const parsed = JSON.parse(decodedFilterParam);
             // Extract timeframe filter if present
@@ -182,14 +184,22 @@ export async function GET(req: Request) {
                 const tf = parsed.conditions.find((f: FilterCondition) => f.field === 'timeframe');
                 if (tf && Array.isArray(tf.value) && tf.value.length === 2 && tf.value[0] && tf.value[1]) {
                     timeframe = [tf.value[0], tf.value[1]];
+                    hasTimeframeFilter = true;
                     // Remove timeframe from conditions before passing to parseFilters
                     parsed.conditions = parsed.conditions.filter((f: FilterCondition) => f.field !== 'timeframe');
                     filterParamToParse = JSON.stringify(parsed);
                 }
             }
-            const parsedFilters = parseFilters(filterParamToParse);
-            console.log('PARSED filters:', parsedFilters);
-            if (parsedFilters) where = { ...parsedFilters, isActive: true };
+            
+            // Only apply database-level filtering if there's no timeframe filter
+            // When timeframe is present, we'll apply filtering after calculating deltas
+            if (!hasTimeframeFilter) {
+                const parsedFilters = parseFilters(filterParamToParse);
+                console.log('PARSED filters:', parsedFilters);
+                if (parsedFilters) where = { ...parsedFilters, isActive: true };
+            } else {
+                console.log('⏰ Timeframe filter detected - will apply other filters after delta calculation');
+            }
         }
         console.log('FINAL where clause:', where);
         // Don't apply sorting to database query if timeframe filter is present
@@ -302,11 +312,87 @@ export async function GET(req: Request) {
 
         // Apply sorting after transformation if timeframe filter is present
         let finalVideos = transformedVideos;
+        
+        // Apply filtering after delta calculation if timeframe filter is present
+        if (hasTimeframeFilter && decodedFilterParam) {
+            const parsed = JSON.parse(decodedFilterParam);
+            if (parsed && parsed.conditions) {
+                const nonTimeframeConditions = parsed.conditions.filter((f: FilterCondition) => f.field !== 'timeframe');
+                if (nonTimeframeConditions.length > 0) {
+                    console.log('🔍 Applying post-transformation filtering for timeframe:', nonTimeframeConditions);
+                    finalVideos = finalVideos.filter((video) => {
+                        return nonTimeframeConditions.every((condition: FilterCondition) => {
+                            const { field, operator, value } = condition;
+                            let videoValue: any;
+                            
+                            // Map database fields to transformed fields
+                            switch (field) {
+                                case 'currentViews':
+                                    videoValue = video.views;
+                                    break;
+                                case 'currentLikes':
+                                    videoValue = video.likes;
+                                    break;
+                                case 'currentComments':
+                                    videoValue = video.comments;
+                                    break;
+                                case 'currentShares':
+                                    videoValue = video.shares;
+                                    break;
+                                case 'username':
+                                    videoValue = video.username.toLowerCase();
+                                    break;
+                                case 'description':
+                                    videoValue = video.description.toLowerCase();
+                                    break;
+                                case 'status':
+                                    videoValue = video.status.toLowerCase();
+                                    break;
+                                case 'platform':
+                                    videoValue = video.platform.toLowerCase();
+                                    break;
+                                case 'scrapingCadence':
+                                    videoValue = video.scrapingCadence.toLowerCase();
+                                    break;
+                                default:
+                                    videoValue = (video as any)[field];
+                            }
+                            
+                            const filterValue = typeof value === 'string' ? value.toLowerCase() : value;
+                            
+                            switch (operator) {
+                                case '=':
+                                case 'is':
+                                    return videoValue === filterValue;
+                                case '≠':
+                                case 'is not':
+                                    return videoValue !== filterValue;
+                                case '<':
+                                    return videoValue < (filterValue ?? 0);
+                                case '≤':
+                                    return videoValue <= (filterValue ?? 0);
+                                case '>':
+                                    return videoValue > (filterValue ?? 0);
+                                case '≥':
+                                    return videoValue >= (filterValue ?? 0);
+                                case 'contains':
+                                    return String(videoValue).includes(String(filterValue || ''));
+                                case 'does not contain':
+                                    return !String(videoValue).includes(String(filterValue || ''));
+                                default:
+                                    return true;
+                            }
+                        });
+                    });
+                }
+            }
+        }
+        
         if (timeframe && decodedSortParam) {
-            const sorts = parseSorts(decodedSortParam);
-            if (sorts && sorts.length > 0) {
-                console.log('🔄 Applying post-transformation sorting for timeframe filter:', sorts);
-                finalVideos = [...transformedVideos].sort((a, b) => {
+            console.log('🔄 Applying post-transformation sorting for timeframe filter:', decodedSortParam);
+            finalVideos = [...finalVideos].sort((a, b) => {
+                const sorts = parseSorts(decodedSortParam);
+                if (sorts && sorts.length > 0) {
                     for (const sort of sorts) {
                         const [field, order] = Object.entries(sort)[0];
                         let aValue: string | number, bValue: string | number;
@@ -349,9 +435,9 @@ export async function GET(req: Request) {
                         if (aValue < bValue) return order === 'asc' ? -1 : 1;
                         if (aValue > bValue) return order === 'asc' ? 1 : -1;
                     }
-                    return 0;
-                });
-            }
+                }
+                return 0;
+            });
         } else if (!timeframe && decodedSortParam) {
             console.log('📊 Using database-level sorting (no timeframe filter)');
         } else if (timeframe && !decodedSortParam) {
