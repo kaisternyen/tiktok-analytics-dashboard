@@ -96,26 +96,83 @@ function getMusic(mediaData: TikTokVideoData | InstagramPostData | YouTubeVideoD
 }
 
 // TikTok account content fetching
-async function fetchTikTokAccountContent(username: string): Promise<AccountContent[]> {
+async function fetchTikTokAccountContent(username: string, lastVideoId?: string): Promise<AccountContent[]> {
     console.log(`🔍 Fetching TikTok content for @${username}...`);
     
-    // For now, this is a placeholder implementation
-    // In a real implementation, you would:
-    // 1. Use TikHub's user videos endpoint to fetch recent videos
-    // 2. Compare with lastVideoId to find new content
-    // 3. Return new videos
+    const apiKey = process.env.TIKHUB_API_KEY;
+    if (!apiKey) {
+        console.error('❌ TIKHUB_API_KEY not found in environment');
+        return [];
+    }
     
-    // Placeholder: simulate finding new content
-    const mockVideos: AccountContent[] = [];
-    
-    // Example TikHub API call (you'll need to implement this):
-    // const apiKey = process.env.TIKHUB_API_KEY;
-    // const response = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_videos?unique_id=${username}`, {
-    //     headers: { 'Authorization': `Bearer ${apiKey}` }
-    // });
-    
-    console.log(`⚠️ TikTok content fetching not yet implemented for @${username}`);
-    return mockVideos;
+    try {
+        // Build URL - don't include lastVideoId parameter as it's not supported by this endpoint
+        const url = `https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos?unique_id=${username}`;
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        
+        if (!response.ok) {
+            console.error(`❌ TikHub API error: ${response.status} ${response.statusText}`);
+            return [];
+        }
+        
+        const data = await response.json();
+        console.log(`📊 TikHub API response for @${username}: Found ${data.data?.aweme_list?.length || 0} videos`);
+        
+        if (!data.data || !data.data.aweme_list || !Array.isArray(data.data.aweme_list)) {
+            console.log(`⚠️ No videos found in API response for @${username}`);
+            return [];
+        }
+        
+        const videos = data.data.aweme_list;
+        console.log(`✅ Found ${videos.length} videos for @${username}`);
+        
+        // Convert TikHub video data to AccountContent format
+        const allContent: AccountContent[] = videos.map((video: any) => {
+            const videoId = video.aweme_id || video.id;
+            const shareUrl = video.share_url || `https://www.tiktok.com/@${username}/video/${videoId}`;
+            const description = video.desc || video.description || '';
+            const createTime = video.create_time || video.createTime;
+            
+            return {
+                id: videoId,
+                url: shareUrl,
+                username: username,
+                description: description,
+                platform: 'tiktok',
+                timestamp: createTime ? new Date(createTime * 1000).toISOString() : new Date().toISOString()
+            };
+        });
+        
+        // Filter out videos we've already processed
+        let newContent = allContent;
+        if (lastVideoId) {
+            console.log(`🔍 Filtering videos newer than last tracked video: ${lastVideoId}`);
+            const lastVideoIndex = allContent.findIndex(video => video.id === lastVideoId);
+            if (lastVideoIndex >= 0) {
+                // Only take videos that come before the lastVideoId (newer videos)
+                newContent = allContent.slice(0, lastVideoIndex);
+                console.log(`📝 Filtered to ${newContent.length} new videos (out of ${allContent.length} total)`);
+            } else {
+                console.log(`📝 Last video ID not found in current batch, considering all ${allContent.length} videos as potentially new`);
+            }
+        }
+        
+        console.log(`🎬 Returning ${newContent.length} videos for tracking consideration`);
+        
+        // Log first video for debugging
+        if (newContent.length > 0) {
+            const firstVideo = newContent[0];
+            console.log(`📹 Latest new video: ${firstVideo.description.substring(0, 50)}... (${firstVideo.id})`);
+        }
+        
+        return newContent;
+        
+    } catch (error) {
+        console.error(`💥 Error fetching TikTok content for @${username}:`, error);
+        return [];
+    }
 }
 
 // Instagram account content fetching
@@ -287,12 +344,20 @@ export async function checkTrackedAccount(account: { id: string; username: strin
     try {
         console.log(`🔍 Checking account @${account.username} on ${account.platform}...`);
 
+        // Get the tracked account record to access lastVideoId
+        const trackedAccount = await prisma.trackedAccount.findUnique({
+            where: { id: account.id }
+        });
+
+        const lastVideoId = trackedAccount?.lastVideoId;
+        console.log(`📋 Last tracked video ID for @${account.username}: ${lastVideoId || 'none'}`);
+
         // Fetch recent content based on platform
         let recentContent: AccountContent[] = [];
         
         switch (account.platform) {
             case 'tiktok':
-                recentContent = await fetchTikTokAccountContent(account.username);
+                recentContent = await fetchTikTokAccountContent(account.username, lastVideoId);
                 break;
             case 'instagram':
                 recentContent = await fetchInstagramAccountContent(account.username);
