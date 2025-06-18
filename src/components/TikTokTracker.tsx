@@ -11,6 +11,7 @@ import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, He
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
 import Link from 'next/link';
+import { TrackedAccountsTab } from '../app/tracked-accounts/page';
 
 interface VideoHistory {
     time: string;
@@ -769,22 +770,6 @@ export default function TikTokTracker() {
                                 </div>
                                 <h1 className="text-xl font-semibold text-gray-900">Social Media Analytics</h1>
                             </div>
-                            {/* Navigation */}
-                            <nav className="flex items-center gap-4">
-                                <Link 
-                                    href="/" 
-                                    className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                                >
-                                    Dashboard
-                                </Link>
-                                <Link 
-                                    href="/tracked-accounts" 
-                                    className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
-                                >
-                                    <Users className="w-4 h-4" />
-                                    Tracked Accounts
-                                </Link>
-                            </nav>
                         </div>
                         <div className="flex items-center gap-3">
                             <Button
@@ -857,17 +842,13 @@ export default function TikTokTracker() {
 
             {/* Main Content */}
             <div className="max-w-7xl mx-auto px-6 py-6">
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue="overview">
                     <TabsList className="mb-6">
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger value="videos">Videos</TabsTrigger>
-                        <TabsTrigger value="tracked-accounts" asChild>
-                            <a href="/tracked-accounts">Tracked Accounts</a>
-                        </TabsTrigger>
+                        <TabsTrigger value="tracked-accounts">Tracked Accounts</TabsTrigger>
                         {selectedVideo && (
-                            <TabsTrigger value="insights">
-                                Insights - @{selectedVideo.username}
-                            </TabsTrigger>
+                            <TabsTrigger value="insights">Insights - @{selectedVideo.username}</TabsTrigger>
                         )}
                     </TabsList>
 
@@ -1218,6 +1199,11 @@ export default function TikTokTracker() {
                                 )}
                             </CardContent>
                         </Card>
+                    </TabsContent>
+
+                    {/* Tracked Accounts Tab */}
+                    <TabsContent value="tracked-accounts">
+                        <TrackedAccountsTab />
                     </TabsContent>
 
                     {/* Insights Tab */}
