@@ -280,13 +280,14 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
         const instagramAPI = new InstagramAPI(apiKey);
         
         // Get comprehensive profile data
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const profile = await instagramAPI.getUserProfile(username);
         
         // Get posts and reels
         const postsData = await instagramAPI.getUserPosts(username, undefined, 20);
         
-        // Transform posts to AccountContent format for compatibility
-        const allContent: AccountContent[] = postsData.posts.map(post => ({
+        // Transform posts to AccountContent format
+        const posts = postsData.posts.map(post => ({
             id: post.id,
             url: post.url,
             username: username,
@@ -296,11 +297,11 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
         }));
 
         // Filter out posts we've already processed if we have a lastVideoId
-        let newContent = allContent;
+        let newContent = posts;
         if (lastVideoId) {
-            const lastIndex = allContent.findIndex(content => content.id === lastVideoId);
+            const lastIndex = posts.findIndex(content => content.id === lastVideoId);
             if (lastIndex !== -1) {
-                newContent = allContent.slice(0, lastIndex);
+                newContent = posts.slice(0, lastIndex);
                 console.log(`📋 Found ${newContent.length} new Instagram posts since last check (videoId: ${lastVideoId})`);
             }
         }
@@ -335,7 +336,7 @@ export async function fetchInstagramAccountDetails(username: string): Promise<In
             instagramAPI.getUserStories(username).catch(() => []),
             instagramAPI.getUserHighlights(username).catch(() => [])
         ]);
-
+        
         // Transform posts to match interface
         const posts = postsData.posts.map(post => ({
             id: post.id,
@@ -351,7 +352,7 @@ export async function fetchInstagramAccountDetails(username: string): Promise<In
             mentions: post.mentions,
             location: post.location
         }));
-
+        
         return {
             profile: {
                 id: profile.id,

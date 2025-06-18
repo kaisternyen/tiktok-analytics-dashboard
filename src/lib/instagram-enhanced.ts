@@ -1,5 +1,6 @@
 // Enhanced Instagram integration using TikHub API
 // Comprehensive implementation with multiple endpoints
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export interface InstagramProfile {
     id: string;

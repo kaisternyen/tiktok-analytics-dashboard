@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { uploadToS3 } from '@/lib/s3';
 
 export const dynamic = 'force-dynamic';
 
