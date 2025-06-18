@@ -225,7 +225,7 @@ export async function GET(req: Request) {
         // Don't apply sorting to database query if timeframe filter is present
         // We'll sort after calculating delta values
         const shouldApplyDBSorting = !timeframe;
-        const orderBy = shouldApplyDBSorting ? (parseSorts(decodedSortParam) || [{ createdAt: 'desc' }]) : [{ createdAt: 'desc' }];
+        const orderBy = shouldApplyDBSorting ? (parseSorts(decodedSortParam) || [{ createdAt: 'desc' as const }]) : [{ createdAt: 'desc' as const }];
         console.log('📋 Fetching videos from database with:', { where, orderBy, shouldApplyDBSorting });
         const videos = await prisma.video.findMany({
             where,
@@ -241,26 +241,26 @@ export async function GET(req: Request) {
         console.log(`✅ Found ${videos.length} videos in database`);
 
         // If timeframe filter is present, filter metricsHistory and videos accordingly
-        let filteredVideos: FilteredVideoWithMetrics[] = videos;
+        let filteredVideos = videos;
         if (timeframe) {
             const [start, end] = timeframe;
-            filteredVideos = videos.map((video: any) => {
-                const filteredHistory = video.metricsHistory.map((h: any) => ({
+            filteredVideos = videos.map((video) => {
+                const filteredHistory = video.metricsHistory.map((h) => ({
                   timestamp: h.timestamp,
                   views: h.views,
                   likes: h.likes,
                   comments: h.comments,
                   shares: h.shares
-                })).filter((h: MetricsHistoryPoint) => {
+                })).filter((h) => {
                     const t = new Date(h.timestamp).getTime();
                     return t >= new Date(start).getTime() && t <= new Date(end).getTime();
                 });
                 return { ...video, metricsHistory: filteredHistory };
-            }).filter((video: any) => video.metricsHistory.length > 0);
+            }).filter((video) => video.metricsHistory.length > 0);
         }
 
         // Transform data for frontend
-        const transformedVideos = filteredVideos.map((video: FilteredVideoWithMetrics) => {
+        const transformedVideos = filteredVideos.map((video) => {
             // Parse JSON fields
             const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
             const music = video.music ? JSON.parse(video.music) : null;
@@ -320,7 +320,7 @@ export async function GET(req: Request) {
                 platform: video.platform || 'tiktok',
                 scrapingCadence: video.scrapingCadence || 'hourly',
                 growth,
-                history: history.map((h: MetricsHistoryPoint) => ({
+                history: history.map((h) => ({
                     time: h.timestamp.toISOString(),
                     views: h.views,
                     likes: h.likes,
@@ -339,7 +339,7 @@ export async function GET(req: Request) {
                 finalVideos = [...transformedVideos].sort((a, b) => {
                     for (const sort of sorts) {
                         const [field, order] = Object.entries(sort)[0];
-                        let aValue: any, bValue: any;
+                        let aValue: string | number, bValue: string | number;
                         
                         // Map database fields to transformed fields
                         switch (field) {
@@ -372,8 +372,8 @@ export async function GET(req: Request) {
                                 bValue = new Date(b.lastUpdate).getTime();
                                 break;
                             default:
-                                aValue = (a as any)[field];
-                                bValue = (b as any)[field];
+                                aValue = (a as Record<string, unknown>)[field] as string | number;
+                                bValue = (b as Record<string, unknown>)[field] as string | number;
                         }
                         
                         if (aValue < bValue) return order === 'asc' ? -1 : 1;
