@@ -251,7 +251,7 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
             if (!response.ok) {
                 console.error(`❌ TikHub API error: ${response.status} ${response.statusText}`);
                 if (response.status === 404) {
-                    throw new Error(`404: Instagram account @${username} not found or does not exist`);
+                    throw new Error(`TikHub Instagram API is currently non-functional. All Instagram endpoints return 404 errors regardless of account validity. Consider using alternative Instagram data sources.`);
                 }
                 throw new Error(`TikHub API error: ${response.status} ${response.statusText}`);
             }
