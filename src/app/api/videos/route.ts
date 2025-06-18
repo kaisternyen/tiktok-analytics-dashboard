@@ -194,7 +194,7 @@ export async function GET(req: Request) {
             // When timeframe is present, we'll apply filtering after calculating deltas
             if (!hasTimeframeFilter) {
                 const parsedFilters = parseFilters(filterParamToParse);
-                console.log('PARSED filters:', parsedFilters);
+                console.log('PARSED filters:', JSON.stringify(parsedFilters, null, 2));
                 if (parsedFilters) where = { ...parsedFilters, isActive: true };
             } else {
                 // Only filter by isActive in DB, all other filters after delta calculation
@@ -202,12 +202,12 @@ export async function GET(req: Request) {
                 console.log('⏰ Timeframe filter detected - will apply other filters after delta calculation');
             }
         }
-        console.log('FINAL where clause:', where);
+        console.log('FINAL where clause:', JSON.stringify(where, null, 2));
         // Don't apply sorting to database query if timeframe filter is present
         // We'll sort after calculating delta values
         const shouldApplyDBSorting = !timeframe;
         const orderBy = shouldApplyDBSorting ? (parseSorts(decodedSortParam) || [{ createdAt: 'desc' as const }]) : [{ createdAt: 'desc' as const }];
-        console.log('📋 Fetching videos from database with:', { where, orderBy, shouldApplyDBSorting });
+        console.log('📋 Fetching videos from database with:', JSON.stringify({ where, orderBy, shouldApplyDBSorting }, null, 2));
         const videos = await prisma.video.findMany({
             where,
             include: {
