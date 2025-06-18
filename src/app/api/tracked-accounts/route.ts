@@ -198,6 +198,65 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
+        // Validate account exists before creating
+        let accountExists = false;
+        if (platform === 'tiktok') {
+            const apiKey = process.env.TIKHUB_API_KEY;
+            if (apiKey) {
+                const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_videos?unique_id=${username}`, {
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.data && data.data.user && data.data.user.nickname) {
+                        accountExists = true;
+                    }
+                }
+            }
+        } else if (platform === 'instagram') {
+            const apiKey = process.env.TIKHUB_API_KEY;
+            if (apiKey) {
+                const res = await fetch(`https://api.tikhub.io/api/v1/instagram/web_app/fetch_user_posts?username=${username}`, {
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.data && data.data.user && data.data.user.username) {
+                        accountExists = true;
+                    }
+                }
+            }
+        } else if (platform === 'youtube') {
+            const apiKey = process.env.YOUTUBE_API_KEY;
+            if (apiKey) {
+                let channelId = username;
+                if (!username.startsWith('UC')) {
+                    const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forUsername=${username}&key=${apiKey}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.items && data.items.length > 0) {
+                            channelId = data.items[0].id;
+                            accountExists = true;
+                        }
+                    }
+                } else {
+                    const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&id=${channelId}&key=${apiKey}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.items && data.items.length > 0) {
+                            accountExists = true;
+                        }
+                    }
+                }
+            }
+        }
+        if (!accountExists) {
+            return NextResponse.json({
+                success: false,
+                error: `Account @${username} on ${platform} does not exist or could not be found.`
+            }, { status: 404 });
+        }
+
         // Check if account already exists
         const existingAccount = await prisma.trackedAccount.findUnique({
             where: {

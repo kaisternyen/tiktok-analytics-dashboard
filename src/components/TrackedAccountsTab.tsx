@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Users } from 'lucide-react';
+import { Plus, RefreshCw, Users, Edit, Play, Pause, Trash2 } from 'lucide-react';
 
 interface TrackedAccount {
     id: string;
@@ -54,6 +54,20 @@ function extractHandle(input: string, platform: string): string {
     }
     return value;
 }
+
+// Restore getPlatformIcon
+const getPlatformIcon = (platform: string) => {
+    switch (platform) {
+        case 'tiktok':
+            return <div className="w-5 h-5 bg-black rounded flex items-center justify-center"><Play className="w-3 h-3 text-white" /></div>;
+        case 'instagram':
+            return <div className="w-5 h-5 bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 rounded flex items-center justify-center"><div className="w-3 h-3 bg-white rounded-full border border-gray-200"></div></div>;
+        case 'youtube':
+            return <div className="w-5 h-5 bg-red-600 rounded flex items-center justify-center"><Play className="w-3 h-3 text-white" /></div>;
+        default:
+            return null;
+    }
+};
 
 export function TrackedAccountsTab() {
     const [accounts, setAccounts] = useState<TrackedAccount[]>([]);
@@ -164,6 +178,31 @@ export function TrackedAccountsTab() {
             setError('Error checking accounts');
         } finally {
             setCheckingAccounts(false);
+        }
+    };
+
+    // Restore toggleAccountStatus
+    const toggleAccountStatus = async (account: TrackedAccount) => {
+        await updateAccount(account.id, { isActive: !account.isActive });
+    };
+
+    // Restore deleteAccount
+    const deleteAccount = async (id: string) => {
+        if (!confirm('Are you sure you want to stop tracking this account?')) return;
+        try {
+            setError(null);
+            const response = await fetch(`/api/tracked-accounts?id=${id}`, {
+                method: 'DELETE'
+            });
+            const data = await response.json();
+            if (data.success) {
+                setSuccess(data.message);
+                fetchAccounts();
+            } else {
+                setError(data.error);
+            }
+        } catch {
+            setError('Error deleting tracked account');
         }
     };
 
@@ -327,34 +366,62 @@ export function TrackedAccountsTab() {
                     <div className="space-y-4">
                         {accounts.map((account) => (
                             <div key={account.id} className="bg-white rounded-lg shadow-sm border p-6">
-                                <div className="flex items-center gap-4">
-                                    {account.pfpUrl ? (
-                                        <img src={account.pfpUrl} alt="Profile" className="w-12 h-12 rounded-full object-cover border" />
-                                    ) : (
-                                        <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xl border">
-                                            <span>?</span>
-                                        </div>
-                                    )}
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="text-lg font-semibold text-gray-900">{account.displayName || `@${account.username}`}</h3>
-                                            <span className="text-xs text-gray-500">({account.lookedUpUsername || account.username})</span>
-                                        </div>
-                                        {typeof account.followers === 'number' && (
-                                            <div className="text-xs text-gray-500">Followers: {account.followers.toLocaleString()}</div>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        {account.pfpUrl ? (
+                                            <img src={account.pfpUrl} alt="Profile" className="w-12 h-12 rounded-full object-cover border" />
+                                        ) : (
+                                            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xl border">
+                                                <span>?</span>
+                                            </div>
                                         )}
-                                        {account.profileUrl && (
-                                            <a href={account.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">View Profile</a>
-                                        )}
-                                        <div className="text-xs mt-1">
-                                            {account.apiError || account.apiErrorMessage ? (
-                                                <span className="text-red-600 font-semibold">❌ {account.apiErrorMessage || account.apiError || 'Account not found or API error'}</span>
-                                            ) : account.totalPosts === null ? (
-                                                <span className="text-gray-400">Loading...</span>
-                                            ) : (
-                                                <span className="text-green-700">Tracked: {account.trackedPosts} / {account.totalPosts} posts</span>
-                                            )}
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                {getPlatformIcon(account.platform)}
+                                                <h3 className="text-lg font-semibold text-gray-900">{account.displayName || `@${account.username}`}</h3>
+                                                <span className="text-xs text-gray-500">({account.lookedUpUsername || account.username})</span>
+                                            </div>
+                                                    {typeof account.followers === 'number' && (
+                                                        <div className="text-xs text-gray-500">Followers: {account.followers.toLocaleString()}</div>
+                                                    )}
+                                                    {account.profileUrl && (
+                                                        <a href={account.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">View Profile</a>
+                                                    )}
+                                                    <div className="text-xs mt-1">
+                                                        {account.apiError || account.apiErrorMessage ? (
+                                                            <span className="text-red-600 font-semibold">❌ {account.apiErrorMessage || account.apiError || 'Account not found or API error'}</span>
+                                                        ) : account.totalPosts === null ? (
+                                                            <span className="text-gray-400">Loading...</span>
+                                                        ) : (
+                                                            <span className="text-green-700">Tracked: {account.trackedPosts} / {account.totalPosts} posts</span>
+                                                        )}
+                                                    </div>
                                         </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => toggleAccountStatus(account)}
+                                            className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm ${
+                                                account.isActive
+                                                    ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                                                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            {account.isActive ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+                                            {account.isActive ? 'Active' : 'Paused'}
+                                        </button>
+                                        <button
+                                            onClick={() => setEditingAccount(account)}
+                                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => deleteAccount(account.id)}
+                                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
                                     </div>
                                 </div>
                             </div>
