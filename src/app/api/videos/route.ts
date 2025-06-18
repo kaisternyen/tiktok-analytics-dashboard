@@ -342,7 +342,6 @@ export async function GET(req: Request) {
                 if (nonTimeframeConditions.length > 0) {
                     try {
                         console.log('🔍 Applying post-transformation filtering for timeframe:', nonTimeframeConditions);
-                        const beforeFilter = finalVideos.length;
                         finalVideos = finalVideos.filter((video) => {
                             return nonTimeframeConditions.every((condition: FilterCondition) => {
                                 const { field, operator, value } = condition;
