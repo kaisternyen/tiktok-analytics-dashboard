@@ -535,7 +535,11 @@ export async function checkTrackedAccount(account: { id: string; username: strin
 
             // Update lastVideoId and lastPostAdded if we found new content
             if (recentContent.length > 0) {
-                const updateData: any = { 
+                const updateData: {
+                    lastVideoId: string;
+                    lastChecked: Date;
+                    lastPostAdded?: Date;
+                } = { 
                     lastVideoId: recentContent[0].id,
                     lastChecked: new Date()
                 };

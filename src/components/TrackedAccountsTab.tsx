@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, RefreshCw, Users, Edit, Play, Pause, Trash2 } from 'lucide-react';
+import Image from 'next/image';
 
 interface TrackedAccount {
     id: string;
@@ -421,7 +422,13 @@ export function TrackedAccountsTab() {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-4">
                                         {account.pfpUrl ? (
-                                            <img src={account.pfpUrl} alt="Profile" className="w-12 h-12 rounded-full object-cover border" />
+                                            <Image 
+                                                src={account.pfpUrl} 
+                                                alt="Profile" 
+                                                width={48}
+                                                height={48}
+                                                className="w-12 h-12 rounded-full object-cover border" 
+                                            />
                                         ) : (
                                             <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xl border">
                                                 <span>?</span>
