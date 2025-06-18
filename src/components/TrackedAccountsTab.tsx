@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Play, RefreshCw, Users, Globe } from 'lucide-react';
+import { Plus, RefreshCw, Users } from 'lucide-react';
 
 interface TrackedAccount {
     id: string;
