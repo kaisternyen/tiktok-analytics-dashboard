@@ -101,20 +101,30 @@ export default function TikTokTracker() {
     const [timeframe, setTimeframe] = useState<[string, string] | null>(null);
 
     const fetchVideos = useCallback(async (customFilters: FilterGroup = filters, customSorts = sorts, customTimeframe: [string, string] | null = timeframe) => {
-        console.log('fetchVideos called with:', { customFilters, customSorts });
+        console.log('fetchVideos called with:', { customFilters, customSorts, customTimeframe });
         try {
             console.log('📋 Fetching videos from API...');
             // Build query params for filters and sorts
             const params = new URLSearchParams();
-            if (customFilters.conditions.length > 0) {
-                params.set('filter', encodeURIComponent(JSON.stringify(customFilters)));
+            let filterGroup = { ...customFilters };
+            // If timeframe is set, add it as a filter condition
+            if (customTimeframe && customTimeframe[0] && customTimeframe[1]) {
+                // Remove any existing timeframe condition
+                filterGroup = {
+                    ...filterGroup,
+                    conditions: [
+                        ...customFilters.conditions.filter(c => c.field !== 'timeframe'),
+                        { field: 'timeframe', operator: 'is within', value: [customTimeframe[0], customTimeframe[1]] }
+                    ]
+                };
+            }
+            if (filterGroup.conditions.length > 0) {
+                params.set('filter', encodeURIComponent(JSON.stringify(filterGroup)));
             }
             if (customSorts.length > 0) {
                 params.set('sort', encodeURIComponent(JSON.stringify(customSorts)));
             }
-            if (customTimeframe && customTimeframe[0] && customTimeframe[1]) {
-                params.set('timeframe', encodeURIComponent(JSON.stringify(customTimeframe)));
-            }
+            // Do NOT send separate timeframe param
             const apiUrl = `/api/videos${params.toString() ? `?${params.toString()}` : ''}`;
             console.log('➡️ API Request URL:', apiUrl);
             const response = await fetch(apiUrl);
