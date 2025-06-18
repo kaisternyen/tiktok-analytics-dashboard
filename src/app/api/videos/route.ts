@@ -165,27 +165,6 @@ interface MetricsHistoryPoint {
   shares: number;
 }
 
-// Type for filtered videos after timeframe filtering
-interface FilteredVideoWithMetrics {
-  id: string;
-  url: string;
-  username: string;
-  description: string;
-  thumbnailUrl: string | null;
-  createdAt: Date;
-  lastScrapedAt: Date;
-  isActive: boolean;
-  currentViews: number;
-  currentLikes: number;
-  currentComments: number;
-  currentShares: number;
-  hashtags: string | null;
-  music: string | null;
-  platform: string | null;
-  scrapingCadence: string | null;
-  metricsHistory: MetricsHistoryPoint[];
-}
-
 // Type for filter conditions
 interface FilterCondition {
   field: string;
@@ -255,7 +234,7 @@ export async function GET(req: Request) {
                     const t = new Date(h.timestamp).getTime();
                     return t >= new Date(start).getTime() && t <= new Date(end).getTime();
                 });
-                return { ...video, metricsHistory: filteredHistory };
+                return { ...video, metricsHistory: filteredHistory } as typeof video;
             }).filter((video) => video.metricsHistory.length > 0);
         }
 
