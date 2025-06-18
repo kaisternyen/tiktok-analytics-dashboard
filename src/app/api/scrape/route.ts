@@ -133,19 +133,28 @@ export async function POST(request: NextRequest) {
 
         // Always upload thumbnail to S3 if present
         if (thumbnailUrl) {
+            console.log('🖼️ Starting S3 upload for thumbnail:', thumbnailUrl);
             try {
+                console.log('📥 Fetching thumbnail from original URL...');
                 const res = await fetch(thumbnailUrl);
                 if (res.ok) {
+                    console.log('✅ Thumbnail fetch successful, uploading to S3...');
                     const buffer = await res.buffer();
                     const key = `thumbnails/${existingVideo ? existingVideo.id : result.data.id}.jpg`;
+                    console.log('🔑 S3 key:', key);
                     const s3Url = await uploadToS3(buffer, key, 'image/jpeg');
                     thumbnailUrl = s3Url;
+                    console.log('✅ Thumbnail uploaded to S3 successfully:', s3Url);
+                } else {
+                    console.error('❌ Failed to fetch thumbnail, status:', res.status);
                 }
             } catch (err) {
-                console.error('Failed to upload thumbnail to S3:', err);
+                console.error('❌ Failed to upload thumbnail to S3:', err);
             }
+        } else {
+            console.log('⚠️ No thumbnail URL found, skipping S3 upload');
         }
-        console.log('Using thumbnail URL:', thumbnailUrl);
+        console.log('📋 Final thumbnail URL to be stored:', thumbnailUrl);
 
         if (existingVideo) {
             console.log('📋 Media already exists, updating with latest data...');
