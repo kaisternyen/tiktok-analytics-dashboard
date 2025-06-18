@@ -323,7 +323,7 @@ export async function GET(req: Request) {
                     finalVideos = finalVideos.filter((video) => {
                         return nonTimeframeConditions.every((condition: FilterCondition) => {
                             const { field, operator, value } = condition;
-                            let videoValue: any;
+                            let videoValue: string | number;
                             
                             // Map database fields to transformed fields
                             switch (field) {
@@ -355,7 +355,7 @@ export async function GET(req: Request) {
                                     videoValue = video.scrapingCadence.toLowerCase();
                                     break;
                                 default:
-                                    videoValue = (video as any)[field];
+                                    videoValue = (video as Record<string, unknown>)[field] as string | number;
                             }
                             
                             const filterValue = typeof value === 'string' ? value.toLowerCase() : value;
