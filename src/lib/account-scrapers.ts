@@ -398,23 +398,125 @@ export async function fetchInstagramAccountDetails(username: string): Promise<In
 }
 
 // YouTube account content fetching
-async function fetchYouTubeAccountContent(channelId: string): Promise<AccountContent[]> {
-    console.log(`🔍 Fetching YouTube content for channel ${channelId}...`);
+async function fetchYouTubeAccountContent(channelIdentifier: string, lastVideoId?: string): Promise<AccountContent[]> {
+    console.log(`🔍 Fetching YouTube content for channel ${channelIdentifier}...`);
     
-    // For now, this is a placeholder implementation
-    // In a real implementation, you would:
-    // 1. Use YouTube Data API v3 to fetch recent videos
-    // 2. Compare with lastVideoId to find new content
-    // 3. Return new videos
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+        console.error('❌ YOUTUBE_API_KEY not found in environment');
+        return [];
+    }
     
-    const mockVideos: AccountContent[] = [];
-    
-    // Example YouTube API call (you'll need to implement this):
-    // const apiKey = process.env.YOUTUBE_API_KEY;
-    // const response = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=50&key=${apiKey}`);
-    
-    console.log(`⚠️ YouTube content fetching not yet implemented for channel ${channelId}`);
-    return mockVideos;
+    try {
+        // Step 1: Resolve channel ID if needed
+        let channelId = channelIdentifier;
+        
+        // If the identifier doesn't look like a channel ID (UCxxxxxxxxxx), try to resolve it
+        if (!channelIdentifier.startsWith('UC') || channelIdentifier.length !== 24) {
+            console.log(`🔍 Resolving channel ID for username: ${channelIdentifier}`);
+            
+            // Try to get channel by username
+            const channelResponse = await fetch(
+                `https://www.googleapis.com/youtube/v3/channels?part=id&forUsername=${channelIdentifier}&key=${apiKey}`
+            );
+            
+            if (channelResponse.ok) {
+                const channelData = await channelResponse.json();
+                if (channelData.items && channelData.items.length > 0) {
+                    channelId = channelData.items[0].id;
+                    console.log(`✅ Resolved channel ID: ${channelId}`);
+                } else {
+                    // If username lookup fails, try searching for the channel
+                    console.log(`🔍 Username lookup failed, trying search for: ${channelIdentifier}`);
+                    const searchResponse = await fetch(
+                        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(channelIdentifier)}&type=channel&maxResults=1&key=${apiKey}`
+                    );
+                    
+                    if (searchResponse.ok) {
+                        const searchData = await searchResponse.json();
+                        if (searchData.items && searchData.items.length > 0) {
+                            channelId = searchData.items[0].snippet.channelId;
+                            console.log(`✅ Found channel via search: ${channelId}`);
+                        } else {
+                            console.error(`❌ Could not find YouTube channel for: ${channelIdentifier}`);
+                            return [];
+                        }
+                    } else {
+                        console.error(`❌ YouTube search API error: ${searchResponse.status} ${searchResponse.statusText}`);
+                        return [];
+                    }
+                }
+            } else {
+                console.error(`❌ YouTube channels API error: ${channelResponse.status} ${channelResponse.statusText}`);
+                return [];
+            }
+        }
+        
+        // Step 2: Fetch recent videos from the channel
+        console.log(`📡 Fetching recent videos for channel ID: ${channelId}`);
+        
+        const videosResponse = await fetch(
+            `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&type=video&maxResults=50&key=${apiKey}`
+        );
+        
+        if (!videosResponse.ok) {
+            console.error(`❌ YouTube search API error: ${videosResponse.status} ${videosResponse.statusText}`);
+            return [];
+        }
+        
+        const videosData = await videosResponse.json();
+        
+        if (!videosData.items || !Array.isArray(videosData.items)) {
+            console.log(`⚠️ No videos found for channel ${channelId}`);
+            return [];
+        }
+        
+        console.log(`📊 Found ${videosData.items.length} videos for channel ${channelId}`);
+        
+        // Step 3: Convert YouTube video data to AccountContent format
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const allContent: AccountContent[] = videosData.items.map((video: any) => {
+            const videoId = video.id.videoId;
+            const snippet = video.snippet;
+            
+            return {
+                id: videoId,
+                url: `https://www.youtube.com/watch?v=${videoId}`,
+                username: snippet.channelTitle || channelIdentifier,
+                description: snippet.title + (snippet.description ? `\n\n${snippet.description}` : ''),
+                platform: 'youtube' as const,
+                timestamp: new Date(snippet.publishedAt).toISOString()
+            };
+        });
+        
+        // Step 4: Filter out videos we've already processed
+        let newContent = allContent;
+        if (lastVideoId) {
+            console.log(`🔍 Filtering videos newer than last tracked video: ${lastVideoId}`);
+            const lastVideoIndex = allContent.findIndex(video => video.id === lastVideoId);
+            if (lastVideoIndex >= 0) {
+                // Only take videos that come before the lastVideoId (newer videos)
+                newContent = allContent.slice(0, lastVideoIndex);
+                console.log(`📝 Filtered to ${newContent.length} new videos (out of ${allContent.length} total)`);
+            } else {
+                console.log(`📝 Last video ID not found in current batch, considering all ${allContent.length} videos as potentially new`);
+            }
+        }
+        
+        console.log(`🎬 Returning ${newContent.length} YouTube videos for tracking consideration`);
+        
+        // Log first video for debugging
+        if (newContent.length > 0) {
+            const firstVideo = newContent[0];
+            console.log(`📹 Latest new video: ${firstVideo.description.substring(0, 50)}... (${firstVideo.id})`);
+        }
+        
+        return newContent;
+        
+    } catch (error) {
+        console.error(`💥 Error fetching YouTube content for ${channelIdentifier}:`, error);
+        return [];
+    }
 }
 
 // Add video to tracking system
@@ -580,8 +682,7 @@ export async function checkTrackedAccount(account: { id: string; username: strin
                 recentContent = await fetchInstagramAccountContent(account.username, lastVideoId || undefined);
                 break;
             case 'youtube':
-                // For YouTube, we might need to store channel ID instead of username
-                recentContent = await fetchYouTubeAccountContent(account.username);
+                recentContent = await fetchYouTubeAccountContent(account.username, lastVideoId || undefined);
                 break;
             default:
                 throw new Error(`Unsupported platform: ${account.platform}`);
@@ -639,13 +740,15 @@ export async function checkTrackedAccount(account: { id: string; username: strin
         console.error(`❌ Error checking account @${account.username}:`, error);
         result.status = 'failed';
         
-        // Provide better error messages for Instagram
+        // Provide better error messages for different platforms
         if (account.platform === 'instagram' && error instanceof Error && error.message.includes('404')) {
             result.error = `Instagram account @${account.username} not found. The account may not exist on Instagram, or Instagram API access may be limited.`;
+        } else if (account.platform === 'youtube' && error instanceof Error) {
+            result.error = `YouTube channel ${account.username} error: ${error.message}. Check if the channel exists and YouTube API key is valid.`;
         } else {
             result.error = error instanceof Error ? error.message : 'Unknown error';
         }
     }
 
     return result;
-} 
+}
