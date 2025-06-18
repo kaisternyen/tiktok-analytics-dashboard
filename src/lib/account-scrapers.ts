@@ -467,6 +467,7 @@ async function fetchYouTubeAccountContent(channelIdentifier: string, lastVideoId
                                 if (searchData.items && searchData.items.length > 0) {
                                     // Log all search results for debugging
                                     console.log(`🔍 Search found ${searchData.items.length} results:`);
+                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                     searchData.items.forEach((item: any, index: number) => {
                                         console.log(`  ${index + 1}. ${item.snippet.title} (${item.snippet.channelId})`);
                                         console.log(`     Handle: ${item.snippet.customUrl || 'N/A'}`);
