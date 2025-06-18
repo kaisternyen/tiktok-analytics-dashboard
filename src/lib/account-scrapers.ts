@@ -106,30 +106,57 @@ async function fetchTikTokAccountContent(username: string, lastVideoId?: string)
     }
     
     try {
-        // Build URL - don't include lastVideoId parameter as it's not supported by this endpoint
-        const url = `https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos?unique_id=${username}`;
-        const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${apiKey}` }
-        });
+        let allVideos: any[] = [];
+        let hasMore = true;
+        let maxCursor: string | undefined;
+        let pageCount = 0;
+        const maxPages = 3; // Limit to prevent infinite loops
         
-        if (!response.ok) {
-            console.error(`❌ TikHub API error: ${response.status} ${response.statusText}`);
-            return [];
+        while (hasMore && pageCount < maxPages) {
+            pageCount++;
+            
+            // Build URL with pagination
+            let url = `https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos?unique_id=${username}`;
+            if (maxCursor) {
+                url += `&max_cursor=${maxCursor}`;
+            }
+            
+            console.log(`📡 Fetching page ${pageCount}${maxCursor ? ` (cursor: ${maxCursor})` : ''}...`);
+            
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${apiKey}` }
+            });
+            
+            if (!response.ok) {
+                console.error(`❌ TikHub API error: ${response.status} ${response.statusText}`);
+                break;
+            }
+            
+            const data = await response.json();
+            
+            if (!data.data || !data.data.aweme_list || !Array.isArray(data.data.aweme_list)) {
+                console.log(`⚠️ No videos found in page ${pageCount} for @${username}`);
+                break;
+            }
+            
+            const pageVideos = data.data.aweme_list;
+            allVideos.push(...pageVideos);
+            console.log(`📊 Page ${pageCount}: Found ${pageVideos.length} videos (total: ${allVideos.length})`);
+            
+            // Check pagination
+            hasMore = data.data.has_more === 1 || data.data.has_more === true;
+            maxCursor = data.data.max_cursor;
+            
+            if (!hasMore || !maxCursor) {
+                console.log(`✅ Reached end of content (has_more: ${hasMore}, cursor: ${maxCursor})`);
+                break;
+            }
         }
         
-        const data = await response.json();
-        console.log(`📊 TikHub API response for @${username}: Found ${data.data?.aweme_list?.length || 0} videos`);
-        
-        if (!data.data || !data.data.aweme_list || !Array.isArray(data.data.aweme_list)) {
-            console.log(`⚠️ No videos found in API response for @${username}`);
-            return [];
-        }
-        
-        const videos = data.data.aweme_list;
-        console.log(`✅ Found ${videos.length} videos for @${username}`);
+        console.log(`✅ Total videos fetched for @${username}: ${allVideos.length} across ${pageCount} pages`);
         
         // Convert TikHub video data to AccountContent format
-        const allContent: AccountContent[] = videos.map((video: any) => {
+        const allContent: AccountContent[] = allVideos.map((video: any) => {
             const videoId = video.aweme_id || video.id;
             const shareUrl = video.share_url || `https://www.tiktok.com/@${username}/video/${videoId}`;
             const description = video.desc || video.description || '';
