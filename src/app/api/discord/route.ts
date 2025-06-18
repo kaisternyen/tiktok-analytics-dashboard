@@ -5,6 +5,7 @@ import nacl from 'tweetnacl';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import { getCurrentNormalizedTimestamp } from '@/lib/timestamp-utils';
+import { uploadToS3 } from '@/lib/s3';
 
 // Union type for all possible media data
 type MediaData = TikTokVideoData | InstagramPostData | YouTubeVideoData;
@@ -142,6 +143,7 @@ export async function POST(req: NextRequest) {
       let platformName = 'TikTok';
       let views = 0;
       let shares = 0;
+      let thumbnailUrl = getThumbnailUrl(mediaData);
       
       if (url.includes('instagram.com')) {
         platform = 'instagram';
@@ -162,13 +164,30 @@ export async function POST(req: NextRequest) {
         shares = tiktokData.shares || 0;
       }
 
+      // Always upload thumbnail to S3 if present
+      if (thumbnailUrl) {
+        try {
+          const res = await fetch(thumbnailUrl);
+          if (res.ok) {
+            const arrayBuffer = await res.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            const key = `thumbnails/${mediaData.id}.jpg`;
+            const s3Url = await uploadToS3(buffer, key, 'image/jpeg');
+            thumbnailUrl = s3Url;
+            console.log('✅ Thumbnail uploaded to S3:', s3Url);
+          }
+        } catch (err) {
+          console.error('Failed to upload thumbnail to S3:', err);
+        }
+      }
+
       // Create video record
       const newVideo = await prisma.video.create({
         data: {
           url: url,
           username: getUsername(mediaData),
           description: getDescription(mediaData),
-          thumbnailUrl: getThumbnailUrl(mediaData),
+          thumbnailUrl: thumbnailUrl,
           platform: platform,
           currentViews: views,
           currentLikes: mediaData.likes,
