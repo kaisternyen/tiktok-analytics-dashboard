@@ -22,24 +22,19 @@ export interface AccountCheckResult {
     addedVideos?: AccountContent[];
 }
 
-// Helper function to check if content matches keyword
+// Helper function to check if content matches keyword(s)
 export function matchesKeyword(content: string, keyword: string): boolean {
     const contentLower = content.toLowerCase();
-    const keywordLower = keyword.toLowerCase();
-    
-    // Check for exact keyword match
-    if (contentLower.includes(keywordLower)) {
-        return true;
-    }
-    
-    // Check for hashtag variations
-    const hashtagVariations = [
-        `#${keywordLower}`,
-        `@${keywordLower}`,
-        keywordLower
-    ];
-    
-    return hashtagVariations.some(variation => contentLower.includes(variation));
+    // Split keywords by comma, trim, and filter out empty
+    const keywords = keyword.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+    // Check if any keyword matches (as substring, hashtag, or mention)
+    return keywords.some(kw => {
+        if (!kw) return false;
+        if (contentLower.includes(kw)) return true;
+        if (contentLower.includes(`#${kw}`)) return true;
+        if (contentLower.includes(`@${kw}`)) return true;
+        return false;
+    });
 }
 
 // Helper function to get thumbnail URL from media data

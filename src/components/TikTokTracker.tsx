@@ -861,6 +861,9 @@ export default function TikTokTracker() {
                     <TabsList className="mb-6">
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger value="videos">Videos</TabsTrigger>
+                        <TabsTrigger value="tracked-accounts" asChild>
+                            <a href="/tracked-accounts">Tracked Accounts</a>
+                        </TabsTrigger>
                         {selectedVideo && (
                             <TabsTrigger value="insights">
                                 Insights - @{selectedVideo.username}
