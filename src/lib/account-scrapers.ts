@@ -69,7 +69,8 @@ function getDescription(mediaData: TikTokVideoData | InstagramPostData | YouTube
     if ('description' in mediaData) {
         return mediaData.description;
     } else if ('title' in mediaData) {
-        return mediaData.title;
+        // This is specifically for YouTubeVideoData which has a title property
+        return (mediaData as YouTubeVideoData).title;
     }
     return '';
 }
