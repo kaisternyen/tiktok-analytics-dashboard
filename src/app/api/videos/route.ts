@@ -262,24 +262,37 @@ export async function GET(req: Request) {
             }
 
             // If timeframe filter is present, calculate delta values
-            let views = video.currentViews;
-            let likes = video.currentLikes;
-            let comments = video.currentComments;
-            let shares = video.currentShares;
+            let views = 0;
+            let likes = 0;
+            let comments = 0;
+            let shares = 0;
 
-            if (timeframe && history.length >= 2) {
-                // Sort history by timestamp (oldest first)
-                const sortedHistory = [...history].sort((a, b) => 
-                    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-                );
-                const start = sortedHistory[0];
-                const end = sortedHistory[sortedHistory.length - 1];
-                
-                // Calculate deltas
-                views = end.views - start.views;
-                likes = end.likes - start.likes;
-                comments = end.comments - start.comments;
-                shares = end.shares - start.shares;
+            if (timeframe) {
+                if (history.length >= 2) {
+                    // Sort history by timestamp (oldest first)
+                    const sortedHistory = [...history].sort((a, b) => 
+                        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                    );
+                    const start = sortedHistory[0];
+                    const end = sortedHistory[sortedHistory.length - 1];
+                    // Calculate deltas
+                    views = end.views - start.views;
+                    likes = end.likes - start.likes;
+                    comments = end.comments - start.comments;
+                    shares = end.shares - start.shares;
+                } else {
+                    // Not enough data points in timeframe, delta is 0
+                    views = 0;
+                    likes = 0;
+                    comments = 0;
+                    shares = 0;
+                }
+            } else {
+                // No timeframe, use current values
+                views = video.currentViews;
+                likes = video.currentLikes;
+                comments = video.currentComments;
+                shares = video.currentShares;
             }
 
             return {
