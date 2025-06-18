@@ -108,6 +108,82 @@ export async function POST(request: NextRequest) {
 
         console.log('✅ Created tracked account:', newAccount.id);
 
+        // --- Fetch total posts from platform API ---
+        let totalPosts = null;
+        let trackedPosts = 0;
+        try {
+            // Count tracked posts in DB
+            trackedPosts = await prisma.video.count({
+                where: {
+                    username: username.toLowerCase(),
+                    platform: platform
+                }
+            });
+
+            if (platform === 'tiktok') {
+                // TikTok: Use TikHub API
+                const apiKey = process.env.TIKHUB_API_KEY;
+                if (apiKey) {
+                    const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_videos?unique_id=${username}`, {
+                        headers: { 'Authorization': `Bearer ${apiKey}` }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        // Try to get total post count from response
+                        if (data.data && typeof data.data.total === 'number') {
+                            totalPosts = data.data.total;
+                        } else if (Array.isArray(data.data?.aweme_list)) {
+                            totalPosts = data.data.aweme_list.length;
+                        }
+                    }
+                }
+            } else if (platform === 'instagram') {
+                // Instagram: Use TikHub API
+                const apiKey = process.env.TIKHUB_API_KEY;
+                if (apiKey) {
+                    const res = await fetch(`https://api.tikhub.io/api/v1/instagram/web_app/fetch_user_posts?username=${username}`, {
+                        headers: { 'Authorization': `Bearer ${apiKey}` }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        // Try to get total post count from response
+                        if (data.data && typeof data.data.total === 'number') {
+                            totalPosts = data.data.total;
+                        } else if (Array.isArray(data.data?.items)) {
+                            totalPosts = data.data.items.length;
+                        }
+                    }
+                }
+            } else if (platform === 'youtube') {
+                // YouTube: Use YouTube Data API
+                const apiKey = process.env.YOUTUBE_API_KEY;
+                if (apiKey) {
+                    // First, get channel ID from username if needed
+                    let channelId = username;
+                    if (!username.startsWith('UC')) {
+                        // If not a channel ID, resolve to channel ID
+                        const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forUsername=${username}&key=${apiKey}`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.items && data.items.length > 0) {
+                                channelId = data.items[0].id;
+                            }
+                        }
+                    }
+                    // Now get channel statistics
+                    const res2 = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${channelId}&key=${apiKey}`);
+                    if (res2.ok) {
+                        const data2 = await res2.json();
+                        if (data2.items && data2.items.length > 0) {
+                            totalPosts = parseInt(data2.items[0].statistics?.videoCount || '0', 10);
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching total/tracked posts:', err);
+        }
+
         return NextResponse.json({
             success: true,
             message: `Started tracking @${username} on ${platform}`,
@@ -120,7 +196,9 @@ export async function POST(request: NextRequest) {
                 isActive: newAccount.isActive,
                 lastChecked: newAccount.lastChecked.toISOString(),
                 createdAt: newAccount.createdAt.toISOString()
-            }
+            },
+            trackedPosts,
+            totalPosts
         });
 
     } catch (error) {

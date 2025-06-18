@@ -67,7 +67,13 @@ export function TrackedAccountsTab() {
             const data = await response.json();
             
             if (data.success) {
-                setSuccess(data.message);
+                let extraInfo = '';
+                if (typeof data.trackedPosts === 'number' && typeof data.totalPosts === 'number') {
+                    extraInfo = ` (Tracked: ${data.trackedPosts} / ${data.totalPosts} posts)`;
+                } else if (typeof data.trackedPosts === 'number') {
+                    extraInfo = ` (Tracked: ${data.trackedPosts} posts)`;
+                }
+                setSuccess(`${data.message}${extraInfo}`);
                 setShowAddForm(false);
                 setFormData({ username: '', platform: 'tiktok', accountType: 'all', keyword: '' });
                 fetchAccounts();
