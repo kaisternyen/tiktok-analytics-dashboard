@@ -93,6 +93,7 @@ export class YouTubeAPI {
         this.apiKey = apiKey;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private async makeRequest(endpoint: string, params: Record<string, string> = {}): Promise<any> {
         const url = new URL(`${this.baseUrl}/${endpoint}`);
         url.searchParams.append('key', this.apiKey);
