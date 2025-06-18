@@ -36,7 +36,7 @@ export async function GET() {
                 if (account.platform === 'tiktok') {
                     const apiKey = process.env.TIKHUB_API_KEY;
                     if (apiKey) {
-                        const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_videos?unique_id=${account.username}`, {
+                        const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos?unique_id=${account.username}`, {
                             headers: { 'Authorization': `Bearer ${apiKey}` }
                         });
                         if (res.ok) {
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
         if (platform === 'tiktok') {
             const apiKey = process.env.TIKHUB_API_KEY;
             if (apiKey) {
-                const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_videos?unique_id=${username}`, {
+                const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos?unique_id=${username}`, {
                     headers: { 'Authorization': `Bearer ${apiKey}` }
                 });
                 if (res.ok) {
@@ -313,7 +313,7 @@ export async function POST(request: NextRequest) {
                 // TikTok: Use TikHub API
                 const apiKey = process.env.TIKHUB_API_KEY;
                 if (apiKey) {
-                    const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_videos?unique_id=${username}`, {
+                    const res = await fetch(`https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos?unique_id=${username}`, {
                         headers: { 'Authorization': `Bearer ${apiKey}` }
                     });
                     if (res.ok) {
