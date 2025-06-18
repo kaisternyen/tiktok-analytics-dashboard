@@ -395,7 +395,7 @@ export async function checkTrackedAccount(account: { id: string; username: strin
         
         switch (account.platform) {
             case 'tiktok':
-                recentContent = await fetchTikTokAccountContent(account.username, lastVideoId);
+                recentContent = await fetchTikTokAccountContent(account.username, lastVideoId || undefined);
                 break;
             case 'instagram':
                 recentContent = await fetchInstagramAccountContent(account.username);
