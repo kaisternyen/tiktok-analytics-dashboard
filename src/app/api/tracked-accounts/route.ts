@@ -86,10 +86,10 @@ export async function GET() {
                             const data2 = await res2.json();
                             if (data2.items && data2.items.length > 0) {
                                 totalPosts = parseInt(data2.items[0].statistics?.videoCount || '0', 10);
+                                if (data2.items[0].snippet && data2.items[0].snippet.thumbnails && data2.items[0].snippet.thumbnails.default) {
+                                    pfpUrl = data2.items[0].snippet.thumbnails.default.url;
+                                }
                             }
-                        }
-                        if (data2.items && data2.items.length > 0 && data2.items[0].snippet && data2.items[0].snippet.thumbnails && data2.items[0].snippet.thumbnails.default) {
-                            pfpUrl = data2.items[0].snippet.thumbnails.default.url;
                         }
                     }
                 }
@@ -279,9 +279,9 @@ export async function POST(request: NextRequest) {
                         const data2 = await res2.json();
                         if (data2.items && data2.items.length > 0) {
                             totalPosts = parseInt(data2.items[0].statistics?.videoCount || '0', 10);
-                        }
-                        if (data2.items && data2.items.length > 0 && data2.items[0].snippet && data2.items[0].snippet.thumbnails && data2.items[0].snippet.thumbnails.default) {
-                            pfpUrl = data2.items[0].snippet.thumbnails.default.url;
+                            if (data2.items[0].snippet && data2.items[0].snippet.thumbnails && data2.items[0].snippet.thumbnails.default) {
+                                pfpUrl = data2.items[0].snippet.thumbnails.default.url;
+                            }
                         }
                     }
                 }
