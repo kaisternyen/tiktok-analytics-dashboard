@@ -11,7 +11,7 @@ import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, He
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
 import Link from 'next/link';
-import { TrackedAccountsTab } from '../app/tracked-accounts/page';
+import { TrackedAccountsTab } from '../components/TrackedAccountsTab';
 
 interface VideoHistory {
     time: string;
