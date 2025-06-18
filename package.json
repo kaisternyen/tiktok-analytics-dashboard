@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "prisma generate && next build",
+    "vercel-build": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate"
@@ -29,6 +30,7 @@
     "lucide-react": "^0.511.0",
     "next": "^15.3.2",
     "node-fetch": "^3.3.2",
+    "prisma": "^6.8.2",
     "react": "^19.0.0",
     "react-datepicker": "^8.4.0",
     "react-dom": "^19.0.0",
@@ -45,7 +47,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.3.2",
-    "prisma": "^6.8.2",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.0",
     "typescript": "^5"
