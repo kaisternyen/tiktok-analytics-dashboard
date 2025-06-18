@@ -16,6 +16,11 @@ interface TrackedAccount {
     pfpUrl?: string;
     apiStatus?: string;
     apiError?: string;
+    displayName?: string;
+    lookedUpUsername?: string;
+    followers?: number;
+    profileUrl?: string;
+    apiErrorMessage?: string;
 }
 
 interface AddAccountForm {
@@ -386,60 +391,34 @@ export function TrackedAccountsTab() {
                     <div className="space-y-4">
                         {accounts.map((account) => (
                             <div key={account.id} className="bg-white rounded-lg shadow-sm border p-6">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        {account.pfpUrl ? (
-                                            <img src={account.pfpUrl} alt="Profile" className="w-10 h-10 rounded-full object-cover border border-gray-200" />
-                                        ) : getPlatformIcon(account.platform)}
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="text-lg font-semibold text-gray-900">@{account.username}</h3>
-                                                <span className="text-sm text-gray-500">{getPlatformName(account.platform)}</span>
-                                                {account.accountType === 'keyword' && (
-                                                    <div className="flex items-center gap-1 text-sm text-blue-600">
-                                                        <Hash className="w-3 h-3" />
-                                                        {account.keyword}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            {account.apiError || account.apiStatus === 'error' ? (
-                                                <div className="text-xs text-red-600 mt-1">Account not found or API error</div>
-                                            ) : (typeof account.trackedPosts === 'number' && typeof account.totalPosts === 'number') ? (
-                                                <div className="text-xs text-gray-500 mt-1">Tracked: {account.trackedPosts} / {account.totalPosts} posts</div>
-                                            ) : typeof account.trackedPosts === 'number' && account.totalPosts == null ? (
-                                                <div className="text-xs text-gray-400 mt-1">Loading...</div>
-                                            ) : typeof account.trackedPosts === 'number' ? (
-                                                <div className="text-xs text-gray-500 mt-1">Tracked: {account.trackedPosts} posts</div>
-                                            ) : null}
-                                            <p className="text-sm text-gray-600">
-                                                Last checked: {formatTimeAgo(account.lastChecked)}
-                                            </p>
+                                <div className="flex items-center gap-4">
+                                    {account.pfpUrl ? (
+                                        <img src={account.pfpUrl} alt="Profile" className="w-12 h-12 rounded-full object-cover border" />
+                                    ) : (
+                                        <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xl border">
+                                            <span>?</span>
                                         </div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <button
-                                            onClick={() => toggleAccountStatus(account)}
-                                            className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm ${
-                                                account.isActive
-                                                    ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                                                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                                            }`}
-                                        >
-                                            {account.isActive ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
-                                            {account.isActive ? 'Active' : 'Paused'}
-                                        </button>
-                                        <button
-                                            onClick={() => setEditingAccount(account)}
-                                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
-                                        >
-                                            <Edit className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => deleteAccount(account.id)}
-                                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                    )}
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-lg font-semibold text-gray-900">{account.displayName || `@${account.username}`}</h3>
+                                            <span className="text-xs text-gray-500">({account.lookedUpUsername || account.username})</span>
+                                        </div>
+                                        {typeof account.followers === 'number' && (
+                                            <div className="text-xs text-gray-500">Followers: {account.followers.toLocaleString()}</div>
+                                        )}
+                                        {account.profileUrl && (
+                                            <a href={account.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">View Profile</a>
+                                        )}
+                                        <div className="text-xs mt-1">
+                                            {account.apiError || account.apiErrorMessage ? (
+                                                <span className="text-red-600 font-semibold">❌ {account.apiErrorMessage || account.apiError || 'Account not found or API error'}</span>
+                                            ) : account.totalPosts === null ? (
+                                                <span className="text-gray-400">Loading...</span>
+                                            ) : (
+                                                <span className="text-green-700">Tracked: {account.trackedPosts} / {account.totalPosts} posts</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
