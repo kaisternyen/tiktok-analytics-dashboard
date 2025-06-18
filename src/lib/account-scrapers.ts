@@ -413,41 +413,85 @@ async function fetchYouTubeAccountContent(channelIdentifier: string, lastVideoId
         
         // If the identifier doesn't look like a channel ID (UCxxxxxxxxxx), try to resolve it
         if (!channelIdentifier.startsWith('UC') || channelIdentifier.length !== 24) {
-            console.log(`🔍 Resolving channel ID for username: ${channelIdentifier}`);
+            console.log(`🔍 Resolving channel ID for identifier: ${channelIdentifier}`);
             
-            // Try to get channel by username
-            const channelResponse = await fetch(
-                `https://www.googleapis.com/youtube/v3/channels?part=id&forUsername=${channelIdentifier}&key=${apiKey}`
+            // Clean the identifier - remove @ if present and any URL parts
+            let cleanIdentifier = channelIdentifier;
+            if (cleanIdentifier.startsWith('@')) {
+                cleanIdentifier = cleanIdentifier.substring(1);
+            }
+            // Handle full URLs like https://www.youtube.com/@touchgrassdaily
+            if (cleanIdentifier.includes('youtube.com/@')) {
+                const match = cleanIdentifier.match(/youtube\.com\/@([^\/?\s]+)/);
+                if (match) {
+                    cleanIdentifier = match[1];
+                }
+            }
+            
+            console.log(`🧹 Cleaned identifier: ${cleanIdentifier}`);
+            
+            // Try to get channel by handle first (modern approach)
+            console.log(`🔍 Trying handle lookup for: @${cleanIdentifier}`);
+            const handleResponse = await fetch(
+                `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forHandle=@${cleanIdentifier}&key=${apiKey}`
             );
             
-            if (channelResponse.ok) {
-                const channelData = await channelResponse.json();
-                if (channelData.items && channelData.items.length > 0) {
-                    channelId = channelData.items[0].id;
-                    console.log(`✅ Resolved channel ID: ${channelId}`);
+            if (handleResponse.ok) {
+                const handleData = await handleResponse.json();
+                if (handleData.items && handleData.items.length > 0) {
+                    channelId = handleData.items[0].id;
+                    console.log(`✅ Resolved channel ID via handle: ${channelId}`);
                 } else {
-                    // If username lookup fails, try searching for the channel
-                    console.log(`🔍 Username lookup failed, trying search for: ${channelIdentifier}`);
-                    const searchResponse = await fetch(
-                        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(channelIdentifier)}&type=channel&maxResults=1&key=${apiKey}`
+                    console.log(`❌ Handle lookup failed for @${cleanIdentifier}`);
+                    
+                    // Try legacy username lookup
+                    console.log(`🔍 Trying username lookup for: ${cleanIdentifier}`);
+                    const usernameResponse = await fetch(
+                        `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forUsername=${cleanIdentifier}&key=${apiKey}`
                     );
                     
-                    if (searchResponse.ok) {
-                        const searchData = await searchResponse.json();
-                        if (searchData.items && searchData.items.length > 0) {
-                            channelId = searchData.items[0].snippet.channelId;
-                            console.log(`✅ Found channel via search: ${channelId}`);
+                    if (usernameResponse.ok) {
+                        const usernameData = await usernameResponse.json();
+                        if (usernameData.items && usernameData.items.length > 0) {
+                            channelId = usernameData.items[0].id;
+                            console.log(`✅ Resolved channel ID via username: ${channelId}`);
                         } else {
-                            console.error(`❌ Could not find YouTube channel for: ${channelIdentifier}`);
-                            return [];
+                            // If both handle and username lookups fail, try searching
+                            console.log(`🔍 Both lookups failed, trying search for: ${cleanIdentifier}`);
+                            const searchResponse = await fetch(
+                                `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(cleanIdentifier)}&type=channel&maxResults=5&key=${apiKey}`
+                            );
+                            
+                            if (searchResponse.ok) {
+                                const searchData = await searchResponse.json();
+                                if (searchData.items && searchData.items.length > 0) {
+                                    // Log all search results for debugging
+                                    console.log(`🔍 Search found ${searchData.items.length} results:`);
+                                    searchData.items.forEach((item: any, index: number) => {
+                                        console.log(`  ${index + 1}. ${item.snippet.title} (${item.snippet.channelId})`);
+                                        console.log(`     Handle: ${item.snippet.customUrl || 'N/A'}`);
+                                        console.log(`     Description: ${item.snippet.description?.substring(0, 100) || 'N/A'}...`);
+                                    });
+                                    
+                                    // Take the first result
+                                    channelId = searchData.items[0].snippet.channelId;
+                                    console.log(`✅ Found channel via search: ${channelId} (${searchData.items[0].snippet.title})`);
+                                } else {
+                                    console.error(`❌ Could not find YouTube channel for: ${channelIdentifier}`);
+                                    return [];
+                                }
+                            } else {
+                                console.error(`❌ YouTube search API error: ${searchResponse.status} ${searchResponse.statusText}`);
+                                return [];
+                            }
                         }
                     } else {
-                        console.error(`❌ YouTube search API error: ${searchResponse.status} ${searchResponse.statusText}`);
+                        console.error(`❌ YouTube username API error: ${usernameResponse.status} ${usernameResponse.statusText}`);
                         return [];
                     }
                 }
             } else {
-                console.error(`❌ YouTube channels API error: ${channelResponse.status} ${channelResponse.statusText}`);
+                console.error(`❌ YouTube handle API error: ${handleResponse.status} ${handleResponse.statusText}`);
                 return [];
             }
         }

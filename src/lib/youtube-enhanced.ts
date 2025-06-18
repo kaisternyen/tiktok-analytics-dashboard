@@ -116,28 +116,77 @@ export class YouTubeAPI {
     async getChannel(identifier: string): Promise<YouTubeChannel | null> {
         let data;
         
-        // Try by username first
+        // Clean the identifier - remove @ if present and any URL parts
+        let cleanIdentifier = identifier;
+        if (cleanIdentifier.startsWith('@')) {
+            cleanIdentifier = cleanIdentifier.substring(1);
+        }
+        // Handle full URLs like https://www.youtube.com/@touchgrassdaily
+        if (cleanIdentifier.includes('youtube.com/@')) {
+            const match = cleanIdentifier.match(/youtube\.com\/@([^\/?\s]+)/);
+            if (match) {
+                cleanIdentifier = match[1];
+            }
+        }
+        
+        // Try by handle first (modern approach)
         if (!identifier.startsWith('UC') || identifier.length !== 24) {
             try {
                 data = await this.makeRequest('channels', {
                     part: 'snippet,statistics',
-                    forUsername: identifier
-                });
-            } catch {
-                // If username fails, try search
-                const searchData = await this.makeRequest('search', {
-                    part: 'snippet',
-                    q: identifier,
-                    type: 'channel',
-                    maxResults: '1'
+                    forHandle: `@${cleanIdentifier}`
                 });
                 
-                if (searchData.items && searchData.items.length > 0) {
-                    const channelId = searchData.items[0].snippet.channelId;
+                if (data?.items && data.items.length > 0) {
+                    // Found via handle, proceed to return
+                } else {
+                    // Try legacy username lookup
+                    try {
+                        data = await this.makeRequest('channels', {
+                            part: 'snippet,statistics',
+                            forUsername: cleanIdentifier
+                        });
+                    } catch {
+                        // If username fails, try search
+                        const searchData = await this.makeRequest('search', {
+                            part: 'snippet',
+                            q: cleanIdentifier,
+                            type: 'channel',
+                            maxResults: '1'
+                        });
+                        
+                        if (searchData.items && searchData.items.length > 0) {
+                            const channelId = searchData.items[0].snippet.channelId;
+                            data = await this.makeRequest('channels', {
+                                part: 'snippet,statistics',
+                                id: channelId
+                            });
+                        }
+                    }
+                }
+            } catch {
+                // If handle fails, try username
+                try {
                     data = await this.makeRequest('channels', {
                         part: 'snippet,statistics',
-                        id: channelId
+                        forUsername: cleanIdentifier
                     });
+                } catch {
+                    // If username fails, try search
+                    const searchData = await this.makeRequest('search', {
+                        part: 'snippet',
+                        q: cleanIdentifier,
+                        type: 'channel',
+                        maxResults: '1'
+                    });
+                    
+                    if (searchData.items && searchData.items.length > 0) {
+                        const channelId = searchData.items[0].snippet.channelId;
+                        data = await this.makeRequest('channels', {
+                            part: 'snippet,statistics',
+                            id: channelId
+                        });
+                    }
                 }
             }
         } else {
