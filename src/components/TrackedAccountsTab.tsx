@@ -396,7 +396,7 @@ export function TrackedAccountsTab() {
                             </div>
                         ))}
                     </div>
-                )}
+                }
 
                 {/* Edit Account Modal */}
                 {editingAccount && (
