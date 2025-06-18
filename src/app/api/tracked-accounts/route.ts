@@ -21,6 +21,11 @@ export async function GET() {
             let pfpUrl = null;
             let apiStatus = null;
             let apiError = null;
+            let displayName = null;
+            let followers = null;
+            let profileUrl = null;
+            let apiErrorMessage = null;
+            let lookedUpUsername = null;
             try {
                 trackedPosts = await prisma.video.count({
                     where: {
@@ -46,6 +51,16 @@ export async function GET() {
                             }
                             apiStatus = data.status;
                             apiError = data.error;
+                            if (data.data && data.data.user && data.data.user.nickname) {
+                                displayName = data.data.user.nickname;
+                            }
+                            if (data.data && data.data.user && data.data.user.follower_count) {
+                                followers = data.data.user.follower_count;
+                            }
+                            if (data.data && data.data.user && data.data.user.profile_url) {
+                                profileUrl = data.data.user.profile_url;
+                            }
+                            lookedUpUsername = account.username;
                         }
                     }
                 } else if (account.platform === 'instagram') {
@@ -66,6 +81,16 @@ export async function GET() {
                             }
                             apiStatus = data.status;
                             apiError = data.error;
+                            if (data.data && data.data.user && data.data.user.username) {
+                                displayName = data.data.user.username;
+                            }
+                            if (data.data && data.data.user && data.data.user.follower_count) {
+                                followers = data.data.user.follower_count;
+                            }
+                            if (data.data && data.data.user && data.data.user.profile_url) {
+                                profileUrl = data.data.user.profile_url;
+                            }
+                            lookedUpUsername = account.username;
                         }
                     }
                 } else if (account.platform === 'youtube') {
@@ -110,7 +135,12 @@ export async function GET() {
                 totalPosts,
                 pfpUrl,
                 apiStatus,
-                apiError
+                apiError,
+                displayName,
+                followers,
+                profileUrl,
+                apiErrorMessage,
+                lookedUpUsername
             };
         }));
 
@@ -204,6 +234,11 @@ export async function POST(request: NextRequest) {
         let pfpUrl = null;
         let apiStatus = null;
         let apiError = null;
+        let displayName = null;
+        let followers = null;
+        let profileUrl = null;
+        let apiErrorMessage = null;
+        let lookedUpUsername = null;
         try {
             // Count tracked posts in DB
             trackedPosts = await prisma.video.count({
@@ -233,6 +268,16 @@ export async function POST(request: NextRequest) {
                         }
                         apiStatus = data.status;
                         apiError = data.error;
+                        if (data.data && data.data.user && data.data.user.nickname) {
+                            displayName = data.data.user.nickname;
+                        }
+                        if (data.data && data.data.user && data.data.user.follower_count) {
+                            followers = data.data.user.follower_count;
+                        }
+                        if (data.data && data.data.user && data.data.user.profile_url) {
+                            profileUrl = data.data.user.profile_url;
+                        }
+                        lookedUpUsername = username;
                     }
                 }
             } else if (platform === 'instagram') {
@@ -255,6 +300,16 @@ export async function POST(request: NextRequest) {
                         }
                         apiStatus = data.status;
                         apiError = data.error;
+                        if (data.data && data.data.user && data.data.user.username) {
+                            displayName = data.data.user.username;
+                        }
+                        if (data.data && data.data.user && data.data.user.follower_count) {
+                            followers = data.data.user.follower_count;
+                        }
+                        if (data.data && data.data.user && data.data.user.profile_url) {
+                            profileUrl = data.data.user.profile_url;
+                        }
+                        lookedUpUsername = username;
                     }
                 }
             } else if (platform === 'youtube') {
@@ -304,7 +359,12 @@ export async function POST(request: NextRequest) {
                 createdAt: newAccount.createdAt.toISOString(),
                 pfpUrl,
                 apiStatus,
-                apiError
+                apiError,
+                displayName,
+                followers,
+                profileUrl,
+                apiErrorMessage,
+                lookedUpUsername
             },
             trackedPosts,
             totalPosts
