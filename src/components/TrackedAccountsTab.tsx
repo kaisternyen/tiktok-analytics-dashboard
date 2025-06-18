@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Play, Pause, RefreshCw, Users, Hash, Globe } from 'lucide-react';
+import { Plus, Play, RefreshCw, Users, Globe } from 'lucide-react';
 
 interface TrackedAccount {
     id: string;
@@ -146,29 +146,6 @@ export function TrackedAccountsTab() {
         }
     };
 
-    // Delete tracked account
-    const deleteAccount = async (id: string) => {
-        if (!confirm('Are you sure you want to stop tracking this account?')) return;
-        
-        try {
-            setError(null);
-            const response = await fetch(`/api/tracked-accounts?id=${id}`, {
-                method: 'DELETE'
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                setSuccess(data.message);
-                fetchAccounts();
-            } else {
-                setError(data.error);
-            }
-        } catch {
-            setError('Error deleting tracked account');
-        }
-    };
-
     // Check all accounts for new content
     const checkAccounts = async () => {
         try {
@@ -190,11 +167,6 @@ export function TrackedAccountsTab() {
         }
     };
 
-    // Toggle account active status
-    const toggleAccountStatus = async (account: TrackedAccount) => {
-        await updateAccount(account.id, { isActive: !account.isActive });
-    };
-
     useEffect(() => {
         fetchAccounts();
     }, []);
@@ -209,42 +181,6 @@ export function TrackedAccountsTab() {
             return () => clearTimeout(timer);
         }
     }, [success, error]);
-
-    const getPlatformIcon = (platform: string) => {
-        switch (platform) {
-            case 'tiktok':
-                return <div className="w-5 h-5 bg-black rounded flex items-center justify-center"><Play className="w-3 h-3 text-white" /></div>;
-            case 'instagram':
-                return <div className="w-5 h-5 bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 rounded flex items-center justify-center"><div className="w-3 h-3 bg-white rounded-full border border-gray-200"></div></div>;
-            case 'youtube':
-                return <div className="w-5 h-5 bg-red-600 rounded flex items-center justify-center"><Play className="w-3 h-3 text-white" /></div>;
-            default:
-                return <Globe className="w-5 h-5 text-gray-500" />;
-        }
-    };
-
-    const getPlatformName = (platform: string) => {
-        switch (platform) {
-            case 'tiktok': return 'TikTok';
-            case 'instagram': return 'Instagram';
-            case 'youtube': return 'YouTube';
-            default: return platform;
-        }
-    };
-
-    const formatTimeAgo = (dateString: string) => {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffMins = Math.floor(diffMs / (1000 * 60));
-        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-        if (diffMins < 1) return 'Just now';
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        return `${diffDays}d ago`;
-    };
 
     if (loading) {
         return (

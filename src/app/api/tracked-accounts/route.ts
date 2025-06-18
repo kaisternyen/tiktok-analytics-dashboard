@@ -24,7 +24,7 @@ export async function GET() {
             let displayName = null;
             let followers = null;
             let profileUrl = null;
-            let apiErrorMessage = null;
+            const apiErrorMessage = null;
             let lookedUpUsername = null;
             try {
                 trackedPosts = await prisma.video.count({
@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
         let displayName = null;
         let followers = null;
         let profileUrl = null;
-        let apiErrorMessage = null;
+        const apiErrorMessage = null;
         let lookedUpUsername = null;
         try {
             // Count tracked posts in DB
