@@ -351,7 +351,7 @@ export function TrackedAccountsTab() {
                                         By default, only NEW content posted after adding this account will be tracked. 
                                         Check this box to also add their existing content that meets your criteria
                                         {formData.accountType === 'keyword' && formData.keyword && (
-                                            <span className="font-medium"> (only posts containing "{formData.keyword}")</span>
+                                            <span className="font-medium"> (only posts containing &ldquo;{formData.keyword}&rdquo;)</span>
                                         )}.
                                     </p>
                                 </div>
