@@ -49,7 +49,7 @@ export default function TrackedAccountsPage() {
             } else {
                 setError('Failed to fetch tracked accounts');
             }
-        } catch (err) {
+        } catch {
             setError('Error fetching tracked accounts');
         } finally {
             setLoading(false);
@@ -76,7 +76,7 @@ export default function TrackedAccountsPage() {
             } else {
                 setError(data.error);
             }
-        } catch (err) {
+        } catch {
             setError('Error adding tracked account');
         }
     };
@@ -100,7 +100,7 @@ export default function TrackedAccountsPage() {
             } else {
                 setError(data.error);
             }
-        } catch (err) {
+        } catch {
             setError('Error updating tracked account');
         }
     };
@@ -123,7 +123,7 @@ export default function TrackedAccountsPage() {
             } else {
                 setError(data.error);
             }
-        } catch (err) {
+        } catch {
             setError('Error deleting tracked account');
         }
     };
@@ -142,7 +142,7 @@ export default function TrackedAccountsPage() {
             } else {
                 setError(data.error);
             }
-        } catch (err) {
+        } catch {
             setError('Error checking accounts');
         } finally {
             setCheckingAccounts(false);
@@ -281,7 +281,7 @@ export default function TrackedAccountsPage() {
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Platform</label>
                                 <select
                                     value={formData.platform}
-                                    onChange={(e) => setFormData({ ...formData, platform: e.target.value as any })}
+                                    onChange={(e) => setFormData({ ...formData, platform: e.target.value as 'tiktok' | 'instagram' | 'youtube' })}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 >
                                     <option value="tiktok">TikTok</option>
@@ -293,7 +293,7 @@ export default function TrackedAccountsPage() {
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Account Type</label>
                                 <select
                                     value={formData.accountType}
-                                    onChange={(e) => setFormData({ ...formData, accountType: e.target.value as any })}
+                                    onChange={(e) => setFormData({ ...formData, accountType: e.target.value as 'all' | 'keyword' })}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 >
                                     <option value="all">All Content</option>
@@ -410,7 +410,7 @@ export default function TrackedAccountsPage() {
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Account Type</label>
                                     <select
                                         value={editingAccount.accountType}
-                                        onChange={(e) => setEditingAccount({ ...editingAccount, accountType: e.target.value as any })}
+                                        onChange={(e) => setEditingAccount({ ...editingAccount, accountType: e.target.value as 'all' | 'keyword' })}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     >
                                         <option value="all">All Content</option>

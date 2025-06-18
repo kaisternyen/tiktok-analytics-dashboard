@@ -83,15 +83,23 @@ function getHashtags(mediaData: TikTokVideoData | InstagramPostData | YouTubeVid
 }
 
 // Helper function to get music from media data
-function getMusic(mediaData: TikTokVideoData | InstagramPostData | YouTubeVideoData): any {
+function getMusic(mediaData: TikTokVideoData | InstagramPostData | YouTubeVideoData): { name: string; author: string } | null {
     if ('music' in mediaData && mediaData.music) {
-        return mediaData.music;
+        // Handle different music formats
+        if ('name' in mediaData.music && 'author' in mediaData.music) {
+            return mediaData.music as { name: string; author: string };
+        } else if ('songName' in mediaData.music && 'artistName' in mediaData.music) {
+            return {
+                name: (mediaData.music as any).songName,
+                author: (mediaData.music as any).artistName
+            };
+        }
     }
     return null;
 }
 
 // TikTok account content fetching
-async function fetchTikTokAccountContent(username: string, lastVideoId?: string): Promise<AccountContent[]> {
+async function fetchTikTokAccountContent(username: string): Promise<AccountContent[]> {
     console.log(`🔍 Fetching TikTok content for @${username}...`);
     
     // For now, this is a placeholder implementation
@@ -114,7 +122,7 @@ async function fetchTikTokAccountContent(username: string, lastVideoId?: string)
 }
 
 // Instagram account content fetching
-async function fetchInstagramAccountContent(username: string, lastVideoId?: string): Promise<AccountContent[]> {
+async function fetchInstagramAccountContent(username: string): Promise<AccountContent[]> {
     console.log(`🔍 Fetching Instagram content for @${username}...`);
     
     // For now, this is a placeholder implementation
@@ -136,7 +144,7 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
 }
 
 // YouTube account content fetching
-async function fetchYouTubeAccountContent(channelId: string, lastVideoId?: string): Promise<AccountContent[]> {
+async function fetchYouTubeAccountContent(channelId: string): Promise<AccountContent[]> {
     console.log(`🔍 Fetching YouTube content for channel ${channelId}...`);
     
     // For now, this is a placeholder implementation
@@ -269,7 +277,7 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
 }
 
 // Main function to check a single tracked account
-export async function checkTrackedAccount(account: any): Promise<AccountCheckResult> {
+export async function checkTrackedAccount(account: { id: string; username: string; platform: string; accountType: 'all' | 'keyword'; keyword?: string }): Promise<AccountCheckResult> {
     const result: AccountCheckResult = {
         accountId: account.id,
         username: account.username,
@@ -287,14 +295,14 @@ export async function checkTrackedAccount(account: any): Promise<AccountCheckRes
         
         switch (account.platform) {
             case 'tiktok':
-                recentContent = await fetchTikTokAccountContent(account.username, account.lastVideoId);
+                recentContent = await fetchTikTokAccountContent(account.username);
                 break;
             case 'instagram':
-                recentContent = await fetchInstagramAccountContent(account.username, account.lastVideoId);
+                recentContent = await fetchInstagramAccountContent(account.username);
                 break;
             case 'youtube':
                 // For YouTube, we might need to store channel ID instead of username
-                recentContent = await fetchYouTubeAccountContent(account.username, account.lastVideoId);
+                recentContent = await fetchYouTubeAccountContent(account.username);
                 break;
             default:
                 throw new Error(`Unsupported platform: ${account.platform}`);
