@@ -156,15 +156,6 @@ function parseSorts(sortParam: string | null): Array<Record<string, 'asc' | 'des
     }
 }
 
-// Add type for metricsHistory
-interface MetricsHistoryPoint {
-  timestamp: Date;
-  views: number;
-  likes: number;
-  comments: number;
-  shares: number;
-}
-
 // Type for filter conditions
 interface FilterCondition {
   field: string;
