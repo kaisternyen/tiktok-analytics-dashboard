@@ -18,6 +18,9 @@ export async function GET() {
         const accountsWithCounts = await Promise.all(accounts.map(async (account) => {
             let trackedPosts = 0;
             let totalPosts = null;
+            let pfpUrl = null;
+            let apiStatus = null;
+            let apiError = null;
             try {
                 trackedPosts = await prisma.video.count({
                     where: {
@@ -38,6 +41,11 @@ export async function GET() {
                             } else if (Array.isArray(data.data?.aweme_list)) {
                                 totalPosts = data.data.aweme_list.length;
                             }
+                            if (data.data && data.data.user && data.data.user.avatar_url) {
+                                pfpUrl = data.data.user.avatar_url;
+                            }
+                            apiStatus = data.status;
+                            apiError = data.error;
                         }
                     }
                 } else if (account.platform === 'instagram') {
@@ -53,6 +61,11 @@ export async function GET() {
                             } else if (Array.isArray(data.data?.items)) {
                                 totalPosts = data.data.items.length;
                             }
+                            if (data.data && data.data.user && data.data.user.avatar_url) {
+                                pfpUrl = data.data.user.avatar_url;
+                            }
+                            apiStatus = data.status;
+                            apiError = data.error;
                         }
                     }
                 } else if (account.platform === 'youtube') {
@@ -75,6 +88,9 @@ export async function GET() {
                                 totalPosts = parseInt(data2.items[0].statistics?.videoCount || '0', 10);
                             }
                         }
+                        if (data2.items && data2.items.length > 0 && data2.items[0].snippet && data2.items[0].snippet.thumbnails && data2.items[0].snippet.thumbnails.default) {
+                            pfpUrl = data2.items[0].snippet.thumbnails.default.url;
+                        }
                     }
                 }
             } catch (err) {
@@ -91,7 +107,10 @@ export async function GET() {
                 createdAt: account.createdAt.toISOString(),
                 lastVideoId: account.lastVideoId,
                 trackedPosts,
-                totalPosts
+                totalPosts,
+                pfpUrl,
+                apiStatus,
+                apiError
             };
         }));
 
@@ -182,6 +201,9 @@ export async function POST(request: NextRequest) {
         // --- Fetch total posts from platform API ---
         let totalPosts = null;
         let trackedPosts = 0;
+        let pfpUrl = null;
+        let apiStatus = null;
+        let apiError = null;
         try {
             // Count tracked posts in DB
             trackedPosts = await prisma.video.count({
@@ -206,6 +228,11 @@ export async function POST(request: NextRequest) {
                         } else if (Array.isArray(data.data?.aweme_list)) {
                             totalPosts = data.data.aweme_list.length;
                         }
+                        if (data.data && data.data.user && data.data.user.avatar_url) {
+                            pfpUrl = data.data.user.avatar_url;
+                        }
+                        apiStatus = data.status;
+                        apiError = data.error;
                     }
                 }
             } else if (platform === 'instagram') {
@@ -223,6 +250,11 @@ export async function POST(request: NextRequest) {
                         } else if (Array.isArray(data.data?.items)) {
                             totalPosts = data.data.items.length;
                         }
+                        if (data.data && data.data.user && data.data.user.avatar_url) {
+                            pfpUrl = data.data.user.avatar_url;
+                        }
+                        apiStatus = data.status;
+                        apiError = data.error;
                     }
                 }
             } else if (platform === 'youtube') {
@@ -248,6 +280,9 @@ export async function POST(request: NextRequest) {
                         if (data2.items && data2.items.length > 0) {
                             totalPosts = parseInt(data2.items[0].statistics?.videoCount || '0', 10);
                         }
+                        if (data2.items && data2.items.length > 0 && data2.items[0].snippet && data2.items[0].snippet.thumbnails && data2.items[0].snippet.thumbnails.default) {
+                            pfpUrl = data2.items[0].snippet.thumbnails.default.url;
+                        }
                     }
                 }
             }
@@ -266,7 +301,10 @@ export async function POST(request: NextRequest) {
                 keyword: newAccount.keyword,
                 isActive: newAccount.isActive,
                 lastChecked: newAccount.lastChecked.toISOString(),
-                createdAt: newAccount.createdAt.toISOString()
+                createdAt: newAccount.createdAt.toISOString(),
+                pfpUrl,
+                apiStatus,
+                apiError
             },
             trackedPosts,
             totalPosts

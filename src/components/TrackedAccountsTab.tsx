@@ -13,6 +13,9 @@ interface TrackedAccount {
     lastVideoId?: string;
     trackedPosts?: number;
     totalPosts?: number;
+    pfpUrl?: string;
+    apiStatus?: string;
+    apiError?: string;
 }
 
 interface AddAccountForm {
@@ -385,7 +388,9 @@ export function TrackedAccountsTab() {
                             <div key={account.id} className="bg-white rounded-lg shadow-sm border p-6">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-4">
-                                        {getPlatformIcon(account.platform)}
+                                        {account.pfpUrl ? (
+                                            <img src={account.pfpUrl} alt="Profile" className="w-10 h-10 rounded-full object-cover border border-gray-200" />
+                                        ) : getPlatformIcon(account.platform)}
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <h3 className="text-lg font-semibold text-gray-900">@{account.username}</h3>
@@ -397,9 +402,12 @@ export function TrackedAccountsTab() {
                                                     </div>
                                                 )}
                                             </div>
-                                            {/* Tracked/Total Posts Info */}
-                                            {(typeof account.trackedPosts === 'number' && typeof account.totalPosts === 'number') ? (
+                                            {account.apiError || account.apiStatus === 'error' ? (
+                                                <div className="text-xs text-red-600 mt-1">Account not found or API error</div>
+                                            ) : (typeof account.trackedPosts === 'number' && typeof account.totalPosts === 'number') ? (
                                                 <div className="text-xs text-gray-500 mt-1">Tracked: {account.trackedPosts} / {account.totalPosts} posts</div>
+                                            ) : typeof account.trackedPosts === 'number' && account.totalPosts == null ? (
+                                                <div className="text-xs text-gray-400 mt-1">Loading...</div>
                                             ) : typeof account.trackedPosts === 'number' ? (
                                                 <div className="text-xs text-gray-500 mt-1">Tracked: {account.trackedPosts} posts</div>
                                             ) : null}
