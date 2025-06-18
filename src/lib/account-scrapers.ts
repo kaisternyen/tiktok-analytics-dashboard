@@ -106,7 +106,7 @@ async function fetchTikTokAccountContent(username: string, lastVideoId?: string)
     }
     
     try {
-        let allVideos: any[] = [];
+        const allVideos: unknown[] = [];
         let hasMore = true;
         let maxCursor: string | undefined;
         let pageCount = 0;
@@ -156,11 +156,22 @@ async function fetchTikTokAccountContent(username: string, lastVideoId?: string)
         console.log(`✅ Total videos fetched for @${username}: ${allVideos.length} across ${pageCount} pages`);
         
         // Convert TikHub video data to AccountContent format
-        const allContent: AccountContent[] = allVideos.map((video: any) => {
-            const videoId = video.aweme_id || video.id;
-            const shareUrl = video.share_url || `https://www.tiktok.com/@${username}/video/${videoId}`;
-            const description = video.desc || video.description || '';
-            const createTime = video.create_time || video.createTime;
+        const allContent: AccountContent[] = allVideos.map((video: unknown) => {
+            // Type assertion since we know the structure from TikHub API
+            const videoData = video as {
+                aweme_id?: string;
+                id?: string;
+                share_url?: string;
+                desc?: string;
+                description?: string;
+                create_time?: number;
+                createTime?: number;
+            };
+            
+            const videoId = videoData.aweme_id || videoData.id || '';
+            const shareUrl = videoData.share_url || `https://www.tiktok.com/@${username}/video/${videoId}`;
+            const description = videoData.desc || videoData.description || '';
+            const createTime = videoData.create_time || videoData.createTime;
             
             return {
                 id: videoId,
