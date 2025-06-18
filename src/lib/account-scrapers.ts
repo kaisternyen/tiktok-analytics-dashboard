@@ -429,6 +429,8 @@ export async function checkTrackedAccount(account: { id: string; username: strin
 
             // Update lastVideoId if we found new content
             if (recentContent.length > 0) {
+                // Set the lastVideoId to the most recent video so future checks
+                // will only pick up content newer than this
                 await prisma.trackedAccount.update({
                     where: { id: account.id },
                     data: { 

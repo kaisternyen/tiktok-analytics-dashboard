@@ -169,9 +169,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { username, platform, accountType, keyword } = body;
+        const { username, platform, accountType, keyword, includeExistingContent = false } = body;
 
-        console.log('➕ Creating new tracked account:', { username, platform, accountType, keyword });
+        console.log('➕ Creating new tracked account:', { username, platform, accountType, keyword, includeExistingContent });
 
         // Validate required fields
         if (!username || !platform) {
@@ -417,6 +417,41 @@ export async function POST(request: NextRequest) {
             }
         } catch (err) {
             console.error('Error fetching total/tracked posts:', err);
+        }
+
+        // --- Conditionally fetch and add existing content ---
+        if (includeExistingContent) {
+            console.log(`🔄 Fetching existing content for @${username} (includeExistingContent: true)`);
+            try {
+                // Import and use the account checking functionality
+                const { checkTrackedAccount } = await import('../../../lib/account-scrapers');
+                
+                const result = await checkTrackedAccount({
+                    id: newAccount.id,
+                    username: newAccount.username,
+                    platform: newAccount.platform,
+                    accountType: newAccount.accountType as 'all' | 'keyword',
+                    keyword: newAccount.keyword || undefined
+                });
+                
+                if (result.status === 'success' && result.newVideos > 0) {
+                    console.log(`✅ Added ${result.newVideos} existing videos for @${username}`);
+                    // Update tracked posts count
+                    trackedPosts = await prisma.video.count({
+                        where: {
+                            username: username.toLowerCase(),
+                            platform: platform
+                        }
+                    });
+                } else {
+                    console.log(`ℹ️ No existing content added for @${username}: ${result.status}`);
+                }
+            } catch (error) {
+                console.error(`⚠️ Error fetching existing content for @${username}:`, error);
+                // Don't fail the entire request if existing content fetch fails
+            }
+        } else {
+            console.log(`⏭️ Skipping existing content for @${username} (includeExistingContent: false)`);
         }
 
         return NextResponse.json({

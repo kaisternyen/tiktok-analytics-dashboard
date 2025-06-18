@@ -28,6 +28,7 @@ interface AddAccountForm {
     platform: 'tiktok' | 'instagram' | 'youtube';
     accountType: 'all' | 'keyword';
     keyword: string;
+    includeExistingContent: boolean;
 }
 
 // Add a helper to extract username/handle from a pasted URL
@@ -79,7 +80,8 @@ export function TrackedAccountsTab() {
         username: '',
         platform: 'tiktok',
         accountType: 'all',
-        keyword: ''
+        keyword: '',
+        includeExistingContent: false
     });
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -126,7 +128,7 @@ export function TrackedAccountsTab() {
                 }
                 setSuccess(`${data.message}${extraInfo}`);
                 setShowAddForm(false);
-                setFormData({ username: '', platform: 'tiktok', accountType: 'all', keyword: '' });
+                setFormData({ username: '', platform: 'tiktok', accountType: 'all', keyword: '', includeExistingContent: false });
                 fetchAccounts();
             } else {
                 setError(data.error);
@@ -330,6 +332,32 @@ export function TrackedAccountsTab() {
                                 />
                             </div>
                         </div>
+                        
+                        {/* Include Existing Content Option */}
+                        <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                            <div className="flex items-start gap-3">
+                                <input
+                                    type="checkbox"
+                                    id="includeExistingContent"
+                                    checked={formData.includeExistingContent}
+                                    onChange={(e) => setFormData({ ...formData, includeExistingContent: e.target.checked })}
+                                    className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <div>
+                                    <label htmlFor="includeExistingContent" className="text-sm font-medium text-gray-700 cursor-pointer">
+                                        Include existing content
+                                    </label>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                        By default, only NEW content posted after adding this account will be tracked. 
+                                        Check this box to also add their existing content that meets your criteria
+                                        {formData.accountType === 'keyword' && formData.keyword && (
+                                            <span className="font-medium"> (only posts containing "{formData.keyword}")</span>
+                                        )}.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div className="flex gap-3 mt-6">
                             <button
                                 onClick={addAccount}
