@@ -7,7 +7,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { cn } from "../lib/utils";
 
-type TimelinePreset = 'D' | 'W' | 'M' | '3M' | '1Y' | 'ALL' | 'CUSTOM';
+type TimelinePreset = 'D' | 'W' | 'M' | '3M' | '1Y' | 'ALL' | 'CUSTOM' | '1H';
 
 interface TimelineFilterProps {
   timeframe: [string, string] | null;
@@ -36,36 +36,64 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
     if (preset === 'ALL') return null;
     
     const now = getCurrentESTTime();
-    const endTime = now.toISOString();
     
     let startTime: Date;
+    let endTime: Date;
     
     switch (preset) {
+      case '1H':
+        // Most recent complete hour (if it's 7:30, show 6:00-7:00)
+        const currentHour = now.getHours();
+        const previousHour = currentHour === 0 ? 23 : currentHour - 1;
+        
+        // Start of previous hour
+        startTime = toZonedTime(now, 'America/New_York');
+        startTime.setHours(previousHour, 0, 0, 0);
+        startTime = fromZonedTime(startTime, 'America/New_York');
+        
+        // End of previous hour (start of current hour)
+        endTime = toZonedTime(now, 'America/New_York');
+        endTime.setHours(currentHour, 0, 0, 0);
+        endTime = fromZonedTime(endTime, 'America/New_York');
+        
+        // If we're in the same day, use the times as calculated
+        // If it's midnight (currentHour = 0), we need to go back to previous day
+        if (currentHour === 0) {
+          startTime = new Date(startTime.getTime() - 24 * 60 * 60 * 1000);
+        }
+        
+        return [startTime.toISOString(), endTime.toISOString()];
+        
       case 'D':
         // Current time back to midnight EST today
         startTime = getESTMidnight(now);
+        endTime = now;
         break;
       case 'W':
         // Current time back to midnight EST 7 days ago
         startTime = getESTMidnight(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+        endTime = now;
         break;
       case 'M':
         // Current time back to midnight EST 30 days ago
         startTime = getESTMidnight(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+        endTime = now;
         break;
       case '3M':
         // Current time back to midnight EST 90 days ago
         startTime = getESTMidnight(new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000));
+        endTime = now;
         break;
       case '1Y':
         // Current time back to midnight EST 365 days ago
         startTime = getESTMidnight(new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000));
+        endTime = now;
         break;
       default:
         return null;
     }
     
-    return [startTime.toISOString(), endTime];
+    return [startTime.toISOString(), endTime.toISOString()];
   };
 
   // Handle preset button clicks
@@ -120,7 +148,7 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
     }
 
     // Check if current timeframe matches any preset
-    const presets: TimelinePreset[] = ['D', 'W', 'M', '3M', '1Y'];
+    const presets: TimelinePreset[] = ['1H', 'D', 'W', 'M', '3M', '1Y'];
     
     for (const preset of presets) {
       const presetTimeframe = getPresetTimeframe(preset);
@@ -147,6 +175,7 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
   }, [timeframe]);
 
   const presets: { key: TimelinePreset; label: string }[] = [
+    { key: '1H', label: '1H' },
     { key: 'D', label: 'D' },
     { key: 'W', label: 'W' },
     { key: 'M', label: 'M' },
