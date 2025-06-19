@@ -279,20 +279,27 @@ async function fetchTikTokAccountContent(username: string, lastVideoId?: string)
 
 // Instagram account content fetching
 async function fetchInstagramAccountContent(username: string, lastVideoId?: string): Promise<AccountContent[]> {
+    console.log(`IGdebug 🔍 Starting Instagram content fetch for @${username} with lastVideoId: ${lastVideoId || 'none'}`);
+    
     const apiKey = process.env.TIKHUB_API_KEY;
     if (!apiKey) {
+        console.error(`IGdebug ❌ TIKHUB_API_KEY not configured`);
         throw new Error('TikHub API key not configured');
     }
 
     try {
         const instagramAPI = new InstagramAPI(apiKey);
         
+        console.log(`IGdebug 📡 Calling Instagram API getUserProfile for @${username}`);
         // Get comprehensive profile data
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const profile = await instagramAPI.getUserProfile(username);
+        console.log(`IGdebug ✅ Profile data retrieved for @${username}`);
         
+        console.log(`IGdebug 📡 Calling Instagram API getUserPosts for @${username} (limit: 50)`);
         // Get posts and reels - fetch more to ensure we get recent content
         const postsData = await instagramAPI.getUserPosts(username, undefined, 50);
+        console.log(`IGdebug ✅ Posts API returned ${postsData.posts.length} posts`);
         
         // Transform posts to AccountContent format and sort by timestamp (newest first)
         const posts = postsData.posts
@@ -306,37 +313,54 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
             }))
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-        console.log(`📋 Instagram posts fetched for @${username}: ${posts.length} total`);
+        console.log(`IGdebug 📋 Instagram posts processed for @${username}: ${posts.length} total`);
         if (posts.length > 0) {
-            console.log(`📅 Most recent post: ${posts[0].timestamp} (ID: ${posts[0].id})`);
-            console.log(`📅 Oldest post: ${posts[posts.length - 1].timestamp} (ID: ${posts[posts.length - 1].id})`);
+            console.log(`IGdebug 📅 Most recent post: ${posts[0].timestamp} (ID: ${posts[0].id})`);
+            console.log(`IGdebug 📅 Oldest post: ${posts[posts.length - 1].timestamp} (ID: ${posts[posts.length - 1].id})`);
+        } else {
+            console.log(`IGdebug ⚠️ No posts found for @${username}`);
         }
 
         // If no lastVideoId (new account), establish baseline without tracking content
         if (!lastVideoId) {
-            console.log(`🆕 New Instagram account @${username} - establishing baseline without tracking existing content`);
+            console.log(`IGdebug 🆕 New Instagram account @${username} - establishing baseline without tracking existing content`);
             // Return empty array - we don't want to track existing content
             // The baseline will be established by updating lastVideoId in checkTrackedAccount
             return [];
         }
 
+        console.log(`IGdebug 🔍 Filtering posts newer than lastVideoId: ${lastVideoId}`);
+        
         // Filter out posts we've already processed if we have a lastVideoId
         let newContent = posts;
         if (lastVideoId) {
             const lastIndex = posts.findIndex(content => content.id === lastVideoId);
+            console.log(`IGdebug 📍 LastVideoId found at index: ${lastIndex}`);
+            
             if (lastIndex !== -1) {
                 newContent = posts.slice(0, lastIndex);
-                console.log(`📋 Found ${newContent.length} new Instagram posts since last check (videoId: ${lastVideoId})`);
+                console.log(`IGdebug 📋 Found ${newContent.length} new Instagram posts since last check (videoId: ${lastVideoId})`);
+                
+                if (newContent.length > 0) {
+                    console.log(`IGdebug 🆕 New posts to be processed:`);
+                    newContent.forEach((post, index) => {
+                        console.log(`IGdebug    ${index + 1}. ${post.id} - ${post.timestamp}`);
+                    });
+                }
             } else {
-                console.log(`⚠️ LastVideoId ${lastVideoId} not found in current posts - returning all ${posts.length} posts as potentially new`);
+                console.log(`IGdebug ⚠️ LastVideoId ${lastVideoId} not found in current posts - returning all ${posts.length} posts as potentially new`);
             }
         }
 
-        console.log(`✅ Total Instagram posts to process for @${username}: ${newContent.length}`);
+        console.log(`IGdebug ✅ Total Instagram posts to process for @${username}: ${newContent.length}`);
         return newContent;
 
     } catch (error) {
-        console.error('Instagram API Error:', error);
+        console.error(`IGdebug 💥 Instagram API Error for @${username}:`, error);
+        if (error instanceof Error) {
+            console.error(`IGdebug 💥 Error message: ${error.message}`);
+            console.error(`IGdebug 💥 Error stack: ${error.stack}`);
+        }
         throw new Error(`Failed to fetch Instagram content for @${username}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 }
@@ -724,6 +748,11 @@ async function fetchYouTubeBaseline(channelIdentifier: string): Promise<AccountC
 // Add video to tracking system
 async function addVideoToTracking(content: AccountContent, accountType: 'all' | 'keyword', keyword?: string): Promise<boolean> {
     try {
+        if (content.platform === 'instagram') {
+            console.log(`IGdebug 🎬 Starting video tracking for Instagram post ${content.id}`);
+            console.log(`IGdebug 📋 Post details: URL=${content.url}, Description length=${content.description.length}`);
+        }
+        
         // Extract platform-specific video ID from content
         const videoId = content.id;
         
@@ -735,6 +764,10 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
             where: { url: content.url }
         });
 
+        if (content.platform === 'instagram' && existingVideo) {
+            console.log(`IGdebug ⚠️ Instagram post already tracked by URL: ${content.url}`);
+        }
+
         // If not found by URL and we have a videoId, check by videoId + platform
         if (!existingVideo && videoId) {
             existingVideo = await prisma.video.findFirst({
@@ -743,10 +776,18 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
                     platform: content.platform 
                 }
             });
+            
+            if (content.platform === 'instagram' && existingVideo) {
+                console.log(`IGdebug ⚠️ Instagram post already tracked by videoId: ${videoId}`);
+            }
         }
 
         if (existingVideo) {
-            console.log(`⚠️ Video already tracked (${existingVideo.videoId ? 'by videoId' : 'by URL'}): ${content.url}`);
+            if (content.platform === 'instagram') {
+                console.log(`IGdebug ❌ Instagram post already tracked (${existingVideo.videoId ? 'by videoId' : 'by URL'}): ${content.url}`);
+            } else {
+                console.log(`⚠️ Video already tracked (${existingVideo.videoId ? 'by videoId' : 'by URL'}): ${content.url}`);
+            }
             return false;
         }
 
@@ -754,20 +795,38 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
         if (accountType === 'keyword' && keyword) {
             const matches = matchesKeyword(content.description, keyword);
             if (!matches) {
-                console.log(`❌ Content doesn't match keyword "${keyword}": ${content.description.substring(0, 100)}...`);
+                if (content.platform === 'instagram') {
+                    console.log(`IGdebug ❌ Instagram post doesn't match keyword "${keyword}": ${content.description.substring(0, 100)}...`);
+                } else {
+                    console.log(`❌ Content doesn't match keyword "${keyword}": ${content.description.substring(0, 100)}...`);
+                }
                 return false;
+            } else if (content.platform === 'instagram') {
+                console.log(`IGdebug ✅ Instagram post matches keyword "${keyword}"`);
             }
+        }
+
+        if (content.platform === 'instagram') {
+            console.log(`IGdebug 📡 Scraping Instagram post data: ${content.url}`);
         }
 
         // Scrape the video to get full data
         const scrapingResult = await scrapeMediaPost(content.url);
         
         if (!scrapingResult.success || !scrapingResult.data) {
-            console.error(`❌ Failed to scrape video: ${scrapingResult.error}`);
+            if (content.platform === 'instagram') {
+                console.error(`IGdebug ❌ Failed to scrape Instagram post: ${scrapingResult.error}`);
+            } else {
+                console.error(`❌ Failed to scrape video: ${scrapingResult.error}`);
+            }
             return false;
         }
 
         const mediaData = scrapingResult.data as TikTokVideoData | InstagramPostData | YouTubeVideoData;
+        
+        if (content.platform === 'instagram') {
+            console.log(`IGdebug ✅ Instagram post scraped successfully`);
+        }
         
         // Determine platform and extract data
         let platform = 'tiktok';
@@ -780,6 +839,10 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
             const instaData = mediaData as InstagramPostData;
             views = instaData.plays || instaData.views || 0;
             shares = 0; // Instagram doesn't track shares
+            
+            if (content.platform === 'instagram') {
+                console.log(`IGdebug 📊 Instagram post metrics: ${views} views, ${mediaData.likes} likes, ${mediaData.comments} comments`);
+            }
         } else if (content.url.includes('youtube.com')) {
             platform = 'youtube';
             const youtubeData = mediaData as YouTubeVideoData;
@@ -801,11 +864,23 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
                     const key = `thumbnails/${mediaData.id}.jpg`;
                     const s3Url = await uploadToS3(buffer, key, 'image/jpeg');
                     thumbnailUrl = s3Url;
-                    console.log('✅ Thumbnail uploaded to S3:', s3Url);
+                    if (content.platform === 'instagram') {
+                        console.log(`IGdebug ✅ Instagram thumbnail uploaded to S3: ${s3Url}`);
+                    } else {
+                        console.log('✅ Thumbnail uploaded to S3:', s3Url);
+                    }
                 }
             } catch (err) {
-                console.error('Failed to upload thumbnail to S3:', err);
+                if (content.platform === 'instagram') {
+                    console.error(`IGdebug ❌ Failed to upload Instagram thumbnail to S3:`, err);
+                } else {
+                    console.error('Failed to upload thumbnail to S3:', err);
+                }
             }
+        }
+
+        if (content.platform === 'instagram') {
+            console.log(`IGdebug 💾 Creating Instagram video record in database`);
         }
 
         // Create video record with enhanced duplicate prevention
@@ -842,11 +917,23 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
             }
         });
 
-        console.log(`✅ Added new video to tracking: @${getUsername(mediaData)} - ${getDescription(mediaData).substring(0, 50)}... (videoId: ${videoId})`);
+        if (content.platform === 'instagram') {
+            console.log(`IGdebug ✅ Successfully added Instagram post to tracking: @${getUsername(mediaData)} - ${getDescription(mediaData).substring(0, 50)}... (videoId: ${videoId})`);
+        } else {
+            console.log(`✅ Added new video to tracking: @${getUsername(mediaData)} - ${getDescription(mediaData).substring(0, 50)}... (videoId: ${videoId})`);
+        }
         return true;
 
     } catch (error) {
-        console.error('❌ Error adding video to tracking:', error);
+        if (content.platform === 'instagram') {
+            console.error(`IGdebug 💥 Error adding Instagram post to tracking:`, error);
+            if (error instanceof Error) {
+                console.error(`IGdebug 💥 Error message: ${error.message}`);
+                console.error(`IGdebug 💥 Error stack: ${error.stack}`);
+            }
+        } else {
+            console.error('❌ Error adding video to tracking:', error);
+        }
         return false;
     }
 }
@@ -863,7 +950,11 @@ export async function checkTrackedAccount(account: { id: string; username: strin
     };
 
     try {
-        console.log(`🔍 Checking account @${account.username} on ${account.platform}...`);
+        if (account.platform === 'instagram') {
+            console.log(`IGdebug 🚀 Starting Instagram account check for @${account.username}`);
+        } else {
+            console.log(`🔍 Checking account @${account.username} on ${account.platform}...`);
+        }
 
         // Get the tracked account record to access lastVideoId
         const trackedAccount = await prisma.trackedAccount.findUnique({
@@ -871,14 +962,24 @@ export async function checkTrackedAccount(account: { id: string; username: strin
         });
 
         const lastVideoId = trackedAccount?.lastVideoId;
-        console.log(`📋 Last tracked video ID for @${account.username}: ${lastVideoId || 'none'}`);
+        
+        if (account.platform === 'instagram') {
+            console.log(`IGdebug 📋 Last tracked video ID for @${account.username}: ${lastVideoId || 'none'}`);
+            console.log(`IGdebug 📋 Account type: ${account.accountType}, Keyword: ${account.keyword || 'none'}`);
+        } else {
+            console.log(`📋 Last tracked video ID for @${account.username}: ${lastVideoId || 'none'}`);
+        }
 
         // Fetch recent content based on platform
         let recentContent: AccountContent[] = [];
         
         // For new accounts (no lastVideoId), we need to establish a baseline
         if (!lastVideoId) {
-            console.log(`🆕 New account @${account.username} - establishing baseline without tracking existing content`);
+            if (account.platform === 'instagram') {
+                console.log(`IGdebug 🆕 New Instagram account @${account.username} - establishing baseline without tracking existing content`);
+            } else {
+                console.log(`🆕 New account @${account.username} - establishing baseline without tracking existing content`);
+            }
             
             // Fetch the most recent content to get the baseline ID
             let baselineContent: AccountContent | null = null;
@@ -888,6 +989,7 @@ export async function checkTrackedAccount(account: { id: string; username: strin
                     baselineContent = await fetchTikTokBaseline(account.username);
                     break;
                 case 'instagram':
+                    console.log(`IGdebug 📡 Fetching Instagram baseline for @${account.username}`);
                     // Use Instagram API to get most recent post
                     const instagramAPI = new InstagramAPI(process.env.TIKHUB_API_KEY!);
                     const postsData = await instagramAPI.getUserPosts(account.username, undefined, 1);
@@ -901,6 +1003,9 @@ export async function checkTrackedAccount(account: { id: string; username: strin
                             platform: 'instagram' as const,
                             timestamp: post.timestamp
                         };
+                        console.log(`IGdebug ✅ Instagram baseline content found: ${post.id} - ${post.timestamp}`);
+                    } else {
+                        console.log(`IGdebug ❌ No Instagram posts found for baseline`);
                     }
                     break;
                 case 'youtube':
@@ -920,13 +1025,21 @@ export async function checkTrackedAccount(account: { id: string; username: strin
                     }
                 });
                 
-                console.log(`✅ Baseline established for @${account.username}: ${baselineContent.id} (no content tracked)`);
+                if (account.platform === 'instagram') {
+                    console.log(`IGdebug ✅ Baseline established for @${account.username}: ${baselineContent.id} (no content tracked)`);
+                } else {
+                    console.log(`✅ Baseline established for @${account.username}: ${baselineContent.id} (no content tracked)`);
+                }
                 result.status = 'success';
                 result.newVideos = 0;
                 result.addedVideos = [];
                 return result;
             } else {
-                console.log(`⚠️ No content found to establish baseline for @${account.username}`);
+                if (account.platform === 'instagram') {
+                    console.log(`IGdebug ⚠️ No content found to establish baseline for @${account.username}`);
+                } else {
+                    console.log(`⚠️ No content found to establish baseline for @${account.username}`);
+                }
                 result.status = 'no_new_content';
                 result.newVideos = 0;
                 return result;
@@ -934,6 +1047,10 @@ export async function checkTrackedAccount(account: { id: string; username: strin
         }
         
         // For existing accounts with lastVideoId, fetch new content normally
+        if (account.platform === 'instagram') {
+            console.log(`IGdebug 🔍 Fetching new Instagram content for @${account.username} (existing account)`);
+        }
+        
         switch (account.platform) {
             case 'tiktok':
                 recentContent = await fetchTikTokAccountContent(account.username, lastVideoId);
@@ -949,23 +1066,45 @@ export async function checkTrackedAccount(account: { id: string; username: strin
         }
 
         if (recentContent.length === 0) {
+            if (account.platform === 'instagram') {
+                console.log(`IGdebug ⚠️ No new Instagram content found for @${account.username}`);
+            }
             result.status = 'no_new_content';
             result.newVideos = 0;
         } else {
+            if (account.platform === 'instagram') {
+                console.log(`IGdebug 🎯 Processing ${recentContent.length} new Instagram posts for @${account.username}`);
+            }
+            
             // Add videos to tracking system
             let addedCount = 0;
             const addedVideos: AccountContent[] = [];
             
             for (const content of recentContent) {
+                if (account.platform === 'instagram') {
+                    console.log(`IGdebug 🔄 Attempting to add Instagram post ${content.id} to tracking`);
+                }
+                
                 const added = await addVideoToTracking(content, account.accountType, account.keyword);
                 if (added) {
                     addedCount++;
                     addedVideos.push(content);
+                    if (account.platform === 'instagram') {
+                        console.log(`IGdebug ✅ Successfully added Instagram post ${content.id} to tracking`);
+                    }
+                } else {
+                    if (account.platform === 'instagram') {
+                        console.log(`IGdebug ❌ Failed to add Instagram post ${content.id} to tracking`);
+                    }
                 }
             }
 
             result.newVideos = addedCount;
             result.addedVideos = addedVideos;
+
+            if (account.platform === 'instagram') {
+                console.log(`IGdebug 📊 Instagram tracking summary: ${addedCount}/${recentContent.length} posts added`);
+            }
 
             // Update lastVideoId and lastPostAdded if we found new content
             if (recentContent.length > 0) {
@@ -987,6 +1126,10 @@ export async function checkTrackedAccount(account: { id: string; username: strin
                     where: { id: account.id },
                     data: updateData
                 });
+                
+                if (account.platform === 'instagram') {
+                    console.log(`IGdebug 🔄 Updated Instagram account: lastVideoId=${recentContent[0].id}, lastPostAdded=${addedCount > 0 ? 'YES' : 'NO'}`);
+                }
             }
         }
 
@@ -996,8 +1139,21 @@ export async function checkTrackedAccount(account: { id: string; username: strin
             data: { lastChecked: new Date() }
         });
 
+        if (account.platform === 'instagram') {
+            console.log(`IGdebug 🏁 Instagram account check completed for @${account.username}: ${result.status}, ${result.newVideos} new videos`);
+        }
+
     } catch (error) {
-        console.error(`❌ Error checking account @${account.username}:`, error);
+        if (account.platform === 'instagram') {
+            console.error(`IGdebug 💥 Error checking Instagram account @${account.username}:`, error);
+            if (error instanceof Error) {
+                console.error(`IGdebug 💥 Error message: ${error.message}`);
+                console.error(`IGdebug 💥 Error stack: ${error.stack}`);
+            }
+        } else {
+            console.error(`❌ Error checking account @${account.username}:`, error);
+        }
+        
         result.status = 'failed';
         
         // Provide better error messages for different platforms
@@ -1006,7 +1162,7 @@ export async function checkTrackedAccount(account: { id: string; username: strin
         } else if (account.platform === 'youtube' && error instanceof Error) {
             result.error = `YouTube channel ${account.username} error: ${error.message}. Check if the channel exists and YouTube API key is valid.`;
         } else {
-            result.error = error instanceof Error ? error.message : 'Unknown error';
+        result.error = error instanceof Error ? error.message : 'Unknown error';
         }
     }
 
