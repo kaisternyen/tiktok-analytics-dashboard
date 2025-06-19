@@ -164,58 +164,6 @@ export default function VideoFilterSortBar({ filters, sorts, timeframe, onChange
             }}
           />
         </div>
-
-        {/* Original Detailed Timeframe Controls */}
-        <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
-          <span className="text-xs text-gray-500">Advanced:</span>
-          <span className="text-xs text-gray-500">from</span>
-          <DatePicker
-            selected={localTimeframe && localTimeframe[0] ? toZonedTime(new Date(localTimeframe[0]), 'America/New_York') : null}
-            onChange={date => {
-              if (!date) return;
-              const d = new Date(date);
-              d.setMinutes(0, 0, 0);
-              const estIso = fromZonedTime(d, 'America/New_York').toISOString();
-              handleTimeframeChange(estIso, localTimeframe && localTimeframe[1] ? localTimeframe[1] : '');
-            }}
-            showTimeSelect
-            showTimeSelectOnly={false}
-            timeIntervals={60}
-            dateFormat="MMMM d, yyyy h aa"
-            timeCaption="Hour"
-            placeholderText="Start date/time (EST)"
-            className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-            popperPlacement="bottom"
-          />
-          <span className="text-xs text-gray-500">to</span>
-          <DatePicker
-            selected={localTimeframe && localTimeframe[1] ? toZonedTime(new Date(localTimeframe[1]), 'America/New_York') : null}
-            onChange={date => {
-              if (!date) return;
-              const d = new Date(date);
-              d.setMinutes(0, 0, 0);
-              const estIso = fromZonedTime(d, 'America/New_York').toISOString();
-              handleTimeframeChange(localTimeframe && localTimeframe[0] ? localTimeframe[0] : '', estIso);
-            }}
-            showTimeSelect
-            showTimeSelectOnly={false}
-            timeIntervals={60}
-            dateFormat="MMMM d, yyyy h aa"
-            timeCaption="Hour"
-            placeholderText="End date/time (EST)"
-            className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
-            popperPlacement="bottom"
-          />
-          {localTimeframe && (localTimeframe[0] || localTimeframe[1]) && (
-            <button
-              className="ml-2 text-xs text-gray-400 hover:text-red-500"
-              onClick={() => { setLocalTimeframe(null); onChange({ operator: localOperator, conditions: localFilters }, localSorts, null); }}
-              title="Clear timeframe"
-            >
-              ×
-            </button>
-          )}
-        </div>
       </div>
       {/* Filter Bar */}
       <div className="flex flex-col gap-2">

@@ -31,9 +31,19 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
     return toZonedTime(new Date(), 'America/New_York');
   };
 
+  // Helper function to get most recent complete hour
+  const getMostRecentCompleteHour = () => {
+    const now = getCurrentESTTime();
+    const currentHour = now.getHours();
+    const mostRecentHour = toZonedTime(now, 'America/New_York');
+    mostRecentHour.setHours(currentHour, 0, 0, 0);
+    return fromZonedTime(mostRecentHour, 'America/New_York');
+  };
+
   // Calculate preset timeframes
   const getPresetTimeframe = (preset: TimelinePreset): [string, string] | null => {
     if (preset === 'ALL') return null;
+    if (preset === 'CUSTOM') return null; // Custom will use the customRange
     
     const now = getCurrentESTTime();
     
@@ -65,9 +75,9 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
         return [startTime.toISOString(), endTime.toISOString()];
         
       case 'D':
-        // Current time back to midnight EST today
+        // Current day's midnight EST to most recent complete hour
         startTime = getESTMidnight(now);
-        endTime = now;
+        endTime = getMostRecentCompleteHour();
         break;
       case 'W':
         // Current time back to midnight EST 7 days ago
@@ -101,7 +111,18 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
     setSelectedPreset(preset);
     
     if (preset === 'CUSTOM') {
-      // Don't change the timeframe, just show the custom range picker
+      // Use the stored custom range if available
+      if (customRange[0] && customRange[1]) {
+        const startEST = getESTMidnight(customRange[0]);
+        const endEST = toZonedTime(customRange[1], 'America/New_York');
+        endEST.setHours(23, 59, 59, 999); // End of day
+        const endESTIso = fromZonedTime(endEST, 'America/New_York');
+        
+        onChange([startEST.toISOString(), endESTIso.toISOString()]);
+      } else {
+        // If no custom range set, clear timeframe
+        onChange(null);
+      }
       return;
     }
     
@@ -109,34 +130,38 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
     onChange(newTimeframe);
   };
 
-  // Handle custom range changes
-  const handleCustomStartChange = (date: Date | null) => {
-    const newRange: [Date | null, Date | null] = [date, customRange[1]];
-    setCustomRange(newRange);
-    
-    if (date && newRange[1]) {
-      // Convert to EST and create timeframe
-      const startEST = getESTMidnight(date);
-      const endEST = toZonedTime(newRange[1], 'America/New_York');
-      endEST.setHours(23, 59, 59, 999); // End of day
-      const endESTIso = fromZonedTime(endEST, 'America/New_York');
+  // Handle advanced/custom range changes
+  const handleAdvancedStartChange = (date: Date | null) => {
+    if (selectedPreset === 'CUSTOM') {
+      const newRange: [Date | null, Date | null] = [date, customRange[1]];
+      setCustomRange(newRange);
       
-      onChange([startEST.toISOString(), endESTIso.toISOString()]);
+      if (date && newRange[1]) {
+        // Convert to EST and create timeframe
+        const startEST = getESTMidnight(date);
+        const endEST = toZonedTime(newRange[1], 'America/New_York');
+        endEST.setHours(23, 59, 59, 999); // End of day
+        const endESTIso = fromZonedTime(endEST, 'America/New_York');
+        
+        onChange([startEST.toISOString(), endESTIso.toISOString()]);
+      }
     }
   };
 
-  const handleCustomEndChange = (date: Date | null) => {
-    const newRange: [Date | null, Date | null] = [customRange[0], date];
-    setCustomRange(newRange);
-    
-    if (newRange[0] && date) {
-      // Convert to EST and create timeframe
-      const startEST = getESTMidnight(newRange[0]);
-      const endEST = toZonedTime(date, 'America/New_York');
-      endEST.setHours(23, 59, 59, 999); // End of day
-      const endESTIso = fromZonedTime(endEST, 'America/New_York');
+  const handleAdvancedEndChange = (date: Date | null) => {
+    if (selectedPreset === 'CUSTOM') {
+      const newRange: [Date | null, Date | null] = [customRange[0], date];
+      setCustomRange(newRange);
       
-      onChange([startEST.toISOString(), endESTIso.toISOString()]);
+      if (newRange[0] && date) {
+        // Convert to EST and create timeframe
+        const startEST = getESTMidnight(newRange[0]);
+        const endEST = toZonedTime(date, 'America/New_York');
+        endEST.setHours(23, 59, 59, 999); // End of day
+        const endESTIso = fromZonedTime(endEST, 'America/New_York');
+        
+        onChange([startEST.toISOString(), endESTIso.toISOString()]);
+      }
     }
   };
 
@@ -185,6 +210,22 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
     { key: 'CUSTOM', label: 'CUSTOM' },
   ];
 
+  // Get display values for the advanced section
+  const getAdvancedDisplayValues = (): [Date | null, Date | null] => {
+    if (selectedPreset === 'CUSTOM') {
+      return customRange;
+    } else if (timeframe) {
+      return [
+        toZonedTime(new Date(timeframe[0]), 'America/New_York'),
+        toZonedTime(new Date(timeframe[1]), 'America/New_York')
+      ];
+    }
+    return [null, null];
+  };
+
+  const [advancedStart, advancedEnd] = getAdvancedDisplayValues();
+  const isCustomMode = selectedPreset === 'CUSTOM';
+
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       {/* Preset Buttons - styled like the header navigation */}
@@ -205,53 +246,57 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
         ))}
       </div>
 
-      {/* Custom Date Range Picker Container - fixed height to prevent layout shift */}
+      {/* Advanced Section - always visible, but readonly when not in custom mode */}
       <div className="h-10 flex items-center">
-        {selectedPreset === 'CUSTOM' ? (
-          <div className="flex items-center gap-2 p-2 border rounded-lg bg-background">
-            <span className="text-sm text-muted-foreground">From:</span>
-            <DatePicker
-              selected={customRange[0] || undefined}
-              onChange={handleCustomStartChange}
-              selectsStart
-              startDate={customRange[0] || undefined}
-              endDate={customRange[1] || undefined}
-              dateFormat="MMM d, yyyy"
-              placeholderText="Start date"
-              className="text-sm px-2 py-1 rounded border border-input bg-background w-32"
-              popperPlacement="bottom-start"
-            />
-            <span className="text-sm text-muted-foreground">To:</span>
-            <DatePicker
-              selected={customRange[1] || undefined}
-              onChange={handleCustomEndChange}
-              selectsEnd
-              startDate={customRange[0] || undefined}
-              endDate={customRange[1] || undefined}
-              minDate={customRange[0] || undefined}
-              dateFormat="MMM d, yyyy"
-              placeholderText="End date"
-              className="text-sm px-2 py-1 rounded border border-input bg-background w-32"
-              popperPlacement="bottom-start"
-            />
-            {(customRange[0] || customRange[1]) && (
-              <button
-                onClick={() => {
-                  setCustomRange([null, null]);
-                  onChange(null);
-                  setSelectedPreset('ALL');
-                }}
-                className="text-sm text-muted-foreground hover:text-destructive"
-                title="Clear custom range"
-              >
-                ×
-              </button>
+        <div className="flex items-center gap-2 p-2 border rounded-lg bg-background">
+          {!isCustomMode && (
+            <span className="text-sm text-muted-foreground font-medium">
+              {selectedPreset === 'ALL' ? 'All time:' : `${selectedPreset}:`}
+            </span>
+          )}
+          <span className="text-sm text-muted-foreground">From:</span>
+          <DatePicker
+            selected={advancedStart || undefined}
+            onChange={handleAdvancedStartChange}
+            dateFormat="MMM d, yyyy"
+            placeholderText="Start date"
+            className={cn(
+              "text-sm px-2 py-1 rounded border border-input bg-background w-32",
+              !isCustomMode && "cursor-default bg-muted"
             )}
-          </div>
-        ) : (
-          // Empty div to maintain space when not in custom mode
-          <div></div>
-        )}
+            popperPlacement="bottom-start"
+            disabled={!isCustomMode}
+            readOnly={!isCustomMode}
+          />
+          <span className="text-sm text-muted-foreground">To:</span>
+          <DatePicker
+            selected={advancedEnd || undefined}
+            onChange={handleAdvancedEndChange}
+            minDate={advancedStart || undefined}
+            dateFormat="MMM d, yyyy"
+            placeholderText="End date"
+            className={cn(
+              "text-sm px-2 py-1 rounded border border-input bg-background w-32",
+              !isCustomMode && "cursor-default bg-muted"
+            )}
+            popperPlacement="bottom-start"
+            disabled={!isCustomMode}
+            readOnly={!isCustomMode}
+          />
+          {isCustomMode && (advancedStart || advancedEnd) && (
+            <button
+              onClick={() => {
+                setCustomRange([null, null]);
+                onChange(null);
+                setSelectedPreset('ALL');
+              }}
+              className="text-sm text-muted-foreground hover:text-destructive"
+              title="Clear custom range"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
