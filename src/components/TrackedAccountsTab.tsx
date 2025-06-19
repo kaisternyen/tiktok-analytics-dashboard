@@ -119,11 +119,48 @@ export function TrackedAccountsTab() {
             const data = await response.json();
             
             if (data.success) {
-                setAccounts(data.accounts);
+                // Validate and clean the account data before setting state
+                const validatedAccounts = data.accounts.map((account: TrackedAccount) => {
+                    // Ensure required fields have default values
+                    const cleanAccount = {
+                        ...account,
+                        trackedPosts: typeof account.trackedPosts === 'number' ? account.trackedPosts : 0,
+                        totalPosts: typeof account.totalPosts === 'number' ? account.totalPosts : 0,
+                        displayName: account.displayName || `@${account.username}`,
+                        lastChecked: account.lastChecked || new Date().toISOString()
+                    };
+                    
+                    // Log any suspicious data in development
+                    if (process.env.NODE_ENV === 'development') {
+                        if (cleanAccount.trackedPosts > cleanAccount.totalPosts && cleanAccount.totalPosts > 0) {
+                            console.warn(`⚠️ Account ${cleanAccount.platform}:${cleanAccount.username} has more tracked (${cleanAccount.trackedPosts}) than total (${cleanAccount.totalPosts}) posts`);
+                        }
+                        if (cleanAccount.trackedPosts === 0 && cleanAccount.lastPostAdded) {
+                            console.warn(`⚠️ Account ${cleanAccount.platform}:${cleanAccount.username} shows 0 tracked posts but has lastPostAdded: ${cleanAccount.lastPostAdded}`);
+                        }
+                    }
+                    
+                    return cleanAccount;
+                });
+                
+                setAccounts(validatedAccounts);
+                
+                // Log summary in development
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('📊 Fetched accounts summary:', {
+                        total: validatedAccounts.length,
+                        byPlatform: validatedAccounts.reduce((acc: Record<string, number>, account: TrackedAccount) => {
+                            acc[account.platform] = (acc[account.platform] || 0) + 1;
+                            return acc;
+                        }, {}),
+                        totalTrackedPosts: validatedAccounts.reduce((sum: number, acc: TrackedAccount) => sum + (acc.trackedPosts || 0), 0)
+                    });
+                }
             } else {
                 setError('Failed to fetch tracked accounts');
             }
-        } catch {
+        } catch (err) {
+            console.error('Error fetching tracked accounts:', err);
             setError('Error fetching tracked accounts');
         } finally {
             setLoading(false);
@@ -453,13 +490,27 @@ export function TrackedAccountsTab() {
                                                             <span className="text-gray-400">Loading...</span>
                                                         ) : (
                                                             <div className="space-y-1">
-                                                                <span className="text-green-700">Tracked: {account.trackedPosts} / {account.totalPosts} posts</span>
+                                                                <span className="text-green-700">
+                                                                    Tracked: {account.trackedPosts || 0} / {account.totalPosts || 0} posts
+                                                                    {/* Show warning if tracked > total */}
+                                                                    {(account.trackedPosts || 0) > (account.totalPosts || 0) && (
+                                                                        <span className="text-orange-600 text-xs ml-2" title="We may have tracked posts that were later deleted">
+                                                                            ⚠️
+                                                                        </span>
+                                                                    )}
+                                                                </span>
                                                                 <div className="flex gap-4 text-xs text-gray-500">
                                                                     <span>Last checked: {formatTimeAgo(account.lastChecked)}</span>
                                                                     {account.lastPostAdded && (
                                                                         <span className="font-medium text-blue-600">Last post: {formatTimeAgo(account.lastPostAdded)}</span>
                                                                     )}
                                                                 </div>
+                                                                {/* Debug info for development */}
+                                                                {process.env.NODE_ENV === 'development' && (
+                                                                    <div className="text-xs text-gray-400 mt-1">
+                                                                        Debug: ID={account.id.substring(0, 8)}, Platform={account.platform}, User={account.username}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         )}
                                                     </div>
