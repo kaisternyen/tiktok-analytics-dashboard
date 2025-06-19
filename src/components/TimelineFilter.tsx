@@ -157,7 +157,7 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
   ];
 
   return (
-    <div className={cn("flex items-center gap-4", className)}>
+    <div className={cn("flex flex-col gap-2", className)}>
       {/* Preset Buttons - styled like the header navigation */}
       <div className="bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]">
         {presets.map((preset) => (
@@ -176,49 +176,54 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
         ))}
       </div>
 
-      {/* Custom Date Range Picker - shown when CUSTOM is selected */}
-      {selectedPreset === 'CUSTOM' && (
-        <div className="flex items-center gap-2 ml-4 p-2 border rounded-lg bg-background">
-          <span className="text-sm text-muted-foreground">From:</span>
-          <DatePicker
-            selected={customRange[0] || undefined}
-            onChange={handleCustomStartChange}
-            selectsStart
-            startDate={customRange[0] || undefined}
-            endDate={customRange[1] || undefined}
-            dateFormat="MMM d, yyyy"
-            placeholderText="Start date"
-            className="text-sm px-2 py-1 rounded border border-input bg-background"
-            popperPlacement="bottom-start"
-          />
-          <span className="text-sm text-muted-foreground">To:</span>
-          <DatePicker
-            selected={customRange[1] || undefined}
-            onChange={handleCustomEndChange}
-            selectsEnd
-            startDate={customRange[0] || undefined}
-            endDate={customRange[1] || undefined}
-            minDate={customRange[0] || undefined}
-            dateFormat="MMM d, yyyy"
-            placeholderText="End date"
-            className="text-sm px-2 py-1 rounded border border-input bg-background"
-            popperPlacement="bottom-start"
-          />
-          {(customRange[0] || customRange[1]) && (
-            <button
-              onClick={() => {
-                setCustomRange([null, null]);
-                onChange(null);
-                setSelectedPreset('ALL');
-              }}
-              className="text-sm text-muted-foreground hover:text-destructive"
-              title="Clear custom range"
-            >
-              ×
-            </button>
-          )}
-        </div>
-      )}
+      {/* Custom Date Range Picker Container - fixed height to prevent layout shift */}
+      <div className="h-10 flex items-center">
+        {selectedPreset === 'CUSTOM' ? (
+          <div className="flex items-center gap-2 p-2 border rounded-lg bg-background">
+            <span className="text-sm text-muted-foreground">From:</span>
+            <DatePicker
+              selected={customRange[0] || undefined}
+              onChange={handleCustomStartChange}
+              selectsStart
+              startDate={customRange[0] || undefined}
+              endDate={customRange[1] || undefined}
+              dateFormat="MMM d, yyyy"
+              placeholderText="Start date"
+              className="text-sm px-2 py-1 rounded border border-input bg-background w-32"
+              popperPlacement="bottom-start"
+            />
+            <span className="text-sm text-muted-foreground">To:</span>
+            <DatePicker
+              selected={customRange[1] || undefined}
+              onChange={handleCustomEndChange}
+              selectsEnd
+              startDate={customRange[0] || undefined}
+              endDate={customRange[1] || undefined}
+              minDate={customRange[0] || undefined}
+              dateFormat="MMM d, yyyy"
+              placeholderText="End date"
+              className="text-sm px-2 py-1 rounded border border-input bg-background w-32"
+              popperPlacement="bottom-start"
+            />
+            {(customRange[0] || customRange[1]) && (
+              <button
+                onClick={() => {
+                  setCustomRange([null, null]);
+                  onChange(null);
+                  setSelectedPreset('ALL');
+                }}
+                className="text-sm text-muted-foreground hover:text-destructive"
+                title="Clear custom range"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ) : (
+          // Empty div to maintain space when not in custom mode
+          <div></div>
+        )}
+      </div>
     </div>
   );
 } 

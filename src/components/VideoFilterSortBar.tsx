@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
+import { TimelineFilter } from './TimelineFilter';
 
 // Define field types for the videos table
 const FIELD_DEFS = [
@@ -150,9 +151,23 @@ export default function VideoFilterSortBar({ filters, sorts, timeframe, onChange
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-col gap-4">
       {/* Timeframe Section */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-4">
         <span className="font-medium text-gray-700">Timeframe</span>
-        <div className="flex items-center gap-2">
+        
+        {/* Timeline Filter with Preset Buttons */}
+        <div className="min-h-[60px] flex flex-col justify-center">
+          <TimelineFilter
+            timeframe={localTimeframe}
+            onChange={(newTimeframe) => {
+              setLocalTimeframe(newTimeframe);
+              onChange({ operator: localOperator, conditions: localFilters }, localSorts, newTimeframe);
+            }}
+          />
+        </div>
+
+        {/* Original Detailed Timeframe Controls */}
+        <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+          <span className="text-xs text-gray-500">Advanced:</span>
           <span className="text-xs text-gray-500">from</span>
           <DatePicker
             selected={localTimeframe && localTimeframe[0] ? toZonedTime(new Date(localTimeframe[0]), 'America/New_York') : null}
