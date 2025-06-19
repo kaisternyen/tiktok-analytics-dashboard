@@ -101,6 +101,73 @@ export default function TikTokTracker() {
     const [sorts, setSorts] = useState<SortCondition[]>([]);
     const [timeframe, setTimeframe] = useState<[string, string] | null>(null);
 
+    // Handle header click for sorting
+    const handleHeaderClick = (field: string) => {
+        // Define the mapping between display field names and database field names
+        const fieldMapping: Record<string, string> = {
+            'Creator': 'username',
+            'Platform': 'platform',
+            'Views': 'currentViews',
+            'Likes': 'currentLikes',
+            'Comments': 'currentComments',
+            'Shares': 'currentShares',
+            'Growth': 'currentViews', // Sort by views for growth
+            'Posted': 'createdAt',
+            'Cadence': 'scrapingCadence',
+            'Status': 'status'
+        };
+
+        const dbField = fieldMapping[field] || field;
+        const currentSort = sorts.find(sort => sort.field === dbField);
+        
+        let newSorts: SortCondition[] = [];
+        
+        if (!currentSort) {
+            // No current sort on this field, set to ascending
+            newSorts = [{ field: dbField, order: 'asc' }];
+        } else if (currentSort.order === 'asc') {
+            // Currently ascending, change to descending
+            newSorts = [{ field: dbField, order: 'desc' }];
+        } else {
+            // Currently descending, remove sort (back to default)
+            newSorts = [];
+        }
+
+        setSorts(newSorts);
+        fetchVideos(filters, newSorts, timeframe);
+    };
+
+    // Get current sort state for a field
+    const getSortState = (field: string): 'asc' | 'desc' | null => {
+        const fieldMapping: Record<string, string> = {
+            'Creator': 'username',
+            'Platform': 'platform',
+            'Views': 'currentViews',
+            'Likes': 'currentLikes',
+            'Comments': 'currentComments',
+            'Shares': 'currentShares',
+            'Growth': 'currentViews',
+            'Posted': 'createdAt',
+            'Cadence': 'scrapingCadence',
+            'Status': 'status'
+        };
+
+        const dbField = fieldMapping[field] || field;
+        const currentSort = sorts.find(sort => sort.field === dbField);
+        return currentSort ? currentSort.order : null;
+    };
+
+    // Render sort icon for header
+    const renderSortIcon = (field: string) => {
+        const sortState = getSortState(field);
+        if (sortState === 'asc') {
+            return <TrendingUp className="w-4 h-4 ml-1 text-blue-600" />;
+        } else if (sortState === 'desc') {
+            return <TrendingDown className="w-4 h-4 ml-1 text-blue-600" />;
+        }
+        return <span className="w-4 h-4 ml-1"></span>; // Placeholder for consistent spacing
+    };
+
     const fetchVideos = useCallback(async (customFilters: FilterGroup = filters, customSorts = sorts, customTimeframe: [string, string] | null = timeframe) => {
         console.log('fetchVideos called with:', { customFilters, customSorts, customTimeframe });
         try {
@@ -1054,16 +1121,96 @@ export default function TikTokTracker() {
                                         <table className="w-full">
                                             <thead className="bg-gray-50 border-b border-gray-200">
                                                 <tr>
-                                                    <th className="text-left p-4 font-medium text-gray-900">Creator</th>
-                                                    <th className="text-left p-4 font-medium text-gray-900">Platform</th>
-                                                    <th className="text-left p-4 font-medium text-gray-900">Views</th>
-                                                    <th className="text-left p-4 font-medium text-gray-900">Likes</th>
-                                                    <th className="text-left p-4 font-medium text-gray-900">Comments</th>
-                                                    <th className="text-left p-4 font-medium text-gray-900">Shares</th>
-                                                    <th className="text-left p-4 font-medium text-gray-900">Growth</th>
-                                                    <th className="text-left p-4 font-medium text-gray-900">Posted</th>
-                                                    <th className="text-left p-4 font-medium text-gray-900">Cadence</th>
-                                                    <th className="text-left p-4 font-medium text-gray-900">Status</th>
+                                                    <th 
+                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                        onClick={() => handleHeaderClick('Creator')}
+                                                    >
+                                                        <div className="flex items-center">
+                                                            Creator
+                                                            {renderSortIcon('Creator')}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                        onClick={() => handleHeaderClick('Platform')}
+                                                    >
+                                                        <div className="flex items-center">
+                                                            Platform
+                                                            {renderSortIcon('Platform')}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                        onClick={() => handleHeaderClick('Views')}
+                                                    >
+                                                        <div className="flex items-center">
+                                                            Views
+                                                            {renderSortIcon('Views')}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                        onClick={() => handleHeaderClick('Likes')}
+                                                    >
+                                                        <div className="flex items-center">
+                                                            Likes
+                                                            {renderSortIcon('Likes')}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                        onClick={() => handleHeaderClick('Comments')}
+                                                    >
+                                                        <div className="flex items-center">
+                                                            Comments
+                                                            {renderSortIcon('Comments')}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                        onClick={() => handleHeaderClick('Shares')}
+                                                    >
+                                                        <div className="flex items-center">
+                                                            Shares
+                                                            {renderSortIcon('Shares')}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                        onClick={() => handleHeaderClick('Growth')}
+                                                    >
+                                                        <div className="flex items-center">
+                                                            Growth
+                                                            {renderSortIcon('Growth')}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                        onClick={() => handleHeaderClick('Posted')}
+                                                    >
+                                                        <div className="flex items-center">
+                                                            Posted
+                                                            {renderSortIcon('Posted')}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                        onClick={() => handleHeaderClick('Cadence')}
+                                                    >
+                                                        <div className="flex items-center">
+                                                            Cadence
+                                                            {renderSortIcon('Cadence')}
+                                                        </div>
+                                                    </th>
+                                                    <th 
+                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                        onClick={() => handleHeaderClick('Status')}
+                                                    >
+                                                        <div className="flex items-center">
+                                                            Status
+                                                            {renderSortIcon('Status')}
+                                                        </div>
+                                                    </th>
                                                     <th className="text-left p-4 font-medium text-gray-900">Actions</th>
                                                 </tr>
                                             </thead>
