@@ -11,6 +11,7 @@ import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, He
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
 import { TrackedAccountsTab } from '../components/TrackedAccountsTab';
+import { TimelineFilter } from './TimelineFilter';
 
 interface VideoHistory {
     time: string;
@@ -1029,6 +1030,16 @@ export default function TikTokTracker() {
                                 </div>
                             </CardContent>
                         </Card>
+
+                        {/* Timeline Filter */}
+                        <div className="mb-4">
+                            <TimelineFilter
+                                timeframe={timeframe}
+                                onChange={(newTimeframe) => setTimeframe(newTimeframe)}
+                                className="mb-4"
+                            />
+                        </div>
+
                         {/* Filter/Sort Bar */}
                         <VideoFilterSortBar
                             filters={filters}
