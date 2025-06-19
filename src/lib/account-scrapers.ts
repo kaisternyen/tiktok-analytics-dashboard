@@ -304,6 +304,12 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
             console.log(`📅 Oldest post: ${posts[posts.length - 1].timestamp} (ID: ${posts[posts.length - 1].id})`);
         }
 
+        // If no lastVideoId (new account), only return the most recent post to establish baseline
+        if (!lastVideoId) {
+            console.log(`🆕 New Instagram account @${username} - returning only most recent post to establish baseline`);
+            return posts.length > 0 ? [posts[0]] : [];
+        }
+
         // Filter out posts we've already processed if we have a lastVideoId
         let newContent = posts;
         if (lastVideoId) {
@@ -543,6 +549,12 @@ async function fetchYouTubeAccountContent(channelIdentifier: string, lastVideoId
                 timestamp: new Date(snippet.publishedAt).toISOString()
             };
         });
+        
+        // If no lastVideoId (new account), only return the most recent video to establish baseline
+        if (!lastVideoId) {
+            console.log(`🆕 New YouTube account ${channelIdentifier} - returning only most recent video to establish baseline`);
+            return allContent.length > 0 ? [allContent[0]] : [];
+        }
         
         // Step 4: Filter out videos we've already processed
         let newContent = allContent;

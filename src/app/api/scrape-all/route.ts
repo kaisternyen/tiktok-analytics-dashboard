@@ -136,11 +136,7 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
 // Calculate if video should change cadence based on performance and age
 async function evaluateCadenceChange(video: VideoRecord, newViews: number): Promise<{ newCadence: string; reason: string } | null> {
     const videoAgeInDays = (new Date().getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-    
-    // Videos under 7 days old always stay on hourly tracking
-    if (videoAgeInDays < 7) {
-        return null; // No cadence changes for new videos - always hourly first week
-    }
+    const videoAgeInHours = videoAgeInDays * 24;
     
     // Check if we're at 12:00 AM EST (cadence evaluation window)
     const now = new Date();
@@ -152,58 +148,90 @@ async function evaluateCadenceChange(video: VideoRecord, newViews: number): Prom
         return null; // Not midnight EST - no cadence changes
     }
     
-    // Calculate true daily views by looking back 24 hours in metrics history
-    const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
-    
-    try {
-        // Find the closest metrics entry from 24 hours ago
-        const historicalMetric = await prisma.metricsHistory.findFirst({
-            where: {
-                videoId: video.id,
-                timestamp: {
-                    gte: new Date(twentyFourHoursAgo.getTime() - (2 * 60 * 60 * 1000)), // 2 hour buffer
-                    lte: new Date(twentyFourHoursAgo.getTime() + (2 * 60 * 60 * 1000))  // 2 hour buffer
-                }
-            },
-            orderBy: {
-                timestamp: 'desc'
-            }
-        });
+    // For videos 24+ hours old but less than 7 days: check 1000 views threshold
+    if (videoAgeInHours >= 24 && videoAgeInDays < 7) {
+        console.log(`📊 @${video.username}: 24+ hours old (${videoAgeInHours.toFixed(1)}h) - checking 1000 views threshold`);
         
-        if (!historicalMetric) {
-            console.log(`⚠️ No historical data found for @${video.username} - skipping cadence evaluation`);
-            return null;
-        }
-        
-        // Calculate true daily views (views gained in past 24 hours)
-        const dailyViews = Math.max(0, newViews - historicalMetric.views);
-        
-        // Threshold: 10,000 daily views
-        const DAILY_VIEWS_THRESHOLD = 10000;
-        
-        // Switch from hourly to daily if views drop below threshold
-        if (video.scrapingCadence === 'hourly' && dailyViews < DAILY_VIEWS_THRESHOLD) {
+        if (video.scrapingCadence === 'hourly' && newViews < 1000) {
             return {
                 newCadence: 'daily',
-                reason: `Midnight EST evaluation: Daily views ${dailyViews.toLocaleString()} < ${DAILY_VIEWS_THRESHOLD.toLocaleString()} → switching to daily tracking`
-            };
-        } 
-        
-        // Switch from daily to hourly if views exceed threshold
-        if (video.scrapingCadence === 'daily' && dailyViews >= DAILY_VIEWS_THRESHOLD) {
-            return {
-                newCadence: 'hourly',
-                reason: `Midnight EST evaluation: Daily views ${dailyViews.toLocaleString()} ≥ ${DAILY_VIEWS_THRESHOLD.toLocaleString()} → switching to hourly tracking`
+                reason: `24-hour evaluation: Total views ${newViews.toLocaleString()} < 1,000 → switching to daily tracking`
             };
         }
         
-        console.log(`📊 @${video.username}: Daily views ${dailyViews.toLocaleString()} - staying on ${video.scrapingCadence} cadence`);
-        return null; // No change needed
+        if (video.scrapingCadence === 'daily' && newViews >= 1000) {
+            return {
+                newCadence: 'hourly',
+                reason: `24-hour evaluation: Total views ${newViews.toLocaleString()} ≥ 1,000 → switching back to hourly tracking`
+            };
+        }
         
-    } catch (error) {
-        console.error(`❌ Error calculating daily views for @${video.username}:`, error);
+        console.log(`📊 @${video.username}: Total views ${newViews.toLocaleString()} - staying on ${video.scrapingCadence} cadence (24h threshold)`);
         return null;
     }
+    
+    // Videos under 24 hours old always stay on hourly tracking
+    if (videoAgeInHours < 24) {
+        return null; // No cadence changes for very new videos - always hourly first 24 hours
+    }
+    
+    // Videos 7+ days old: use daily views growth threshold (existing logic)
+    if (videoAgeInDays >= 7) {
+        // Calculate true daily views by looking back 24 hours in metrics history
+        const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+        
+        try {
+            // Find the closest metrics entry from 24 hours ago
+            const historicalMetric = await prisma.metricsHistory.findFirst({
+                where: {
+                    videoId: video.id,
+                    timestamp: {
+                        gte: new Date(twentyFourHoursAgo.getTime() - (2 * 60 * 60 * 1000)), // 2 hour buffer
+                        lte: new Date(twentyFourHoursAgo.getTime() + (2 * 60 * 60 * 1000))  // 2 hour buffer
+                    }
+                },
+                orderBy: {
+                    timestamp: 'desc'
+                }
+            });
+            
+            if (!historicalMetric) {
+                console.log(`⚠️ No historical data found for @${video.username} - skipping cadence evaluation`);
+                return null;
+            }
+            
+            // Calculate true daily views (views gained in past 24 hours)
+            const dailyViews = Math.max(0, newViews - historicalMetric.views);
+            
+            // Threshold: 10,000 daily views
+            const DAILY_VIEWS_THRESHOLD = 10000;
+            
+            // Switch from hourly to daily if views drop below threshold
+            if (video.scrapingCadence === 'hourly' && dailyViews < DAILY_VIEWS_THRESHOLD) {
+                return {
+                    newCadence: 'daily',
+                    reason: `7+ day evaluation: Daily views ${dailyViews.toLocaleString()} < ${DAILY_VIEWS_THRESHOLD.toLocaleString()} → switching to daily tracking`
+                };
+            } 
+            
+            // Switch from daily to hourly if views exceed threshold
+            if (video.scrapingCadence === 'daily' && dailyViews >= DAILY_VIEWS_THRESHOLD) {
+                return {
+                    newCadence: 'hourly',
+                    reason: `7+ day evaluation: Daily views ${dailyViews.toLocaleString()} ≥ ${DAILY_VIEWS_THRESHOLD.toLocaleString()} → switching to hourly tracking`
+                };
+            }
+            
+            console.log(`📊 @${video.username}: Daily views ${dailyViews.toLocaleString()} - staying on ${video.scrapingCadence} cadence (7+ day threshold)`);
+            return null; // No change needed
+            
+        } catch (error) {
+            console.error(`❌ Error calculating daily views for @${video.username}:`, error);
+            return null;
+        }
+    }
+    
+    return null; // No cadence change needed
 }
 
 // Smart processing with standardized timing and adaptive frequency
