@@ -111,18 +111,14 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
     setSelectedPreset(preset);
     
     if (preset === 'CUSTOM') {
-      // Use the stored custom range if available
+      // Use the stored custom range if available, or don't change timeframe if none set
       if (customRange[0] && customRange[1]) {
-        const startEST = getESTMidnight(customRange[0]);
-        const endEST = toZonedTime(customRange[1], 'America/New_York');
-        endEST.setHours(23, 59, 59, 999); // End of day
-        const endESTIso = fromZonedTime(endEST, 'America/New_York');
+        const startEST = fromZonedTime(customRange[0], 'America/New_York');
+        const endEST = fromZonedTime(customRange[1], 'America/New_York');
         
-        onChange([startEST.toISOString(), endESTIso.toISOString()]);
-      } else {
-        // If no custom range set, clear timeframe
-        onChange(null);
+        onChange([startEST.toISOString(), endEST.toISOString()]);
       }
+      // Don't call onChange(null) here - let the user set their custom range
       return;
     }
     
@@ -137,13 +133,11 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
       setCustomRange(newRange);
       
       if (date && newRange[1]) {
-        // Convert to EST and create timeframe
-        const startEST = getESTMidnight(date);
-        const endEST = toZonedTime(newRange[1], 'America/New_York');
-        endEST.setHours(23, 59, 59, 999); // End of day
-        const endESTIso = fromZonedTime(endEST, 'America/New_York');
+        // Convert to EST and create timeframe with full time precision
+        const startEST = fromZonedTime(date, 'America/New_York');
+        const endEST = fromZonedTime(newRange[1], 'America/New_York');
         
-        onChange([startEST.toISOString(), endESTIso.toISOString()]);
+        onChange([startEST.toISOString(), endEST.toISOString()]);
       }
     }
   };
@@ -154,13 +148,11 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
       setCustomRange(newRange);
       
       if (newRange[0] && date) {
-        // Convert to EST and create timeframe
-        const startEST = getESTMidnight(newRange[0]);
-        const endEST = toZonedTime(date, 'America/New_York');
-        endEST.setHours(23, 59, 59, 999); // End of day
-        const endESTIso = fromZonedTime(endEST, 'America/New_York');
+        // Convert to EST and create timeframe with full time precision
+        const startEST = fromZonedTime(newRange[0], 'America/New_York');
+        const endEST = fromZonedTime(date, 'America/New_York');
         
-        onChange([startEST.toISOString(), endESTIso.toISOString()]);
+        onChange([startEST.toISOString(), endEST.toISOString()]);
       }
     }
   };
@@ -324,10 +316,13 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
           <DatePicker
             selected={advancedStart || undefined}
             onChange={handleAdvancedStartChange}
-            dateFormat="MMM d, yyyy"
-            placeholderText="Start date"
+            showTimeSelect
+            timeIntervals={60}
+            timeCaption="Hour"
+            dateFormat="MMM d, yyyy h aa"
+            placeholderText="Start date/time"
             className={cn(
-              "text-sm px-2 py-1 rounded border border-input bg-background w-32",
+              "text-sm px-2 py-1 rounded border border-input bg-background w-40",
               !isCustomMode && "cursor-default bg-muted"
             )}
             popperPlacement="bottom-start"
@@ -339,10 +334,13 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
             selected={advancedEnd || undefined}
             onChange={handleAdvancedEndChange}
             minDate={advancedStart || undefined}
-            dateFormat="MMM d, yyyy"
-            placeholderText="End date"
+            showTimeSelect
+            timeIntervals={60}
+            timeCaption="Hour"
+            dateFormat="MMM d, yyyy h aa"
+            placeholderText="End date/time"
             className={cn(
-              "text-sm px-2 py-1 rounded border border-input bg-background w-32",
+              "text-sm px-2 py-1 rounded border border-input bg-background w-40",
               !isCustomMode && "cursor-default bg-muted"
             )}
             popperPlacement="bottom-start"
