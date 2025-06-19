@@ -172,11 +172,77 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
       return;
     }
 
+    // Calculate preset timeframes within useEffect to avoid dependency issues
+    const getPresetTimeframeLocal = (preset: TimelinePreset): [string, string] | null => {
+      if (preset === 'ALL') return null;
+      if (preset === 'CUSTOM') return null; // Custom will use the customRange
+      
+      const now = getCurrentESTTime();
+      
+      let startTime: Date;
+      let endTime: Date;
+      
+      switch (preset) {
+        case '1H':
+          // Most recent complete hour (if it's 7:30, show 6:00-7:00)
+          const currentHour = now.getHours();
+          const previousHour = currentHour === 0 ? 23 : currentHour - 1;
+          
+          // Start of previous hour
+          startTime = toZonedTime(now, 'America/New_York');
+          startTime.setHours(previousHour, 0, 0, 0);
+          startTime = fromZonedTime(startTime, 'America/New_York');
+          
+          // End of previous hour (start of current hour)
+          endTime = toZonedTime(now, 'America/New_York');
+          endTime.setHours(currentHour, 0, 0, 0);
+          endTime = fromZonedTime(endTime, 'America/New_York');
+          
+          // If we're in the same day, use the times as calculated
+          // If it's midnight (currentHour = 0), we need to go back to previous day
+          if (currentHour === 0) {
+            startTime = new Date(startTime.getTime() - 24 * 60 * 60 * 1000);
+          }
+          
+          return [startTime.toISOString(), endTime.toISOString()];
+          
+        case 'D':
+          // Current day's midnight EST to most recent complete hour
+          startTime = getESTMidnight(now);
+          endTime = getMostRecentCompleteHour();
+          break;
+        case 'W':
+          // Current time back to midnight EST 7 days ago
+          startTime = getESTMidnight(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+          endTime = now;
+          break;
+        case 'M':
+          // Current time back to midnight EST 30 days ago
+          startTime = getESTMidnight(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+          endTime = now;
+          break;
+        case '3M':
+          // Current time back to midnight EST 90 days ago
+          startTime = getESTMidnight(new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000));
+          endTime = now;
+          break;
+        case '1Y':
+          // Current time back to midnight EST 365 days ago
+          startTime = getESTMidnight(new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000));
+          endTime = now;
+          break;
+        default:
+          return null;
+      }
+      
+      return [startTime.toISOString(), endTime.toISOString()];
+    };
+
     // Check if current timeframe matches any preset
     const presets: TimelinePreset[] = ['1H', 'D', 'W', 'M', '3M', '1Y'];
     
     for (const preset of presets) {
-      const presetTimeframe = getPresetTimeframe(preset);
+      const presetTimeframe = getPresetTimeframeLocal(preset);
       if (presetTimeframe) {
         // Allow some tolerance (1 minute) for matching
         const startDiff = Math.abs(new Date(timeframe[0]).getTime() - new Date(presetTimeframe[0]).getTime());

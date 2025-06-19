@@ -141,13 +141,6 @@ export default function VideoFilterSortBar({ filters, sorts, timeframe, onChange
     { value: 'youtube', label: 'YouTube' },
   ];
 
-  // Add handler for timeframe change
-  const handleTimeframeChange = (start: string, end: string) => {
-    const newTimeframe: [string, string] = [start, end];
-    setLocalTimeframe(newTimeframe);
-    onChange({ operator: localOperator, conditions: localFilters }, localSorts, newTimeframe);
-  };
-
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-col gap-4">
       {/* Timeframe Section */}
