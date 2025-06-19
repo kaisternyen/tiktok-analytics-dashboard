@@ -122,15 +122,12 @@ export default function TikTokTracker() {
         
         let newSorts: SortCondition[] = [];
         
-        if (!currentSort) {
-            // No current sort on this field, set to ascending
+        if (!currentSort || currentSort.order === 'desc') {
+            // No current sort or currently descending, set to ascending
             newSorts = [{ field: dbField, order: 'asc' }];
-        } else if (currentSort.order === 'asc') {
+        } else {
             // Currently ascending, change to descending
             newSorts = [{ field: dbField, order: 'desc' }];
-        } else {
-            // Currently descending, remove sort (back to default)
-            newSorts = [];
         }
 
         setSorts(newSorts);
