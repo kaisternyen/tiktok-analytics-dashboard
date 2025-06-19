@@ -132,24 +132,44 @@ export class InstagramAPI {
 
         console.log(`📋 Raw Instagram API returned ${data.data.data.items.length} posts for @${username}`);
 
-        const posts = data.data.data.items.map((item: any): InstagramPost => ({
-            id: item.id,
-            shortcode: item.shortcode || '',
-            url: item.permalink || `https://www.instagram.com/p/${item.shortcode}/`,
-            caption: item.caption?.text || '',
-            media_type: this.getMediaType(item),
-            media_url: item.display_url || item.video_url || '',
-            thumbnail_url: item.display_url,
-            like_count: item.like_count || 0,
-            comment_count: item.comment_count || 0,
-            timestamp: new Date(item.taken_at * 1000).toISOString(),
-            location: item.location ? {
-                id: item.location.id,
-                name: item.location.name
-            } : undefined,
-            hashtags: this.extractHashtags(item.caption?.text || ''),
-            mentions: this.extractMentions(item.caption?.text || '')
-        }))
+        const posts = data.data.data.items.map((item: any): InstagramPost => {
+            // Debug: Log the raw item data to understand what we're getting
+            console.log(`📋 Processing Instagram post ${item.id}: shortcode=${item.shortcode}, permalink=${item.permalink}`);
+            
+            // Generate URL with better fallback logic
+            let postUrl = '';
+            if (item.permalink) {
+                postUrl = item.permalink;
+            } else if (item.shortcode) {
+                postUrl = `https://www.instagram.com/p/${item.shortcode}/`;
+            } else if (item.code) {
+                // Some APIs use 'code' instead of 'shortcode'
+                postUrl = `https://www.instagram.com/p/${item.code}/`;
+            } else {
+                // Fallback: try to extract from other fields or use a placeholder
+                console.warn(`⚠️ No shortcode/permalink found for post ${item.id}, using fallback URL`);
+                postUrl = `https://www.instagram.com/p/${item.id}/`; // This might not work but better than undefined
+            }
+            
+            return {
+                id: item.id,
+                shortcode: item.shortcode || item.code || '',
+                url: postUrl,
+                caption: item.caption?.text || '',
+                media_type: this.getMediaType(item),
+                media_url: item.display_url || item.video_url || '',
+                thumbnail_url: item.display_url,
+                like_count: item.like_count || 0,
+                comment_count: item.comment_count || 0,
+                timestamp: new Date(item.taken_at * 1000).toISOString(),
+                location: item.location ? {
+                    id: item.location.id,
+                    name: item.location.name
+                } : undefined,
+                hashtags: this.extractHashtags(item.caption?.text || ''),
+                mentions: this.extractMentions(item.caption?.text || '')
+            };
+        })
         // Sort by timestamp descending (newest first) to ensure proper ordering
         .sort((a: InstagramPost, b: InstagramPost) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
