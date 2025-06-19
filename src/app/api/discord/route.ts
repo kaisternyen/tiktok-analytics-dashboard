@@ -224,6 +224,7 @@ export async function POST(req: NextRequest) {
           description: getDescription(mediaData),
           thumbnailUrl: thumbnailUrl,
           platform: platform,
+          postedAt: 'timestamp' in mediaData && mediaData.timestamp ? new Date(mediaData.timestamp) : new Date(),
           currentViews: views,
           currentLikes: mediaData.likes,
           currentComments: mediaData.comments,
@@ -235,6 +236,26 @@ export async function POST(req: NextRequest) {
           isActive: true, // This is required for videos to show up in dashboard
         }
       });
+
+      // Add zero baseline metrics entry at the video's posted date
+      // Only if the video was posted in the past (not just now)
+      const postedDate = 'timestamp' in mediaData && mediaData.timestamp ? new Date(mediaData.timestamp) : new Date();
+      const timeSincePosted = Date.now() - postedDate.getTime();
+      const ONE_HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
+      
+      if (timeSincePosted > ONE_HOUR) {
+        await prisma.metricsHistory.create({
+          data: {
+            videoId: newVideo.id,
+            views: 0,
+            likes: 0,
+            comments: 0,
+            shares: 0,
+            timestamp: postedDate
+          }
+        });
+        console.log(`📊 Discord: Added zero baseline entry at posted date: ${postedDate.toISOString()}`);
+      }
 
       // Add initial metrics history entry
       const normalizedTimestamp = getCurrentNormalizedTimestamp('60min');

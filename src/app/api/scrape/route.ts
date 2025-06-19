@@ -241,6 +241,18 @@ export async function POST(request: NextRequest) {
 
         console.log('📝 [DEBUG] Creating new media record in database with thumbnailUrl:', thumbnailUrl);
 
+        // Extract posted date from the scraped data
+        const getPostedDate = (mediaData: TikTokVideoData | InstagramPostData | YouTubeVideoData): Date => {
+            if ('timestamp' in mediaData && mediaData.timestamp) {
+                return new Date(mediaData.timestamp);
+            }
+            // Fallback to current time if timestamp not available
+            return new Date();
+        };
+
+        const postedDate = getPostedDate(mediaData);
+        console.log(`📅 Video posted date extracted: ${postedDate.toISOString()}`);
+
         // Create new video record
         const newVideo = await prisma.video.create({
             data: {
@@ -249,6 +261,7 @@ export async function POST(request: NextRequest) {
                 description: description,
                 thumbnailUrl: thumbnailUrl,
                 platform: platform,
+                postedAt: postedDate,  // Add the actual posted date
                 currentViews: views,
                 currentLikes: likes,
                 currentComments: comments,
@@ -258,6 +271,25 @@ export async function POST(request: NextRequest) {
                 isActive: true
             }
         });
+
+        // Add zero baseline metrics entry at the video's posted date
+        // Only if the video was posted in the past (not just now)
+        const timeSincePosted = Date.now() - postedDate.getTime();
+        const ONE_HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
+        
+        if (timeSincePosted > ONE_HOUR) {
+            await prisma.metricsHistory.create({
+                data: {
+                    videoId: newVideo.id,
+                    views: 0,
+                    likes: 0,
+                    comments: 0,
+                    shares: 0,
+                    timestamp: postedDate
+                }
+            });
+            console.log(`📊 Added zero baseline entry at posted date: ${postedDate.toISOString()}`);
+        }
 
         // Create initial metrics history entry so the first scrape appears on the graph
         const normalizedTimestamp = getCurrentNormalizedTimestamp(getIntervalForCadence('manual'));
@@ -277,6 +309,7 @@ export async function POST(request: NextRequest) {
             username: newVideo.username,
             platform: platform,
             dbId: newVideo.id,
+            postedAt: postedDate.toISOString(),
             initialViews: views,
             initialLikes: likes
         });

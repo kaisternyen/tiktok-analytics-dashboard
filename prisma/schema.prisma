@@ -23,6 +23,7 @@ model Video {
   isActive          Boolean          @default(true)
   createdAt         DateTime         @default(now())
   lastScrapedAt     DateTime         @default(now())
+  postedAt          DateTime?        // When the video was originally posted to platform
   platform          String           @default("tiktok")
   lastDailyViews    Int?
   scrapingCadence   String           @default("hourly")

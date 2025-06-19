@@ -892,6 +892,7 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
                 description: getDescription(mediaData),
                 thumbnailUrl: thumbnailUrl,
                 platform: platform,
+                postedAt: content.timestamp ? new Date(content.timestamp) : new Date(), // Add posted date
                 currentViews: views,
                 currentLikes: mediaData.likes,
                 currentComments: mediaData.comments,
@@ -903,6 +904,26 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
                 isActive: true,
             }
         });
+
+        // Add zero baseline metrics entry at the video's posted date
+        // Only if the video was posted in the past (not just now)
+        const postedDate = content.timestamp ? new Date(content.timestamp) : new Date();
+        const timeSincePosted = Date.now() - postedDate.getTime();
+        const ONE_HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
+        
+        if (timeSincePosted > ONE_HOUR) {
+            await prisma.metricsHistory.create({
+                data: {
+                    videoId: newVideo.id,
+                    views: 0,
+                    likes: 0,
+                    comments: 0,
+                    shares: 0,
+                    timestamp: postedDate
+                }
+            });
+            console.log(`📊 Added zero baseline entry at posted date: ${postedDate.toISOString()}`);
+        }
 
         // Add initial metrics history entry
         const normalizedTimestamp = getCurrentNormalizedTimestamp('60min');
