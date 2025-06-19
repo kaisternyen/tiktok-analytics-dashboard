@@ -261,6 +261,14 @@ async function fetchTikTokAccountContent(username: string, lastVideoId?: string)
             console.log(`📹 Latest new video: ${firstVideo.description.substring(0, 50)}... (${firstVideo.id})`);
         }
         
+        // If no lastVideoId (new account), establish baseline without tracking content
+        if (!lastVideoId) {
+            console.log(`🆕 New TikTok account @${username} - establishing baseline without tracking existing content`);
+            // Return empty array - we don't want to track existing content
+            // The baseline will be established by updating lastVideoId in checkTrackedAccount
+            return [];
+        }
+        
         return newContent;
         
     } catch (error) {
@@ -304,10 +312,12 @@ async function fetchInstagramAccountContent(username: string, lastVideoId?: stri
             console.log(`📅 Oldest post: ${posts[posts.length - 1].timestamp} (ID: ${posts[posts.length - 1].id})`);
         }
 
-        // If no lastVideoId (new account), only return the most recent post to establish baseline
+        // If no lastVideoId (new account), establish baseline without tracking content
         if (!lastVideoId) {
-            console.log(`🆕 New Instagram account @${username} - returning only most recent post to establish baseline`);
-            return posts.length > 0 ? [posts[0]] : [];
+            console.log(`🆕 New Instagram account @${username} - establishing baseline without tracking existing content`);
+            // Return empty array - we don't want to track existing content
+            // The baseline will be established by updating lastVideoId in checkTrackedAccount
+            return [];
         }
 
         // Filter out posts we've already processed if we have a lastVideoId
@@ -550,10 +560,12 @@ async function fetchYouTubeAccountContent(channelIdentifier: string, lastVideoId
             };
         });
         
-        // If no lastVideoId (new account), only return the most recent video to establish baseline
+        // If no lastVideoId (new account), establish baseline without tracking content
         if (!lastVideoId) {
-            console.log(`🆕 New YouTube account ${channelIdentifier} - returning only most recent video to establish baseline`);
-            return allContent.length > 0 ? [allContent[0]] : [];
+            console.log(`🆕 New YouTube account ${channelIdentifier} - establishing baseline without tracking existing content`);
+            // Return empty array - we don't want to track existing content
+            // The baseline will be established by updating lastVideoId in checkTrackedAccount
+            return [];
         }
         
         // Step 4: Filter out videos we've already processed
@@ -583,6 +595,129 @@ async function fetchYouTubeAccountContent(channelIdentifier: string, lastVideoId
     } catch (error) {
         console.error(`💥 Error fetching YouTube content for ${channelIdentifier}:`, error);
         return [];
+    }
+}
+
+// Helper functions for baseline establishment (always return most recent content)
+async function fetchTikTokBaseline(username: string): Promise<AccountContent | null> {
+    console.log(`🔍 Fetching TikTok baseline for @${username}...`);
+    
+    const apiKey = process.env.TIKHUB_API_KEY;
+    if (!apiKey) {
+        console.error('❌ TIKHUB_API_KEY not found in environment');
+        return null;
+    }
+    
+    try {
+        const url = `https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_user_post_videos?unique_id=${username}`;
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        
+        if (!response.ok) {
+            console.error(`❌ TikHub API error: ${response.status} ${response.statusText}`);
+            return null;
+        }
+        
+        const data = await response.json();
+        
+        if (!data.data || !data.data.aweme_list || !Array.isArray(data.data.aweme_list) || data.data.aweme_list.length === 0) {
+            console.log(`⚠️ No videos found for baseline for @${username}`);
+            return null;
+        }
+        
+        const latestVideo = data.data.aweme_list[0];
+        const videoId = latestVideo.aweme_id || latestVideo.id || '';
+        const shareUrl = latestVideo.share_url || `https://www.tiktok.com/@${username}/video/${videoId}`;
+        const description = latestVideo.desc || latestVideo.description || '';
+        const createTime = latestVideo.create_time || latestVideo.createTime;
+        
+        return {
+            id: videoId,
+            url: shareUrl,
+            username: username,
+            description: description,
+            platform: 'tiktok',
+            timestamp: createTime ? new Date(createTime * 1000).toISOString() : new Date().toISOString()
+        };
+        
+    } catch (error) {
+        console.error(`💥 Error fetching TikTok baseline for @${username}:`, error);
+        return null;
+    }
+}
+
+async function fetchYouTubeBaseline(channelIdentifier: string): Promise<AccountContent | null> {
+    console.log(`🔍 Fetching YouTube baseline for channel ${channelIdentifier}...`);
+    
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+        console.error('❌ YOUTUBE_API_KEY not found in environment');
+        return null;
+    }
+    
+    try {
+        // Use the same channel resolution logic as the main function
+        let channelId = channelIdentifier;
+        
+        if (!channelIdentifier.startsWith('UC') || channelIdentifier.length !== 24) {
+            let cleanIdentifier = channelIdentifier;
+            if (cleanIdentifier.startsWith('@')) {
+                cleanIdentifier = cleanIdentifier.substring(1);
+            }
+            if (cleanIdentifier.includes('youtube.com/@')) {
+                const match = cleanIdentifier.match(/youtube\.com\/@([^\/?\s]+)/);
+                if (match) {
+                    cleanIdentifier = match[1];
+                }
+            }
+            
+            // Try handle lookup first
+            const handleResponse = await fetch(
+                `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forHandle=@${cleanIdentifier}&key=${apiKey}`
+            );
+            
+            if (handleResponse.ok) {
+                const handleData = await handleResponse.json();
+                if (handleData.items && handleData.items.length > 0) {
+                    channelId = handleData.items[0].id;
+                }
+            }
+        }
+        
+        // Fetch most recent video
+        const videosResponse = await fetch(
+            `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&type=video&maxResults=1&key=${apiKey}`
+        );
+        
+        if (!videosResponse.ok) {
+            console.error(`❌ YouTube search API error: ${videosResponse.status} ${videosResponse.statusText}`);
+            return null;
+        }
+        
+        const videosData = await videosResponse.json();
+        
+        if (!videosData.items || !Array.isArray(videosData.items) || videosData.items.length === 0) {
+            console.log(`⚠️ No videos found for baseline for channel ${channelId}`);
+            return null;
+        }
+        
+        const latestVideo = videosData.items[0];
+        const videoId = latestVideo.id.videoId;
+        const snippet = latestVideo.snippet;
+        
+        return {
+            id: videoId,
+            url: `https://www.youtube.com/watch?v=${videoId}`,
+            username: snippet.channelTitle || channelIdentifier,
+            description: snippet.title + (snippet.description ? `\n\n${snippet.description}` : ''),
+            platform: 'youtube' as const,
+            timestamp: new Date(snippet.publishedAt).toISOString()
+        };
+        
+    } catch (error) {
+        console.error(`💥 Error fetching YouTube baseline for ${channelIdentifier}:`, error);
+        return null;
     }
 }
 
@@ -741,15 +876,73 @@ export async function checkTrackedAccount(account: { id: string; username: strin
         // Fetch recent content based on platform
         let recentContent: AccountContent[] = [];
         
+        // For new accounts (no lastVideoId), we need to establish a baseline
+        if (!lastVideoId) {
+            console.log(`🆕 New account @${account.username} - establishing baseline without tracking existing content`);
+            
+            // Fetch the most recent content to get the baseline ID
+            let baselineContent: AccountContent | null = null;
+            
+            switch (account.platform) {
+                case 'tiktok':
+                    baselineContent = await fetchTikTokBaseline(account.username);
+                    break;
+                case 'instagram':
+                    // Use Instagram API to get most recent post
+                    const instagramAPI = new InstagramAPI(process.env.TIKHUB_API_KEY!);
+                    const postsData = await instagramAPI.getUserPosts(account.username, undefined, 1);
+                    if (postsData.posts.length > 0) {
+                        const post = postsData.posts[0];
+                        baselineContent = {
+                            id: post.id,
+                            url: post.url,
+                            username: account.username,
+                            description: post.caption,
+                            platform: 'instagram' as const,
+                            timestamp: post.timestamp
+                        };
+                    }
+                    break;
+                case 'youtube':
+                    baselineContent = await fetchYouTubeBaseline(account.username);
+                    break;
+                default:
+                    throw new Error(`Unsupported platform: ${account.platform}`);
+            }
+            
+            if (baselineContent) {
+                // Set the baseline without tracking any content
+                await prisma.trackedAccount.update({
+                    where: { id: account.id },
+                    data: { 
+                        lastVideoId: baselineContent.id,
+                        lastChecked: new Date()
+                    }
+                });
+                
+                console.log(`✅ Baseline established for @${account.username}: ${baselineContent.id} (no content tracked)`);
+                result.status = 'success';
+                result.newVideos = 0;
+                result.addedVideos = [];
+                return result;
+            } else {
+                console.log(`⚠️ No content found to establish baseline for @${account.username}`);
+                result.status = 'no_new_content';
+                result.newVideos = 0;
+                return result;
+            }
+        }
+        
+        // For existing accounts with lastVideoId, fetch new content normally
         switch (account.platform) {
             case 'tiktok':
-                recentContent = await fetchTikTokAccountContent(account.username, lastVideoId || undefined);
+                recentContent = await fetchTikTokAccountContent(account.username, lastVideoId);
                 break;
             case 'instagram':
-                recentContent = await fetchInstagramAccountContent(account.username, lastVideoId || undefined);
+                recentContent = await fetchInstagramAccountContent(account.username, lastVideoId);
                 break;
             case 'youtube':
-                recentContent = await fetchYouTubeAccountContent(account.username, lastVideoId || undefined);
+                recentContent = await fetchYouTubeAccountContent(account.username, lastVideoId);
                 break;
             default:
                 throw new Error(`Unsupported platform: ${account.platform}`);
