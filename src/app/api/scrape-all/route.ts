@@ -49,10 +49,16 @@ interface VideoRecord {
     lastDailyViews: number | null;
     dailyViewsGrowth: number | null;
     needsCadenceCheck: boolean;
+    trackingMode: string | null;
 }
 
 // Determine if video should be scraped based on standardized timing and cadence
 function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?: string } {
+    // Skip deleted videos entirely
+    if (video.trackingMode === 'deleted') {
+        return { shouldScrape: false, reason: 'Video marked as deleted/unavailable' };
+    }
+    
     const now = new Date();
     const interval = getIntervalForCadence(video.scrapingCadence);
     const lastScraped = new Date(video.lastScrapedAt);
@@ -496,7 +502,13 @@ export async function GET() {
         try {
             // Try to fetch with new cadence fields
             const rawVideos = await prisma.video.findMany({
-                where: { isActive: true },
+                where: { 
+                    isActive: true,
+                    OR: [
+                        { trackingMode: null },
+                        { trackingMode: { not: 'deleted' } }
+                    ]
+                },
                 select: {
                     id: true,
                     url: true,
@@ -512,6 +524,7 @@ export async function GET() {
                     lastDailyViews: true,
                     dailyViewsGrowth: true,
                     needsCadenceCheck: true,
+                    trackingMode: true,
                 }
             });
 
@@ -531,6 +544,7 @@ export async function GET() {
                 lastDailyViews: number | null;
                 dailyViewsGrowth: number | null;
                 needsCadenceCheck: boolean | null;
+                trackingMode: string | null;
             }) => {
                 // Determine proper cadence based on current setting
                 const cadence = video.scrapingCadence || 'hourly';
@@ -544,6 +558,7 @@ export async function GET() {
                     lastDailyViews: video.lastDailyViews || null,
                     dailyViewsGrowth: video.dailyViewsGrowth || null,
                     needsCadenceCheck: video.needsCadenceCheck || false,
+                    trackingMode: video.trackingMode || null,
                 };
             });
             
