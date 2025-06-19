@@ -217,8 +217,7 @@ export async function GET(req: Request) {
             where,
             include: {
                 metricsHistory: {
-                    orderBy: { timestamp: 'desc' },
-                    take: 48
+                    orderBy: { timestamp: 'desc' }
                 }
             },
             orderBy
