@@ -172,13 +172,7 @@ export async function GET(req: Request) {
         const decodedFilterParam = filterParam ? decodeURIComponent(filterParam) : null;
         const decodedSortParam = sortParam ? decodeURIComponent(sortParam) : null;
         console.log('RAW filterParam:', filterParam);
-        let where: Record<string, unknown> = { 
-            isActive: true, 
-            OR: [
-                { trackingMode: null },
-                { trackingMode: { not: 'deleted' } }
-            ]
-        };
+        let where: Record<string, unknown> = { isActive: true };
         let timeframe: [string, string] | null = null;
         let filterParamToParse = decodedFilterParam;
         let hasTimeframeFilter = false;
@@ -203,20 +197,12 @@ export async function GET(req: Request) {
                 console.log('PARSED filters:', JSON.stringify(parsedFilters, null, 2));
                 if (parsedFilters) where = { 
                     ...parsedFilters, 
-                    isActive: true,
-                    OR: [
-                        { trackingMode: null },
-                        { trackingMode: { not: 'deleted' } }
-                    ]
+                    isActive: true
                 };
             } else {
                 // Only filter by isActive in DB, all other filters after delta calculation
                 where = { 
-                    isActive: true,
-                    OR: [
-                        { trackingMode: null },
-                        { trackingMode: { not: 'deleted' } }
-                    ]
+                    isActive: true
                 };
                 console.log('⏰ Timeframe filter detected - will apply other filters after delta calculation');
             }
