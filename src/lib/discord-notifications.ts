@@ -3,26 +3,10 @@ import { TikTokVideoData, InstagramPostData, YouTubeVideoData } from './tikhub';
 // Union type for all possible media data
 type MediaData = TikTokVideoData | InstagramPostData | YouTubeVideoData;
 
-// Helper to safely get username from any media type
-function getUsername(data: MediaData): string {
-  if ('username' in data) {
-    return data.username || 'unknown';
-  }
-  return 'unknown';
-}
-
 // Helper to safely get description from any media type
 function getDescription(data: MediaData): string {
-  if ('description' in data) {
-    return data.description || '';
-  }
-  if ('caption' in data) {
-    return (data as any).caption || '';
-  }
-  if ('title' in data) {
-    return (data as any).title || '';
-  }
-  return '';
+  // All media types (TikTok, Instagram, YouTube) have description property
+  return data.description || '';
 }
 
 // Helper to get views from any media type

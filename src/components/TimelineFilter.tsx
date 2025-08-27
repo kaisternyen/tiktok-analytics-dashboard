@@ -164,6 +164,15 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
       return;
     }
 
+    // Helper function to get most recent complete hour (defined inside useEffect)
+    const getMostRecentCompleteHourLocal = () => {
+      const now = getCurrentESTTime();
+      const currentHour = now.getHours();
+      const mostRecentHour = toZonedTime(now, 'America/New_York');
+      mostRecentHour.setHours(currentHour, 0, 0, 0);
+      return fromZonedTime(mostRecentHour, 'America/New_York');
+    };
+
     // Calculate preset timeframes within useEffect to avoid dependency issues
     const getPresetTimeframeLocal = (preset: TimelinePreset): [string, string] | null => {
       if (preset === 'ALL') return null;
@@ -201,7 +210,7 @@ export function TimelineFilter({ timeframe, onChange, className }: TimelineFilte
         case 'D':
           // Current day's midnight EST to most recent complete hour
           startTime = getESTMidnight(now);
-          endTime = getMostRecentCompleteHour();
+          endTime = getMostRecentCompleteHourLocal();
           break;
         case 'W':
           // Current time back to midnight EST 7 days ago

@@ -6,10 +6,10 @@ export const dynamic = 'force-dynamic';
 // GET endpoint to check background processing progress
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const accountId = params.id;
+        const { id: accountId } = await params;
         
         // Get the tracked account
         const account = await prisma.trackedAccount.findUnique({
