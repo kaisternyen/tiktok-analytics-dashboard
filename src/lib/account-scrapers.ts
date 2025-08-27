@@ -3,6 +3,7 @@ import { prisma } from './prisma';
 import { getCurrentNormalizedTimestamp } from './timestamp-utils';
 import { uploadToS3 } from './s3';
 import { InstagramAPI } from './instagram-enhanced';
+import { notifyNewVideo } from './discord-notifications';
 
 export interface AccountContent {
     id: string;
@@ -943,6 +944,20 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
         } else {
             console.log(`✅ Added new video to tracking: @${getUsername(mediaData)} - ${getDescription(mediaData).substring(0, 50)}... (videoId: ${videoId})`);
         }
+        
+        // Send Discord notification for new video from tracked account
+        try {
+            await notifyNewVideo(
+                getUsername(mediaData),
+                content.platform,
+                content.url,
+                mediaData
+            );
+        } catch (error) {
+            console.error('⚠️ Failed to send Discord notification for new video:', error);
+            // Don't fail the entire operation if Discord notification fails
+        }
+        
         return true;
 
     } catch (error) {

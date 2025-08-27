@@ -3,6 +3,48 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
+// Background processing function for existing content
+async function processExistingContentInBackground(
+    accountId: string, 
+    username: string, 
+    platform: string, 
+    accountType: 'all' | 'keyword', 
+    keyword?: string
+) {
+    console.log(`🚀 Starting background content processing for @${username} on ${platform}`);
+    
+    try {
+        // Import the account checking functionality
+        const { checkTrackedAccount } = await import('../../../lib/account-scrapers');
+        
+        // Process in chunks with delays to avoid overwhelming the system
+        const result = await checkTrackedAccount({
+            id: accountId,
+            username: username,
+            platform: platform,
+            accountType: accountType,
+            keyword: keyword
+        });
+        
+        if (result.status === 'success' && result.newVideos > 0) {
+            console.log(`✅ Background processing completed for @${username}: Added ${result.newVideos} existing videos`);
+            
+            // Update the account's lastPostAdded timestamp to indicate processing is complete
+            await prisma.trackedAccount.update({
+                where: { id: accountId },
+                data: { lastPostAdded: new Date() }
+            });
+        } else {
+            console.log(`ℹ️ Background processing completed for @${username}: ${result.status}`);
+        }
+    } catch (error) {
+        console.error(`💥 Background processing failed for @${username}:`, error);
+        
+        // You could also update a status field in the database to indicate failure
+        // For now, we'll just log the error
+    }
+}
+
 // Standardize username to prevent duplicate tracking
 function standardizeUsername(username: string, platform: string): string {
     let standardized = username.toLowerCase().trim();
@@ -601,44 +643,29 @@ export async function POST(request: NextRequest) {
             console.error('Error fetching total/tracked posts:', err);
         }
 
-        // --- Conditionally fetch and add existing content ---
+        // --- Schedule background content processing if requested ---
         if (includeExistingContent) {
-            console.log(`🔄 Fetching existing content for @${username} (includeExistingContent: true)`);
-            try {
-                // Import and use the account checking functionality
-                const { checkTrackedAccount } = await import('../../../lib/account-scrapers');
-                
-                const result = await checkTrackedAccount({
-                    id: newAccount.id,
-                    username: newAccount.username,
-                    platform: newAccount.platform,
-                    accountType: newAccount.accountType as 'all' | 'keyword',
-                    keyword: newAccount.keyword || undefined
+            console.log(`🔄 Scheduling background content processing for @${username} (includeExistingContent: true)`);
+            
+            // Start background processing without waiting for it to complete
+            processExistingContentInBackground(newAccount.id, username, platform, newAccount.accountType as 'all' | 'keyword', newAccount.keyword || undefined)
+                .catch(error => {
+                    console.error(`⚠️ Background content processing failed for @${username}:`, error);
                 });
-                
-                if (result.status === 'success' && result.newVideos > 0) {
-                    console.log(`✅ Added ${result.newVideos} existing videos for @${username}`);
-                    // Update tracked posts count
-                    trackedPosts = await prisma.video.count({
-                        where: {
-                            username: standardizeUsername(username, platform),
-                            platform: platform
-                        }
-                    });
-                } else {
-                    console.log(`ℹ️ No existing content added for @${username}: ${result.status}`);
-                }
-            } catch (error) {
-                console.error(`⚠️ Error fetching existing content for @${username}:`, error);
-                // Don't fail the entire request if existing content fetch fails
-            }
+            
+            console.log(`✅ Account @${username} created successfully - existing content will be processed in background`);
         } else {
             console.log(`⏭️ Skipping existing content for @${username} (includeExistingContent: false)`);
         }
 
+        const message = includeExistingContent 
+            ? `Started tracking @${username} on ${platform} - existing content processing in background`
+            : `Started tracking @${username} on ${platform}`;
+
         return NextResponse.json({
             success: true,
-            message: `Started tracking @${username} on ${platform}`,
+            message: message,
+            backgroundProcessing: includeExistingContent,
             account: {
                 id: newAccount.id,
                 username: newAccount.username,

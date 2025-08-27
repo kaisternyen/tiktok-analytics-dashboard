@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import { getCurrentNormalizedTimestamp, getIntervalForCadence, normalizeTimestamp, TimestampInterval } from '@/lib/timestamp-utils';
+import { checkViralThresholds, notifyViralVideo } from '@/lib/discord-notifications';
 
 // Force dynamic rendering for cron jobs
 export const dynamic = 'force-dynamic';
@@ -357,6 +358,27 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                             needsCadenceCheck: false,
                         }
                     });
+
+                    // Check for viral thresholds and send Discord notifications
+                    try {
+                        const viralThreshold = checkViralThresholds(video.currentViews, views);
+                        if (viralThreshold) {
+                            console.log(`🔥 @${video.username} video went viral! Crossed ${viralThreshold.toLocaleString()} views threshold`);
+                            
+                            await notifyViralVideo(
+                                video.username,
+                                video.platform,
+                                video.url,
+                                mediaData.description || '',
+                                views,
+                                mediaData.likes,
+                                viralThreshold
+                            );
+                        }
+                    } catch (error) {
+                        console.error('⚠️ Failed to send viral video Discord notification:', error);
+                        // Don't fail the entire operation if Discord notification fails
+                    }
 
                     // Add new metrics history entry with consistent timestamp normalization
                     // All hourly videos should use 60min intervals, testing uses 1min intervals

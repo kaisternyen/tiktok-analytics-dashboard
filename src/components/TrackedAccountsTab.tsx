@@ -188,7 +188,14 @@ export function TrackedAccountsTab() {
                 } else if (typeof data.trackedPosts === 'number') {
                     extraInfo = ` (Tracked: ${data.trackedPosts} posts)`;
                 }
-                setSuccess(`${data.message}${extraInfo}`);
+                
+                // Show different message if background processing is happening
+                if (data.backgroundProcessing) {
+                    setSuccess(`${data.message}${extraInfo} - Check back in a few minutes for existing content`);
+                } else {
+                    setSuccess(`${data.message}${extraInfo}`);
+                }
+                
                 setShowAddForm(false);
                 setFormData({ username: '', platform: 'tiktok', accountType: 'all', keyword: '', includeExistingContent: false });
                 fetchAccounts();
