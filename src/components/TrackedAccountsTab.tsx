@@ -337,6 +337,18 @@ export function TrackedAccountsTab() {
                     </div>
                 </div>
 
+                {/* Info Card */}
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-start gap-3">
+                        <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
+                            <span className="text-xs font-medium text-blue-600">i</span>
+                        </div>
+                        <div className="flex-1 text-sm text-blue-800">
+                            <p><strong>Fast Loading:</strong> Profile data (follower counts, total posts, profile pictures) will be populated during account checks to keep this page loading instantly.</p>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Messages */}
                 {error && (
                     <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -494,7 +506,7 @@ export function TrackedAccountsTab() {
                                                         {account.apiError || account.apiErrorMessage ? (
                                                             <span className="text-red-600 font-semibold">❌ {account.apiErrorMessage || account.apiError || 'Account not found or API error'}</span>
                                                         ) : account.totalPosts === null ? (
-                                                            <span className="text-gray-400">Loading...</span>
+                                                            <span className="text-gray-500">Profile data will load during next check</span>
                                                         ) : (
                                                             <div className="space-y-1">
                                                                 <span className="text-green-700">
