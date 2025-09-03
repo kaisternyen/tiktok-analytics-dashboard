@@ -94,7 +94,7 @@ export class YouTubeAPI {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private async makeRequest(endpoint: string, params: Record<string, string> = {}): Promise<any> {
+    private async makeRequest(endpoint: string, params: Record<string, string> = {}, retryCount = 0): Promise<any> {
         const url = new URL(`${this.baseUrl}/${endpoint}`);
         url.searchParams.append('key', this.apiKey);
         
@@ -102,10 +102,47 @@ export class YouTubeAPI {
             url.searchParams.append(key, value);
         });
 
+        console.log(`📡 YouTube API request: ${endpoint} (attempt ${retryCount + 1})`, params);
+
         const response = await fetch(url.toString());
 
+        console.log(`📡 YouTube API response: ${response.status} ${response.statusText}`);
+
         if (!response.ok) {
-            throw new Error(`YouTube API error: ${response.status} ${response.statusText}`);
+            const errorText = await response.text();
+            console.error('❌ YouTube API error:', {
+                endpoint,
+                status: response.status,
+                statusText: response.statusText,
+                body: errorText,
+                url: url.toString(),
+                headers: Object.fromEntries(response.headers.entries()),
+                attempt: retryCount + 1
+            });
+
+            // Handle rate limiting with exponential backoff
+            if (response.status === 429 && retryCount < 3) {
+                const delay = Math.pow(2, retryCount) * 5000; // 5s, 10s, 20s
+                console.warn(`🚨 RATE LIMIT HIT: YouTube API returned 429. Retrying in ${delay/1000}s... (attempt ${retryCount + 1}/3)`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.makeRequest(endpoint, params, retryCount + 1);
+            }
+
+            // Provide more specific error messages based on status codes
+            let errorMessage = `YouTube API error: ${response.status} ${response.statusText}`;
+            if (response.status === 401) {
+                errorMessage = 'YouTube API authentication failed. Please check your API key.';
+            } else if (response.status === 403) {
+                errorMessage = 'YouTube API quota exceeded or access denied. Please check your API key and quota limits.';
+            } else if (response.status === 404) {
+                errorMessage = 'YouTube resource not found.';
+            } else if (response.status === 429) {
+                errorMessage = 'YouTube API rate limit exceeded. Too many requests - please try again later.';
+            } else if (response.status >= 500) {
+                errorMessage = 'YouTube API server error. Please try again later.';
+            }
+
+            throw new Error(errorMessage);
         }
 
          

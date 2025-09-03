@@ -504,7 +504,12 @@ export function TrackedAccountsTab() {
                                                     )}
                                                     <div className="text-xs mt-1">
                                                         {account.apiError || account.apiErrorMessage ? (
-                                                            <span className="text-red-600 font-semibold">❌ {account.apiErrorMessage || account.apiError || 'Account not found or API error'}</span>
+                                                            <span className="text-red-600 font-semibold">
+                                                                ❌ {(account.apiErrorMessage || account.apiError || 'Account not found or API error').includes('rate limit') || 
+                                                                     (account.apiErrorMessage || account.apiError || '').includes('429') ? 
+                                                                     '⏳ Rate limited - will retry during next check' : 
+                                                                     account.apiErrorMessage || account.apiError || 'Account not found or API error'}
+                                                            </span>
                                                         ) : account.totalPosts === null ? (
                                                             <span className="text-gray-500">Profile data will load during next check</span>
                                                         ) : (

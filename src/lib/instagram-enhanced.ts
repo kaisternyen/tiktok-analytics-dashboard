@@ -68,11 +68,13 @@ export class InstagramAPI {
         this.apiKey = apiKey;
     }
 
-    private async makeRequest(endpoint: string, params: Record<string, string> = {}): Promise<any> {
+    private async makeRequest(endpoint: string, params: Record<string, string> = {}, retryCount = 0): Promise<any> {
         const url = new URL(`${this.baseUrl}/${endpoint}`);
         Object.entries(params).forEach(([key, value]) => {
             url.searchParams.append(key, value);
         });
+
+        console.log(`📡 Instagram API request: ${endpoint} (attempt ${retryCount + 1})`, params);
 
         const response = await fetch(url.toString(), {
             headers: {
@@ -81,8 +83,41 @@ export class InstagramAPI {
             }
         });
 
+        console.log(`📡 Instagram API response: ${response.status} ${response.statusText}`);
+
         if (!response.ok) {
-            throw new Error(`Instagram API error: ${response.status} ${response.statusText}`);
+            const errorText = await response.text();
+            console.error('❌ Instagram API error:', {
+                endpoint,
+                status: response.status,
+                statusText: response.statusText,
+                body: errorText,
+                url: url.toString(),
+                headers: Object.fromEntries(response.headers.entries()),
+                attempt: retryCount + 1
+            });
+
+            // Handle rate limiting with exponential backoff
+            if (response.status === 429 && retryCount < 3) {
+                const delay = Math.pow(2, retryCount) * 5000; // 5s, 10s, 20s
+                console.warn(`🚨 RATE LIMIT HIT: Instagram API returned 429. Retrying in ${delay/1000}s... (attempt ${retryCount + 1}/3)`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                return this.makeRequest(endpoint, params, retryCount + 1);
+            }
+
+            // Provide more specific error messages based on status codes
+            let errorMessage = `Instagram API error: ${response.status} ${response.statusText}`;
+            if (response.status === 401) {
+                errorMessage = 'Instagram API authentication failed. Please check your TikHub API key.';
+            } else if (response.status === 404) {
+                errorMessage = 'Instagram account not found or URL is invalid.';
+            } else if (response.status === 429) {
+                errorMessage = 'Instagram API rate limit exceeded. Too many requests - please try again later.';
+            } else if (response.status >= 500) {
+                errorMessage = 'Instagram API server error. Please try again later.';
+            }
+
+            throw new Error(errorMessage);
         }
 
         return response.json();
