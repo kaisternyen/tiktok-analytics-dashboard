@@ -89,6 +89,7 @@ export default function TikTokTracker() {
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
     const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('W');
     const [showDelta, setShowDelta] = useState(false);
+    const [timeGranularity, setTimeGranularity] = useState<'hourly' | 'daily' | 'weekly'>('daily');
 
     // Individual video chart states
     const [selectedVideoTimePeriod, setSelectedVideoTimePeriod] = useState<TimePeriod>('W');
@@ -531,35 +532,55 @@ export default function TikTokTracker() {
         );
     };
 
-    // Custom tick formatter for simplified X-axis labels with exactly 3 ticks
-    const formatXAxisTick = (tickItem: string) => {
-        // Format in EST
-        return formatInTimeZone(new Date(tickItem), 'America/New_York', 'MMM d, h aa');
+    // X-axis formatting based on time granularity
+    const formatXAxisTick = (value: string) => {
+        const date = new Date(value);
+        
+        switch (timeGranularity) {
+            case 'hourly':
+                return `${String(date.getHours()).padStart(2, '0')}:00`;
+            case 'daily':
+                return `${date.getMonth() + 1}/${date.getDate()}`;
+            case 'weekly':
+                return `${date.getMonth() + 1}/${date.getDate()}`;
+            default:
+                return value;
+        }
+    };
+
+    // Get tick interval based on data length and granularity
+    const getTickInterval = (dataLength: number) => {
+        if (timeGranularity === 'hourly') {
+            return dataLength > 24 ? Math.floor(dataLength / 12) : 0; // Show ~12 ticks for hourly
+        } else if (timeGranularity === 'daily') {
+            return dataLength > 14 ? Math.floor(dataLength / 7) : 0; // Show ~7 ticks for daily
+        } else {
+            return dataLength > 8 ? Math.floor(dataLength / 4) : 0; // Show ~4 ticks for weekly
+        }
+    };
+
+    // Y-axis domain calculation
+    const getYAxisDomain = (data: ChartDataPoint[]) => {
+        if (data.length === 0) return [0, 100];
+        
+        const values = data.map(d => d.views);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        
+        if (showDelta) {
+            // For delta view, include negative values
+            const padding = (max - min) * 0.1;
+            return [min - padding, max + padding];
+        } else {
+            // For absolute values, start from 0
+            return [0, max * 1.1];
+        }
     };
 
     // Custom tick formatter for individual video charts
     const formatVideoXAxisTick = (tickItem: string) => {
         // Format in EST
         return formatInTimeZone(new Date(tickItem), 'America/New_York', 'MMM d, h aa');
-    };
-
-    // Calculate interval for showing exactly 3 ticks
-    const getTickInterval = (dataLength: number) => {
-        if (dataLength <= 3) return 0; // Show all if 3 or fewer points
-        return Math.floor((dataLength - 1) / 2); // Calculate interval to show start, middle, end
-    };
-
-    // Dynamic Y-axis domain for meaningful scaling
-    const getYAxisDomain = (data: ChartDataPoint[]) => {
-        if (data.length === 0) return [0, 100];
-
-        const values = data.map(d => d.views);
-        const min = Math.min(...values);
-        const max = Math.max(...values);
-
-        // Add some padding to the range
-        const padding = (max - min) * 0.1;
-        return [Math.max(0, min - padding), max + padding];
     };
 
     // Custom tooltip with hover details
@@ -599,6 +620,65 @@ export default function TikTokTracker() {
             );
         }
         return null;
+    };
+
+    // Helper function to group data points by time granularity
+    const aggregateDataByGranularity = (data: ChartDataPoint[], granularity: 'hourly' | 'daily' | 'weekly'): ChartDataPoint[] => {
+        if (data.length === 0) return [];
+
+        const grouped = new Map<string, ChartDataPoint[]>();
+        
+        data.forEach(point => {
+            const date = new Date(point.time);
+            let key: string;
+            
+            switch (granularity) {
+                case 'hourly':
+                    // Group by hour (YYYY-MM-DD HH:00)
+                    key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`;
+                    break;
+                case 'daily':
+                    // Group by day (YYYY-MM-DD)
+                    key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                    break;
+                case 'weekly':
+                    // Group by week (start of week)
+                    const weekStart = new Date(date);
+                    const day = weekStart.getDay();
+                    const diff = weekStart.getDate() - day;
+                    weekStart.setDate(diff);
+                    weekStart.setHours(0, 0, 0, 0);
+                    key = weekStart.toISOString().split('T')[0];
+                    break;
+                default:
+                    key = point.time;
+            }
+            
+            if (!grouped.has(key)) {
+                grouped.set(key, []);
+            }
+            grouped.get(key)!.push(point);
+        });
+
+        // Aggregate the grouped data points
+        const aggregated: ChartDataPoint[] = [];
+        
+        for (const [timeKey, points] of grouped.entries()) {
+            // For each time bucket, take the latest values (most recent data point)
+            const sortedPoints = points.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+            const latestPoint = sortedPoints[0];
+            
+            // Use the time key as the display time and the latest point's data
+            aggregated.push({
+                time: timeKey,
+                views: latestPoint.views,
+                delta: latestPoint.delta,
+                originalTime: new Date(timeKey)
+            });
+        }
+        
+        // Sort by time
+        return aggregated.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
     };
 
     // Enhanced chart data processing with proper aggregate data across ALL videos
@@ -733,7 +813,7 @@ export default function TikTokTracker() {
         });
 
         // Calculate delta values properly (for the selected period only)
-        const chartData: ChartDataPoint[] = aggregateData.map((point, index) => {
+        const rawChartData: ChartDataPoint[] = aggregateData.map((point, index) => {
             const previousPoint = index > 0 ? aggregateData[index - 1] : point;
             const delta = point.views - previousPoint.views;
 
@@ -745,7 +825,24 @@ export default function TikTokTracker() {
             };
         });
 
-        return chartData;
+        // Apply time granularity aggregation
+        const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity);
+        
+        // Recalculate delta values after aggregation if needed
+        const finalChartData = aggregatedData.map((point, index) => {
+            if (showDelta && index > 0) {
+                const previousPoint = aggregatedData[index - 1];
+                const delta = point.views - previousPoint.views;
+                return {
+                    ...point,
+                    views: delta,
+                    delta
+                };
+            }
+            return point;
+        });
+
+        return finalChartData;
     };
 
     const chartData = getChartData();
@@ -987,6 +1084,21 @@ export default function TikTokTracker() {
                                                 Performance Overview - Aggregate Stats ({tracked.length} videos)
                                             </h3>
                                             <div className="flex items-center gap-2">
+                                                {/* Time Granularity Selector */}
+                                                <div className="flex border border-gray-200 rounded-md">
+                                                    {(['hourly', 'daily', 'weekly'] as const).map((granularity) => (
+                                                        <button
+                                                            key={granularity}
+                                                            onClick={() => setTimeGranularity(granularity)}
+                                                            className={`px-3 py-1 text-xs font-medium transition-colors ${timeGranularity === granularity
+                                                                ? 'bg-green-500 text-white'
+                                                                : 'text-gray-600 hover:bg-gray-100'
+                                                                } first:rounded-l-md last:rounded-r-md`}
+                                                        >
+                                                            {granularity.charAt(0).toUpperCase() + granularity.slice(1)}
+                                                        </button>
+                                                    ))}
+                                                </div>
                                                 {/* Time Period Selector */}
                                                 <div className="flex border border-gray-200 rounded-md">
                                                     {(['D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
