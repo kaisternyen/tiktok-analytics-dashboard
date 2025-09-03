@@ -908,7 +908,6 @@ export default function TikTokTracker() {
                 <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue="overview">
                     <TabsList className="mb-6">
                         <TabsTrigger value="overview">Overview</TabsTrigger>
-                        <TabsTrigger value="videos">Videos</TabsTrigger>
                         <TabsTrigger value="tracked-accounts">Tracked Accounts</TabsTrigger>
                         {selectedVideo && (
                             <TabsTrigger value="insights">Insights - @{selectedVideo.username}</TabsTrigger>
@@ -1069,281 +1068,291 @@ export default function TikTokTracker() {
                                         </div>
                                     </CardContent>
                                 </Card>
+
+                                {/* Videos Section */}
+                                <div className="space-y-4">
+                                    <h2 className="text-xl font-semibold text-gray-900">All Videos</h2>
+                                    
+                                    {/* Cadence Info Card */}
+                                    <Card>
+                                        <CardContent className="p-4">
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
+                                                    <span className="text-xs font-medium text-blue-600">i</span>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <h4 className="font-medium text-gray-900 mb-1">Adaptive Scraping Cadence</h4>
+                                                    <div className="text-sm text-gray-600 space-y-1">
+                                                        <p>• <span className="text-blue-600 font-medium">Hourly</span>: New videos (first week) and high-performance videos (10k+ daily views)</p>
+                                                        <p>• <span className="text-orange-600 font-medium">Daily</span>: Older videos with low views - scraped at 12:00 AM EST</p>
+                                                        <p>• <span className="text-purple-600 font-medium">Testing</span>: Development mode - scraped every minute</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Filter/Sort Bar with integrated Timeline Filter */}
+                                    <VideoFilterSortBar
+                                        filters={filters}
+                                        sorts={sorts}
+                                        timeframe={timeframe}
+                                        onChange={(newFilters, newSorts, newTimeframe) => {
+                                            setFilters(newFilters);
+                                            setSorts(newSorts);
+                                            setTimeframe(newTimeframe);
+                                        }}
+                                    />
+                                    <Card>
+                                        <CardContent className="p-0">
+                                            {tracked.length === 0 ? (
+                                                <div className="p-12 text-center text-gray-500">
+                                                    <Play className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                                                    <h3 className="text-lg font-medium mb-2">No videos to display</h3>
+                                                    <p>Track your first TikTok video to see it appear here!</p>
+                                                </div>
+                                            ) : (
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full">
+                                                        <thead className="bg-gray-50 border-b border-gray-200">
+                                                            <tr>
+                                                                <th 
+                                                                    className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                                    onClick={() => handleHeaderClick('Creator')}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Creator
+                                                                        {renderSortIcon('Creator')}
+                                                                    </div>
+                                                                </th>
+                                                                <th 
+                                                                    className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                                    onClick={() => handleHeaderClick('Platform')}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Platform
+                                                                        {renderSortIcon('Platform')}
+                                                                    </div>
+                                                                </th>
+                                                                <th 
+                                                                    className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                                    onClick={() => handleHeaderClick('Views')}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Views
+                                                                        {renderSortIcon('Views')}
+                                                                    </div>
+                                                                </th>
+                                                                <th 
+                                                                    className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                                    onClick={() => handleHeaderClick('Likes')}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Likes
+                                                                        {renderSortIcon('Likes')}
+                                                                    </div>
+                                                                </th>
+                                                                <th 
+                                                                    className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                                    onClick={() => handleHeaderClick('Comments')}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Comments
+                                                                        {renderSortIcon('Comments')}
+                                                                    </div>
+                                                                </th>
+                                                                <th 
+                                                                    className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                                    onClick={() => handleHeaderClick('Shares')}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Shares
+                                                                        {renderSortIcon('Shares')}
+                                                                    </div>
+                                                                </th>
+                                                                <th 
+                                                                    className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                                    onClick={() => handleHeaderClick('Growth')}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Growth
+                                                                        {renderSortIcon('Growth')}
+                                                                    </div>
+                                                                </th>
+                                                                <th 
+                                                                    className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                                    onClick={() => handleHeaderClick('Posted')}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Posted
+                                                                        {renderSortIcon('Posted')}
+                                                                    </div>
+                                                                </th>
+                                                                <th 
+                                                                    className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                                    onClick={() => handleHeaderClick('Cadence')}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Cadence
+                                                                        {renderSortIcon('Cadence')}
+                                                                    </div>
+                                                                </th>
+                                                                <th 
+                                                                    className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                                    onClick={() => handleHeaderClick('Status')}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Status
+                                                                        {renderSortIcon('Status')}
+                                                                    </div>
+                                                                </th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Actions</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {tracked.map((video) => (
+                                                                <tr
+                                                                    key={video.id}
+                                                                    className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                                                                    onClick={() => {
+                                                                        setSelectedVideo(video);
+                                                                        setActiveTab("insights");
+                                                                    }}
+                                                                >
+                                                                    <td className="p-4">
+                                                                        <div className="flex items-center gap-3">
+                                                                            {video.thumbnailUrl && typeof video.thumbnailUrl === 'string' && video.thumbnailUrl.trim() !== '' && video.thumbnailUrl.startsWith('http') ? (
+                                                                                <div 
+                                                                                    className="relative w-10 h-14 cursor-pointer hover:opacity-80 transition-opacity"
+                                                                                    onClick={(e) => openVideoInNewTab(video.url, e)}
+                                                                                    title="Click to open video in new tab"
+                                                                                >
+                                                                                    <Image
+                                                                                        src={`/api/image-proxy?url=${encodeURIComponent(video.thumbnailUrl)}`}
+                                                                                        alt={`${video.username} thumbnail`}
+                                                                                        className="w-10 h-14 object-cover rounded bg-gray-200"
+                                                                                        width={40}
+                                                                                        height={56}
+                                                                                        onError={(e) => {
+                                                                                            // Suppress error log to avoid console spam
+                                                                                            // Hide the image and show fallback
+                                                                                            const img = e.target as HTMLImageElement;
+                                                                                            img.style.display = 'none';
+                                                                                            const fallback = img.parentElement?.querySelector('.thumbnail-fallback') as HTMLElement;
+                                                                                            if (fallback) {
+                                                                                                fallback.style.display = 'flex';
+                                                                                            }
+                                                                                        }}
+                                                                                        onLoad={() => {
+                                                                                            console.log('✅ Thumbnail loaded successfully for:', video.username);
+                                                                                        }}
+                                                                                    />
+                                                                                    {/* Fallback div for failed images */}
+                                                                                    <div className="thumbnail-fallback absolute inset-0 bg-gray-200 rounded flex items-center justify-center" style={{ display: 'none' }}>
+                                                                                        <Play className="w-4 h-4 text-gray-400" />
+                                                                                    </div>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div 
+                                                                                    className="w-10 h-14 bg-gray-200 rounded flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                                                                                    onClick={(e) => openVideoInNewTab(video.url, e)}
+                                                                                    title="Click to open video in new tab"
+                                                                                >
+                                                                                    <Play className="w-4 h-4 text-gray-400" />
+                                                                                </div>
+                                                                            )}
+                                                                            <div>
+                                                                                <div className="font-medium text-gray-900">@{video.username}</div>
+                                                                                <div className="text-sm text-gray-500 max-w-xs truncate">
+                                                                                    {video.description}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="p-4">
+                                                                        <div className="flex items-center gap-2">
+                                                                            {video.platform === 'instagram' ? (
+                                                                                <div className="w-5 h-5 bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 rounded flex items-center justify-center">
+                                                                                    <div className="w-3 h-3 bg-white rounded-full border border-gray-200"></div>
+                                                                                </div>
+                                                                            ) : video.platform === 'youtube' ? (
+                                                                                <div className="w-5 h-5 bg-red-600 rounded flex items-center justify-center">
+                                                                                    <Play className="w-3 h-3 text-white" />
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="w-5 h-5 bg-black rounded flex items-center justify-center">
+                                                                                    <Play className="w-3 h-3 text-white" />
+                                                                                </div>
+                                                                            )}
+                                                                            <span className="text-sm font-medium">
+                                                                                {video.platform === 'instagram' ? 'Instagram' : 
+                                                                                 video.platform === 'youtube' ? 'YouTube' : 'TikTok'}
+                                                                            </span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="p-4 font-medium">{formatNumber(video.views)}</td>
+                                                                    <td className="p-4 font-medium">{formatNumber(video.likes)}</td>
+                                                                    <td className="p-4 font-medium">{formatNumber(video.comments)}</td>
+                                                                    <td className="p-4">
+                                                                        {video.platform === 'instagram' || video.platform === 'youtube' ? 'N/A' : formatNumber(video.shares)}
+                                                                    </td>
+                                                                    <td className="p-4">{formatGrowth(video.growth.views)}</td>
+                                                                    <td className="p-4">{new Date(video.posted).toLocaleDateString()}</td>
+                                                                    <td className="p-4">
+                                                                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                                                                            video.scrapingCadence === 'hourly' 
+                                                                                ? 'bg-blue-100 text-blue-800' 
+                                                                                : video.scrapingCadence === 'daily'
+                                                                                ? 'bg-orange-100 text-orange-800'
+                                                                                : 'bg-purple-100 text-purple-800'
+                                                                        }`}>
+                                                                            {video.scrapingCadence === 'hourly' ? '1H' : 
+                                                                             video.scrapingCadence === 'daily' ? '1D' : 
+                                                                             '1M'}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="p-4">
+                                                                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                                                                            video.status === 'active'
+                                                                                ? 'bg-green-100 text-green-800'
+                                                                                : video.status === 'error'
+                                                                                ? 'bg-red-100 text-red-800'
+                                                                                : 'bg-yellow-100 text-yellow-800'
+                                                                        }`}>
+                                                                            {video.status}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="p-4">
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleDeleteVideo(video.id, e);
+                                                                            }}
+                                                                            disabled={deletingVideoId === video.id}
+                                                                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                                        >
+                                                                            {deletingVideoId === video.id ? (
+                                                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                                                            ) : (
+                                                                                <X className="w-3 h-3" />
+                                                                            )}
+                                                                        </Button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                </div>
                             </>
                         )}
                     </TabsContent>
 
-                    {/* Videos Tab */}
-                    <TabsContent value="videos">
-                        {/* Cadence Info Card */}
-                        <Card className="mb-4">
-                            <CardContent className="p-4">
-                                <div className="flex items-start gap-3">
-                                    <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
-                                        <span className="text-xs font-medium text-blue-600">i</span>
-                                    </div>
-                                    <div className="flex-1">
-                                        <h4 className="font-medium text-gray-900 mb-1">Adaptive Scraping Cadence</h4>
-                                        <div className="text-sm text-gray-600 space-y-1">
-                                            <p>• <span className="text-blue-600 font-medium">Hourly</span>: New videos (first week) and high-performance videos (10k+ daily views)</p>
-                                            <p>• <span className="text-orange-600 font-medium">Daily</span>: Older videos with low views - scraped at 12:00 AM EST</p>
-                                            <p>• <span className="text-purple-600 font-medium">Testing</span>: Development mode - scraped every minute</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Filter/Sort Bar with integrated Timeline Filter */}
-                        <VideoFilterSortBar
-                            filters={filters}
-                            sorts={sorts}
-                            timeframe={timeframe}
-                            onChange={(newFilters, newSorts, newTimeframe) => {
-                                setFilters(newFilters);
-                                setSorts(newSorts);
-                                setTimeframe(newTimeframe);
-                            }}
-                        />
-                        <Card>
-                            <CardContent className="p-0">
-                                {tracked.length === 0 ? (
-                                    <div className="p-12 text-center text-gray-500">
-                                        <Play className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                                        <h3 className="text-lg font-medium mb-2">No videos to display</h3>
-                                        <p>Track your first TikTok video to see it appear here!</p>
-                                    </div>
-                                ) : (
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full">
-                                            <thead className="bg-gray-50 border-b border-gray-200">
-                                                <tr>
-                                                    <th 
-                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                                                        onClick={() => handleHeaderClick('Creator')}
-                                                    >
-                                                        <div className="flex items-center">
-                                                            Creator
-                                                            {renderSortIcon('Creator')}
-                                                        </div>
-                                                    </th>
-                                                    <th 
-                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                                                        onClick={() => handleHeaderClick('Platform')}
-                                                    >
-                                                        <div className="flex items-center">
-                                                            Platform
-                                                            {renderSortIcon('Platform')}
-                                                        </div>
-                                                    </th>
-                                                    <th 
-                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                                                        onClick={() => handleHeaderClick('Views')}
-                                                    >
-                                                        <div className="flex items-center">
-                                                            Views
-                                                            {renderSortIcon('Views')}
-                                                        </div>
-                                                    </th>
-                                                    <th 
-                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                                                        onClick={() => handleHeaderClick('Likes')}
-                                                    >
-                                                        <div className="flex items-center">
-                                                            Likes
-                                                            {renderSortIcon('Likes')}
-                                                        </div>
-                                                    </th>
-                                                    <th 
-                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                                                        onClick={() => handleHeaderClick('Comments')}
-                                                    >
-                                                        <div className="flex items-center">
-                                                            Comments
-                                                            {renderSortIcon('Comments')}
-                                                        </div>
-                                                    </th>
-                                                    <th 
-                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                                                        onClick={() => handleHeaderClick('Shares')}
-                                                    >
-                                                        <div className="flex items-center">
-                                                            Shares
-                                                            {renderSortIcon('Shares')}
-                                                        </div>
-                                                    </th>
-                                                    <th 
-                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                                                        onClick={() => handleHeaderClick('Growth')}
-                                                    >
-                                                        <div className="flex items-center">
-                                                            Growth
-                                                            {renderSortIcon('Growth')}
-                                                        </div>
-                                                    </th>
-                                                    <th 
-                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                                                        onClick={() => handleHeaderClick('Posted')}
-                                                    >
-                                                        <div className="flex items-center">
-                                                            Posted
-                                                            {renderSortIcon('Posted')}
-                                                        </div>
-                                                    </th>
-                                                    <th 
-                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                                                        onClick={() => handleHeaderClick('Cadence')}
-                                                    >
-                                                        <div className="flex items-center">
-                                                            Cadence
-                                                            {renderSortIcon('Cadence')}
-                                                        </div>
-                                                    </th>
-                                                    <th 
-                                                        className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
-                                                        onClick={() => handleHeaderClick('Status')}
-                                                    >
-                                                        <div className="flex items-center">
-                                                            Status
-                                                            {renderSortIcon('Status')}
-                                                        </div>
-                                                    </th>
-                                                    <th className="text-left p-4 font-medium text-gray-900">Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {tracked.map((video) => (
-                                                    <tr
-                                                        key={video.id}
-                                                        className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
-                                                        onClick={() => {
-                                                            setSelectedVideo(video);
-                                                            setActiveTab("insights");
-                                                        }}
-                                                    >
-                                                        <td className="p-4">
-                                                            <div className="flex items-center gap-3">
-                                                                {video.thumbnailUrl && typeof video.thumbnailUrl === 'string' && video.thumbnailUrl.trim() !== '' && video.thumbnailUrl.startsWith('http') ? (
-                                                                    <div 
-                                                                        className="relative w-10 h-14 cursor-pointer hover:opacity-80 transition-opacity"
-                                                                        onClick={(e) => openVideoInNewTab(video.url, e)}
-                                                                        title="Click to open video in new tab"
-                                                                    >
-                                                                        <Image
-                                                                            src={`/api/image-proxy?url=${encodeURIComponent(video.thumbnailUrl)}`}
-                                                                            alt={`${video.username} thumbnail`}
-                                                                            className="w-10 h-14 object-cover rounded bg-gray-200"
-                                                                            width={40}
-                                                                            height={56}
-                                                                            onError={(e) => {
-                                                                                // Suppress error log to avoid console spam
-                                                                                // Hide the image and show fallback
-                                                                                const img = e.target as HTMLImageElement;
-                                                                                img.style.display = 'none';
-                                                                                const fallback = img.parentElement?.querySelector('.thumbnail-fallback') as HTMLElement;
-                                                                                if (fallback) {
-                                                                                    fallback.style.display = 'flex';
-                                                                                }
-                                                                            }}
-                                                                            onLoad={() => {
-                                                                                console.log('✅ Thumbnail loaded successfully for:', video.username);
-                                                                            }}
-                                                                        />
-                                                                        {/* Fallback div for failed images */}
-                                                                        <div className="thumbnail-fallback absolute inset-0 bg-gray-200 rounded flex items-center justify-center" style={{ display: 'none' }}>
-                                                                            <Play className="w-4 h-4 text-gray-400" />
-                                                                        </div>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div 
-                                                                        className="w-10 h-14 bg-gray-200 rounded flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
-                                                                        onClick={(e) => openVideoInNewTab(video.url, e)}
-                                                                        title="Click to open video in new tab"
-                                                                    >
-                                                                        <Play className="w-4 h-4 text-gray-400" />
-                                                                    </div>
-                                                                )}
-                                                                <div>
-                                                                    <div className="font-medium text-gray-900">@{video.username}</div>
-                                                                    <div className="text-sm text-gray-500 max-w-xs truncate">
-                                                                        {video.description}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <div className="flex items-center gap-2">
-                                                                {video.platform === 'instagram' ? (
-                                                                    <div className="w-5 h-5 bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 rounded flex items-center justify-center">
-                                                                        <div className="w-3 h-3 bg-white rounded-full border border-gray-200"></div>
-                                                                    </div>
-                                                                ) : video.platform === 'youtube' ? (
-                                                                    <div className="w-5 h-5 bg-red-600 rounded flex items-center justify-center">
-                                                                        <Play className="w-3 h-3 text-white" />
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="w-5 h-5 bg-black rounded flex items-center justify-center">
-                                                                        <Play className="w-3 h-3 text-white" />
-                                                                    </div>
-                                                                )}
-                                                                <span className="text-sm font-medium">
-                                                                    {video.platform === 'instagram' ? 'Instagram' : 
-                                                                     video.platform === 'youtube' ? 'YouTube' : 'TikTok'}
-                                                                </span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="p-4 font-medium">{formatNumber(video.views)}</td>
-                                                        <td className="p-4 font-medium">{formatNumber(video.likes)}</td>
-                                                        <td className="p-4 font-medium">{formatNumber(video.comments)}</td>
-                                                        <td className="p-4">
-                                                            {video.platform === 'instagram' || video.platform === 'youtube' ? 'N/A' : formatNumber(video.shares)}
-                                                        </td>
-                                                        <td className="p-4">{formatGrowth(video.growth.views)}</td>
-                                                        <td className="p-4">{new Date(video.posted).toLocaleDateString()}</td>
-                                                        <td className="p-4">
-                                                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                                                                video.scrapingCadence === 'hourly' 
-                                                                    ? 'bg-blue-100 text-blue-800' 
-                                                                    : video.scrapingCadence === 'daily'
-                                                                    ? 'bg-orange-100 text-orange-800'
-                                                                    : 'bg-purple-100 text-purple-800'
-                                                            }`}>
-                                                                {video.scrapingCadence === 'hourly' ? '1H' : 
-                                                                 video.scrapingCadence === 'daily' ? '1D' : 
-                                                                 '1M'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded-full">
-                                                                {video.status}
-                                                            </span>
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <button
-                                                                onClick={(e) => handleDeleteVideo(video.id, e)}
-                                                                disabled={deletingVideoId === video.id}
-                                                                className={`p-1 rounded transition-colors ${deletingVideoId === video.id
-                                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                                    : 'hover:bg-red-100 text-red-600 hover:text-red-700'
-                                                                    }`}
-                                                                title={deletingVideoId === video.id ? 'Deleting...' : 'Remove video'}
-                                                            >
-                                                                {deletingVideoId === video.id ? (
-                                                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                                                ) : (
-                                                                    <X className="w-4 h-4" />
-                                                                )}
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
 
                     {/* Tracked Accounts Tab */}
                     <TabsContent value="tracked-accounts">
@@ -1362,8 +1371,8 @@ export default function TikTokTracker() {
                                     <h2 className="text-2xl font-bold text-gray-900">@{selectedVideo.username}</h2>
                                     <p className="text-gray-600">{selectedVideo.description}</p>
                                 </div>
-                                <Button variant="outline" onClick={() => setActiveTab("videos")}>
-                                    ← Back to Videos
+                                <Button variant="outline" onClick={() => setActiveTab("overview")}>
+                                    ← Back to Overview
                                 </Button>
                             </div>
 
