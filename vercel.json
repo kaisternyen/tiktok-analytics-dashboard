@@ -28,7 +28,7 @@
         },
         {
             "path": "/api/tracked-accounts/check",
-            "schedule": "30 * * * *"
+            "schedule": "0 * * * *"
         }
     ]
 }

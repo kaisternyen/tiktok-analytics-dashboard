@@ -268,30 +268,27 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
         return { results, successful, failed, skipped, cadenceChanges };
     }
 
-    // Limit processing to avoid timeouts - reduce max per run to ensure completion within 4 minutes
-    const maxProcessingTime = 4 * 60 * 1000; // 4 minutes max
-    const adjustedMaxPerRun = Math.min(maxPerRun, 100); // Cap at 100 videos per run
-    const limitedVideos = videosToProcess.slice(0, adjustedMaxPerRun);
-    console.log(`🎯 Processing ${limitedVideos.length}/${videosToProcess.length} videos (max ${adjustedMaxPerRun} per run, 4min timeout)`);
+    // Process all videos that need scraping - scale to handle thousands
+    const limitedVideos = videosToProcess.slice(0, maxPerRun);
+    console.log(`🎯 Processing ${limitedVideos.length}/${videosToProcess.length} videos (max ${maxPerRun} per run)`);
+    console.log(`📊 Video breakdown by platform: ${Object.entries(limitedVideos.reduce((acc, v) => { acc[v.platform] = (acc[v.platform] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([k,v]) => `${k}:${v}`).join(', ')}`);
+    console.log(`📊 Video breakdown by cadence: ${Object.entries(limitedVideos.reduce((acc, v) => { acc[v.scrapingCadence] = (acc[v.scrapingCadence] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([k,v]) => `${k}:${v}`).join(', ')}`);
 
-    // Process in smaller batches with time monitoring
-    const batchSize = 3;
-    console.log(`🚀 Starting batch processing with batch size: ${batchSize}`);
+    // Process in optimized batches for maximum throughput
+    const batchSize = 10; // Increase batch size significantly for better throughput
+    console.log(`🚀 Starting high-throughput batch processing with batch size: ${batchSize}`);
 
     for (let i = 0; i < limitedVideos.length; i += batchSize) {
-        // Check if we're approaching timeout
         const elapsed = Date.now() - processingStartTime;
-        if (elapsed > maxProcessingTime) {
-            console.log(`⏰ Approaching timeout (${elapsed}ms elapsed), stopping processing early`);
-            break;
-        }
-
         const batch = limitedVideos.slice(i, i + batchSize);
         const batchNum = Math.floor(i / batchSize) + 1;
         const totalBatches = Math.ceil(limitedVideos.length / batchSize);
-
-        console.log(`📦 ===== BATCH ${batchNum}/${totalBatches} (${elapsed}ms elapsed) =====`);
+        
+        const memoryUsage = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+        console.log(`📦 ===== BATCH ${batchNum}/${totalBatches} (${elapsed}ms elapsed, ${memoryUsage}MB memory) =====`);
         console.log(`🎬 Processing: ${batch.map(v => `@${v.username} (${v.platform}, ${v.scrapingCadence})`).join(', ')}`);
+        
+        const batchStartTime = Date.now();
 
         // Process batch in parallel
         const batchPromises = batch.map(async (video, index) => {
@@ -479,14 +476,21 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
             else if (result.status === 'failed') failed++;
         });
 
+        const batchDuration = Date.now() - batchStartTime;
         const batchSuccess = batchResults.filter(r => r.status === 'success').length;
         const batchFailed = batchResults.filter(r => r.status === 'failed').length;
-        console.log(`📊 Batch ${batchNum} complete: ${batchSuccess} success, ${batchFailed} failed`);
-
-        // Rate limiting: wait 1 second between batches
+        const avgTimePerVideo = batchDuration / batch.length;
+        
+        console.log(`📊 Batch ${batchNum} complete in ${batchDuration}ms: ${batchSuccess} success, ${batchFailed} failed (avg ${avgTimePerVideo.toFixed(0)}ms per video)`);
+        
+        // Track slow batches
+        if (avgTimePerVideo > 3000) {
+            console.log(`🐌 SLOW BATCH: Batch ${batchNum} averaged ${avgTimePerVideo.toFixed(0)}ms per video`);
+        }
+        
+        // No artificial delays - let it run at full speed
         if (i + batchSize < limitedVideos.length) {
-            console.log(`⏱️ Rate limiting: waiting 1 second before next batch...`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            console.log(`⚡ Moving to next batch immediately...`);
         }
     }
 
@@ -496,10 +500,11 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
 export async function GET() {
     const startTime = Date.now();
     console.log(`🚀 ===== CRON JOB STARTED (${new Date().toISOString()}) =====`);
+    console.log(`🔧 Process info: PID ${process.pid}, Memory: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
+    console.log(`⚡ HIGH-PERFORMANCE MODE: Optimized for thousands of videos`);
     console.log(`⏰ Hourly scraping: Running every hour for high-performance videos`);
     console.log(`🌙 Daily scraping: Running at 12:00 AM EST for lower-performance videos`);
-    console.log(`📋 Strategy: First week = hourly, After week 1 = 10k daily views threshold`);
-    console.log(`🔄 Cadence switching: Only at midnight EST for synchronized daily tracking`);
+    console.log(`📋 Strategy: First week = hourly, After week 1 = performance-based switching`);
     
     // Get current EST time for logging
     const now = new Date();
@@ -508,9 +513,9 @@ export async function GET() {
     console.log(`🕐 Current EST time: ${estTime.toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} (Hour ${currentHour})`);
     
     if (currentHour === 0) {
-        console.log(`🌙 MIDNIGHT EST: Cadence evaluation window active`);
+        console.log(`🌙 MIDNIGHT EST: Cadence evaluation window active - performance-based switching enabled`);
     } else {
-        console.log(`⏰ Non-midnight hour: Only hourly videos will be scraped`);
+        console.log(`⏰ Non-midnight hour: Hourly videos + performance-based switching`);
     }
 
     try {

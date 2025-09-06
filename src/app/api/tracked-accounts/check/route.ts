@@ -8,15 +8,23 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
     const startTime = Date.now();
     console.log(`🚀 ===== TRACKED ACCOUNTS CHECK STARTED (${new Date().toISOString()}) =====`);
+    console.log(`🔧 Process info: PID ${process.pid}, Memory: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
 
     try {
         // Fetch all active tracked accounts
+        const dbStartTime = Date.now();
         const accounts = await prisma.trackedAccount.findMany({
             where: { isActive: true },
             orderBy: { lastChecked: 'asc' } // Check oldest first
         });
+        const dbDuration = Date.now() - dbStartTime;
 
-        console.log(`📋 Found ${accounts.length} active tracked accounts to check`);
+        console.log(`📋 Found ${accounts.length} active tracked accounts to check (DB query: ${dbDuration}ms)`);
+        console.log(`📊 Account breakdown: ${accounts.map(a => `${a.platform}:${a.username}`).join(', ')}`);
+        
+        if (accounts.length > 20) {
+            console.log(`⚠️ WARNING: Processing ${accounts.length} accounts - this may take significant time`);
+        }
 
         if (accounts.length === 0) {
             console.log('⚠️ No active tracked accounts found');
@@ -41,20 +49,50 @@ export async function GET() {
                 console.log(`⏰ Approaching timeout (${elapsed}ms elapsed), stopping after ${processed} accounts`);
                 break;
             }
-            const result = await checkTrackedAccount({
-                id: account.id,
-                username: account.username,
-                platform: account.platform,
-                accountType: account.accountType as 'all' | 'keyword',
-                keyword: account.keyword || undefined
-            });
-            results.push(result);
-            totalNewVideos += result.newVideos;
-            processed++;
+            
+            const accountStartTime = Date.now();
+            console.log(`🔄 [${processed + 1}/${accounts.length}] Processing ${account.platform}:${account.username}...`);
+            
+            try {
+                const result = await checkTrackedAccount({
+                    id: account.id,
+                    username: account.username,
+                    platform: account.platform,
+                    accountType: account.accountType as 'all' | 'keyword',
+                    keyword: account.keyword || undefined
+                });
+                
+                const accountDuration = Date.now() - accountStartTime;
+                console.log(`✅ [${processed + 1}/${accounts.length}] ${account.platform}:${account.username} completed in ${accountDuration}ms - Status: ${result.status}, New videos: ${result.newVideos}`);
+                
+                results.push(result);
+                totalNewVideos += result.newVideos;
+                processed++;
+                
+                // Track slow accounts
+                if (accountDuration > 5000) {
+                    console.log(`🐌 SLOW ACCOUNT: ${account.platform}:${account.username} took ${accountDuration}ms`);
+                }
+                
+            } catch (error) {
+                const accountDuration = Date.now() - accountStartTime;
+                console.error(`❌ [${processed + 1}/${accounts.length}] ${account.platform}:${account.username} FAILED in ${accountDuration}ms:`, error);
+                
+                results.push({
+                    status: 'failed',
+                    username: account.username,
+                    platform: account.platform,
+                    newVideos: 0,
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                });
+                processed++;
+            }
 
-            // Rate limiting between accounts to prevent API overload
-            console.log(`⏱️ Rate limiting: waiting 2 seconds before next account... (${processed}/${accounts.length})`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Add minimal delay only to prevent overwhelming external APIs
+            if (processed < accounts.length) {
+                console.log(`⏱️ Brief delay before next account... (${processed}/${accounts.length})`);
+                await new Promise(resolve => setTimeout(resolve, 100)); // 100ms only
+            }
         }
 
         const duration = Date.now() - startTime;
