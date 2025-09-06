@@ -669,16 +669,33 @@ export default function TikTokTracker() {
             const latestPoint = sortedPoints[0];
             
             // Use the time key as the display time and the latest point's data
+            // Don't preserve delta - it will be recalculated based on aggregated points
             aggregated.push({
                 time: timeKey,
                 views: latestPoint.views,
-                delta: latestPoint.delta,
+                delta: 0, // Will be recalculated
                 originalTime: new Date(timeKey)
             });
         }
         
-        // Sort by time
-        return aggregated.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        // Sort by time and recalculate deltas based on aggregated data
+        const sortedAggregated = aggregated.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        
+        // Recalculate deltas for aggregated data
+        return sortedAggregated.map((point, index) => {
+            if (index > 0) {
+                const previousPoint = sortedAggregated[index - 1];
+                const delta = Math.max(0, point.views - previousPoint.views); // Ensure non-negative
+                return {
+                    ...point,
+                    delta
+                };
+            }
+            return {
+                ...point,
+                delta: 0 // First point has no delta
+            };
+        });
     };
 
     // Enhanced chart data processing with proper aggregate data across ALL videos
@@ -812,34 +829,34 @@ export default function TikTokTracker() {
             }
         });
 
-        // Calculate delta values properly (for the selected period only)
-        const rawChartData: ChartDataPoint[] = aggregateData.map((point, index) => {
-            const previousPoint = index > 0 ? aggregateData[index - 1] : point;
-            const delta = point.views - previousPoint.views;
+        // First, create raw chart data with absolute values
+        const rawChartData: ChartDataPoint[] = aggregateData.map((point) => ({
+            time: point.time,
+            views: point.views,
+            delta: 0, // Will be calculated after aggregation
+            originalTime: new Date(point.time)
+        }));
 
-            return {
-                time: point.time,
-                views: showDelta ? delta : point.views,
-                delta,
-                originalTime: new Date(point.time)
-            };
-        });
-
-        // Apply time granularity aggregation
+        // Apply time granularity aggregation (this will recalculate deltas)
         const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity);
         
-        // Recalculate delta values after aggregation if needed
+        // Apply delta mode if requested
         const finalChartData = aggregatedData.map((point, index) => {
             if (showDelta && index > 0) {
-                const previousPoint = aggregatedData[index - 1];
-                const delta = point.views - previousPoint.views;
+                // Use the delta calculated by aggregateDataByGranularity
                 return {
                     ...point,
-                    views: delta,
-                    delta
+                    views: point.delta // Show delta instead of absolute views
+                };
+            } else if (showDelta && index === 0) {
+                // First point in delta mode should show 0
+                return {
+                    ...point,
+                    views: 0,
+                    delta: 0
                 };
             }
-            return point;
+            return point; // Absolute mode - show actual views
         });
 
         return finalChartData;
@@ -897,7 +914,7 @@ export default function TikTokTracker() {
             const previousPoint = index > 0 ? filteredData[index - 1] : point;
             const currentValue = point[metric];
             const previousValue = previousPoint[metric];
-            const delta = currentValue - previousValue;
+            const delta = Math.max(0, currentValue - previousValue); // Ensure non-negative
 
             return {
                 time: point.time,

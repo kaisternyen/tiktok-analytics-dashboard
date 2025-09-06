@@ -12,7 +12,10 @@
             "maxDuration": 30
         },
         "src/app/api/scrape-all/route.ts": {
-            "maxDuration": 60
+            "maxDuration": 300
+        },
+        "src/app/api/tracked-accounts/check/route.ts": {
+            "maxDuration": 300
         }
     },
     "regions": [

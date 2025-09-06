@@ -43,9 +43,9 @@ export async function GET() {
             results.push(result);
             totalNewVideos += result.newVideos;
 
-            // Increased delay between accounts to prevent rate limiting
-            console.log(`⏱️ Rate limiting: waiting 5 seconds before next account...`);
-            await new Promise(resolve => setTimeout(resolve, 5000));
+            // Rate limiting between accounts to prevent API overload
+            console.log(`⏱️ Rate limiting: waiting 3 seconds before next account...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
         }
 
         const duration = Date.now() - startTime;
