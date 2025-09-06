@@ -231,6 +231,7 @@ async function evaluateCadenceChange(video: VideoRecord, newViews: number): Prom
 
 // Smart processing with standardized timing and adaptive frequency
 async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1000): Promise<ProcessingResult> {
+    const processingStartTime = Date.now();
     const results: VideoResult[] = [];
     let successful = 0;
     let failed = 0;
@@ -267,20 +268,29 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
         return { results, successful, failed, skipped, cadenceChanges };
     }
 
-    // Limit processing to avoid timeouts
-    const limitedVideos = videosToProcess.slice(0, maxPerRun);
-    console.log(`🎯 Processing ${limitedVideos.length}/${videosToProcess.length} videos (max ${maxPerRun} per run)`);
+    // Limit processing to avoid timeouts - reduce max per run to ensure completion within 4 minutes
+    const maxProcessingTime = 4 * 60 * 1000; // 4 minutes max
+    const adjustedMaxPerRun = Math.min(maxPerRun, 100); // Cap at 100 videos per run
+    const limitedVideos = videosToProcess.slice(0, adjustedMaxPerRun);
+    console.log(`🎯 Processing ${limitedVideos.length}/${videosToProcess.length} videos (max ${adjustedMaxPerRun} per run, 4min timeout)`);
 
-    // Process in smaller batches
+    // Process in smaller batches with time monitoring
     const batchSize = 3;
     console.log(`🚀 Starting batch processing with batch size: ${batchSize}`);
 
     for (let i = 0; i < limitedVideos.length; i += batchSize) {
+        // Check if we're approaching timeout
+        const elapsed = Date.now() - processingStartTime;
+        if (elapsed > maxProcessingTime) {
+            console.log(`⏰ Approaching timeout (${elapsed}ms elapsed), stopping processing early`);
+            break;
+        }
+
         const batch = limitedVideos.slice(i, i + batchSize);
         const batchNum = Math.floor(i / batchSize) + 1;
         const totalBatches = Math.ceil(limitedVideos.length / batchSize);
 
-        console.log(`📦 ===== BATCH ${batchNum}/${totalBatches} =====`);
+        console.log(`📦 ===== BATCH ${batchNum}/${totalBatches} (${elapsed}ms elapsed) =====`);
         console.log(`🎬 Processing: ${batch.map(v => `@${v.username} (${v.platform}, ${v.scrapingCadence})`).join(', ')}`);
 
         // Process batch in parallel

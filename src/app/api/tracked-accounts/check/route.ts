@@ -31,8 +31,16 @@ export async function GET() {
         // Process accounts sequentially to avoid overwhelming APIs
         const results = [];
         let totalNewVideos = 0;
+        const maxProcessingTime = 4 * 60 * 1000; // 4 minutes max
+        let processed = 0;
 
         for (const account of accounts) {
+            // Check timeout
+            const elapsed = Date.now() - startTime;
+            if (elapsed > maxProcessingTime) {
+                console.log(`⏰ Approaching timeout (${elapsed}ms elapsed), stopping after ${processed} accounts`);
+                break;
+            }
             const result = await checkTrackedAccount({
                 id: account.id,
                 username: account.username,
@@ -42,10 +50,11 @@ export async function GET() {
             });
             results.push(result);
             totalNewVideos += result.newVideos;
+            processed++;
 
             // Rate limiting between accounts to prevent API overload
-            console.log(`⏱️ Rate limiting: waiting 3 seconds before next account...`);
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            console.log(`⏱️ Rate limiting: waiting 2 seconds before next account... (${processed}/${accounts.length})`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
         const duration = Date.now() - startTime;
