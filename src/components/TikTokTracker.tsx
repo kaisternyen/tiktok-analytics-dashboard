@@ -1259,7 +1259,7 @@ export default function TikTokTracker() {
                                         filters={filters}
                                         sorts={sorts}
                                         timeframe={timeframe}
-                                        onChange={(newFilters, newSorts, newTimeframe) => {
+                                        onChange={(newFilters, newSorts) => {
                                             setFilters(newFilters);
                                             setSorts(newSorts);
                                             // timeframe changes are ignored - controlled by selectedTimePeriod

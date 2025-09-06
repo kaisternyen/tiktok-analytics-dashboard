@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
-import { TimelineFilter } from './TimelineFilter';
 
 // Define field types for the videos table
 const FIELD_DEFS = [
@@ -89,7 +88,7 @@ export default function VideoFilterSortBar({ filters, sorts, timeframe, onChange
   const [pendingSnapIdx, setPendingSnapIdx] = useState<number | null>(null);
   const [pendingSnapValue, setPendingSnapValue] = useState<[string, string] | null>(null);
   const [prevValue, setPrevValue] = useState<[string, string] | null>(null);
-  const [localTimeframe, setLocalTimeframe] = useState<[string, string] | null>(timeframe);
+  const localTimeframe = timeframe; // Read-only, controlled by parent
 
   // Sync localSorts with parent prop
   useEffect(() => {
