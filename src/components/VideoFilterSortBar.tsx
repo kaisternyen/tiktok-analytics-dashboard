@@ -149,13 +149,23 @@ export default function VideoFilterSortBar({ filters, sorts, timeframe, onChange
         
         {/* Timeline Filter with Preset Buttons */}
         <div className="min-h-[60px] flex flex-col justify-center">
-          <TimelineFilter
-            timeframe={localTimeframe}
-            onChange={(newTimeframe) => {
-              setLocalTimeframe(newTimeframe);
-              onChange({ operator: localOperator, conditions: localFilters }, localSorts, newTimeframe);
-            }}
-          />
+          {localTimeframe ? (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-sm text-blue-800">
+                <span className="font-medium">Timeframe:</span> {new Date(localTimeframe[0]).toLocaleDateString()} - {new Date(localTimeframe[1]).toLocaleDateString()}
+                <br />
+                <span className="text-xs text-blue-600">Controlled by the time period selector above</span>
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">Timeframe:</span> All time
+                <br />
+                <span className="text-xs text-gray-500">Controlled by the time period selector above</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       {/* Filter Bar */}

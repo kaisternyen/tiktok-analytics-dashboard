@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -87,11 +87,12 @@ export default function TikTokTracker() {
     const [success, setSuccess] = useState<string | null>(null);
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
+    // Unified time period for both chart and videos list
     const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('W');
     const [showDelta, setShowDelta] = useState(false);
     const [timeGranularity, setTimeGranularity] = useState<'hourly' | 'daily' | 'weekly'>('daily');
 
-    // Individual video chart states
+    // Individual video chart states (separate from overview)
     const [selectedVideoTimePeriod, setSelectedVideoTimePeriod] = useState<TimePeriod>('W');
     const [showViewsDelta, setShowViewsDelta] = useState(false);
     const [showLikesDelta, setShowLikesDelta] = useState(false);
@@ -100,7 +101,36 @@ export default function TikTokTracker() {
 
     const [filters, setFilters] = useState<FilterGroup>({ operator: 'AND', conditions: [] });
     const [sorts, setSorts] = useState<SortCondition[]>([]);
-    const [timeframe, setTimeframe] = useState<[string, string] | null>(null);
+    
+    // Derive timeframe from selectedTimePeriod for unified control
+    const timeframe = React.useMemo<[string, string] | null>(() => {
+        if (selectedTimePeriod === 'ALL') return null;
+        
+        const now = new Date();
+        let startDate: Date;
+        
+        switch (selectedTimePeriod) {
+            case 'D':
+                startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                break;
+            case 'W':
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                break;
+            case 'M':
+                startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                break;
+            case '3M':
+                startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+                break;
+            case '1Y':
+                startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+                break;
+            default:
+                return null;
+        }
+        
+        return [startDate.toISOString(), now.toISOString()];
+    }, [selectedTimePeriod]);
 
     // Handle header click for sorting
     const handleHeaderClick = (field: string) => {
@@ -1116,20 +1146,23 @@ export default function TikTokTracker() {
                                                         </button>
                                                     ))}
                                                 </div>
-                                                {/* Time Period Selector */}
-                                                <div className="flex border border-gray-200 rounded-md">
-                                                    {(['D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
-                                                        <button
-                                                            key={period}
-                                                            onClick={() => setSelectedTimePeriod(period)}
-                                                            className={`px-3 py-1 text-xs font-medium transition-colors ${selectedTimePeriod === period
-                                                                ? 'bg-blue-500 text-white'
-                                                                : 'text-gray-600 hover:bg-gray-100'
-                                                                } first:rounded-l-md last:rounded-r-md`}
-                                                        >
-                                                            {period}
-                                                        </button>
-                                                    ))}
+                                                {/* Unified Time Period Selector (controls both chart and videos) */}
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-gray-600">Time Period:</span>
+                                                    <div className="flex border border-gray-200 rounded-md">
+                                                        {(['D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
+                                                            <button
+                                                                key={period}
+                                                                onClick={() => setSelectedTimePeriod(period)}
+                                                                className={`px-3 py-1 text-xs font-medium transition-colors ${selectedTimePeriod === period
+                                                                    ? 'bg-blue-500 text-white'
+                                                                    : 'text-gray-600 hover:bg-gray-100'
+                                                                    } first:rounded-l-md last:rounded-r-md`}
+                                                                >
+                                                                {period}
+                                                            </button>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                                 {/* Delta Toggle */}
                                                 <Button
@@ -1221,7 +1254,7 @@ export default function TikTokTracker() {
                                         </CardContent>
                                     </Card>
 
-                                    {/* Filter/Sort Bar with integrated Timeline Filter */}
+                                    {/* Filter/Sort Bar (timeframe controlled by main time period selector) */}
                                     <VideoFilterSortBar
                                         filters={filters}
                                         sorts={sorts}
@@ -1229,7 +1262,7 @@ export default function TikTokTracker() {
                                         onChange={(newFilters, newSorts, newTimeframe) => {
                                             setFilters(newFilters);
                                             setSorts(newSorts);
-                                            setTimeframe(newTimeframe);
+                                            // timeframe changes are ignored - controlled by selectedTimePeriod
                                         }}
                                     />
                                     <Card>
