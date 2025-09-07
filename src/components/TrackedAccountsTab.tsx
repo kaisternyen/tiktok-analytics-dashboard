@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Users, Edit, Play, Pause, Trash2 } from 'lucide-react';
+import { Plus, RefreshCw, Users, Edit, Play, Pause, Trash2, ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 
 interface TrackedAccount {
@@ -31,6 +31,13 @@ interface AddAccountForm {
     accountType: 'all' | 'keyword';
     keyword: string;
     includeExistingContent: boolean;
+}
+
+interface CronStatus {
+    system: { timestamp: string; memoryUsage: number };
+    database: { status: string; latency: string };
+    issues: { overdueHourlyVideos: number; overdueDailyVideos: number; overdueAccounts: number; totalOverdue: number };
+    oldestPending?: { username: string; platform: string; minutesAgo: number };
 }
 
 // Add a helper to extract username/handle from a pasted URL
@@ -101,6 +108,8 @@ export function TrackedAccountsTab() {
     const [showAddForm, setShowAddForm] = useState(false);
     const [editingAccount, setEditingAccount] = useState<TrackedAccount | null>(null);
     const [checkingAccounts, setCheckingAccounts] = useState(false);
+    const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
+    const [showCronDropdown, setShowCronDropdown] = useState(false);
     const [formData, setFormData] = useState<AddAccountForm>({
         username: '',
         platform: 'tiktok',
@@ -110,6 +119,18 @@ export function TrackedAccountsTab() {
     });
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+
+    const fetchCronStatus = async () => {
+        try {
+            const response = await fetch('/api/cron-status');
+            if (response.ok) {
+                const data = await response.json();
+                setCronStatus(data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch cron status:', err);
+        }
+    };
 
     // Fetch tracked accounts
     const fetchAccounts = async () => {
@@ -279,7 +300,19 @@ export function TrackedAccountsTab() {
 
     useEffect(() => {
         fetchAccounts();
+        fetchCronStatus();
     }, []);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (showCronDropdown && !(event.target as Element).closest('.relative')) {
+                setShowCronDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showCronDropdown]);
 
     // Clear messages after 5 seconds
     useEffect(() => {
@@ -319,6 +352,60 @@ export function TrackedAccountsTab() {
                         <p className="text-gray-600 mt-2">Automatically track new content from your favorite creators</p>
                     </div>
                     <div className="flex gap-3">
+                        <div className="relative">
+                            <button
+                                onClick={() => {
+                                    setShowCronDropdown(!showCronDropdown);
+                                    if (!showCronDropdown) fetchCronStatus();
+                                }}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
+                                    (cronStatus?.issues?.totalOverdue ?? 0) > 0 
+                                        ? 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100' 
+                                        : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100'
+                                }`}
+                            >
+                                <span className="text-sm">
+                                    Cron Status {(cronStatus?.issues?.totalOverdue ?? 0) > 0 && `(${cronStatus?.issues?.totalOverdue ?? 0} pending)`}
+                                </span>
+                                <ChevronDown className={`w-4 h-4 transition-transform ${showCronDropdown ? 'rotate-180' : ''}`} />
+                            </button>
+                            {showCronDropdown && cronStatus && (
+                                <div className="absolute top-full left-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                    <div className="p-4">
+                                        <div className="text-sm text-gray-600 mb-3">
+                                            Last updated: {new Date(cronStatus.system.timestamp).toLocaleTimeString()}
+                                        </div>
+                                        {cronStatus.issues.totalOverdue > 0 ? (
+                                            <div className="space-y-2">
+                                                <div className="text-sm font-medium text-orange-700">Pending Jobs:</div>
+                                                {cronStatus.issues.overdueHourlyVideos > 0 && (
+                                                    <div className="text-sm text-gray-700">• {cronStatus.issues.overdueHourlyVideos} hourly videos overdue</div>
+                                                )}
+                                                {cronStatus.issues.overdueDailyVideos > 0 && (
+                                                    <div className="text-sm text-gray-700">• {cronStatus.issues.overdueDailyVideos} daily videos overdue</div>
+                                                )}
+                                                {cronStatus.issues.overdueAccounts > 0 && (
+                                                    <div className="text-sm text-gray-700">• {cronStatus.issues.overdueAccounts} accounts overdue</div>
+                                                )}
+                                                {cronStatus.oldestPending && (
+                                                    <div className="mt-3 p-2 bg-orange-50 rounded text-sm">
+                                                        <div className="font-medium">Oldest pending:</div>
+                                                        <div>{cronStatus.oldestPending.platform}:{cronStatus.oldestPending.username}</div>
+                                                        <div className="text-orange-600">{cronStatus.oldestPending.minutesAgo} minutes ago</div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="text-sm text-green-600">✓ All jobs up to date</div>
+                                        )}
+                                        <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500">
+                                            DB: {cronStatus.database.status} ({cronStatus.database.latency}) | 
+                                            Memory: {cronStatus.system.memoryUsage}MB
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         <button
                             onClick={checkAccounts}
                             disabled={checkingAccounts || accounts.length === 0}
