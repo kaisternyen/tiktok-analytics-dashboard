@@ -31,6 +31,8 @@ model Video {
   needsCadenceCheck Boolean          @default(false)
   lastModeChange    DateTime?
   trackingMode      String?
+  phase1Notified    Boolean          @default(false)  // >5k views + >5 comments
+  phase2Notified    Boolean          @default(false)  // >10k views in hour + exponential
   metricsHistory    MetricsHistory[]
 
   @@unique([videoId, platform])
