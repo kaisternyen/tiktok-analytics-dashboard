@@ -205,3 +205,181 @@ export function checkViralThresholds(previousViews: number, currentViews: number
   
   return null;
 }
+
+// Check if video qualifies for Phase 1: >5k views and >5 comments
+export function checkPhase1Criteria(views: number, comments: number): boolean {
+  return views > 5000 && comments > 5;
+}
+
+// Check if video qualifies for Phase 2: >10k views in an hour with exponential growth
+export async function checkPhase2Criteria(videoId: string, currentViews: number): Promise<boolean> {
+  if (currentViews <= 10000) return false;
+  
+  try {
+    // Get metrics from the last 2 hours to check exponential growth
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const oneHourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000);
+    
+    const { prisma } = await import('@/lib/prisma');
+    
+    const recentMetrics = await prisma.metricsHistory.findMany({
+      where: {
+        videoId: videoId,
+        timestamp: {
+          gte: twoHoursAgo
+        }
+      },
+      orderBy: { timestamp: 'asc' }
+    });
+    
+    if (recentMetrics.length < 2) return false;
+    
+    // Check if video gained >10k views in the last hour
+    const oneHourMetrics = recentMetrics.filter(m => m.timestamp >= oneHourAgo);
+    if (oneHourMetrics.length === 0) return false;
+    
+    const earliestInHour = oneHourMetrics[0];
+    const viewsGainedInHour = currentViews - earliestInHour.views;
+    
+    if (viewsGainedInHour <= 10000) return false;
+    
+    // Check for exponential growth pattern
+    // Compare growth rate: if recent growth is significantly higher than earlier growth
+    if (recentMetrics.length >= 3) {
+      const midPoint = Math.floor(recentMetrics.length / 2);
+      const firstHalf = recentMetrics.slice(0, midPoint);
+      const secondHalf = recentMetrics.slice(midPoint);
+      
+      if (firstHalf.length > 1 && secondHalf.length > 1) {
+        const firstHalfGrowthRate = (firstHalf[firstHalf.length - 1].views - firstHalf[0].views) / firstHalf.length;
+        const secondHalfGrowthRate = (secondHalf[secondHalf.length - 1].views - secondHalf[0].views) / secondHalf.length;
+        
+        // Exponential growth: recent growth rate should be at least 2x the earlier rate
+        return secondHalfGrowthRate > firstHalfGrowthRate * 2;
+      }
+    }
+    
+    // Fallback: if gained >10k in an hour, consider it exponential
+    return true;
+    
+  } catch (error) {
+    console.error('Error checking Phase 2 criteria:', error);
+    return false;
+  }
+}
+
+// Send Phase 1 notification
+export async function notifyPhase1(
+  username: string,
+  platform: string,
+  url: string,
+  description: string,
+  views: number,
+  comments: number
+): Promise<void> {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) return;
+
+  try {
+    const platformEmoji = getPlatformEmoji(platform);
+
+    const embed = {
+      title: `🎯 Phase 1 Alert! ${platformEmoji}`,
+      description: `**@${username}**'s video hit Phase 1 criteria!`,
+      color: 0x00ff88, // Green-blue
+      fields: [
+        {
+          name: "📝 Description",
+          value: description.length > 200 ? description.substring(0, 200) + "..." : description,
+          inline: false
+        },
+        {
+          name: "🎯 Phase 1 Criteria Met",
+          value: `👀 ${formatNumber(views)} views (>5k)\n💬 ${formatNumber(comments)} comments (>5)`,
+          inline: true
+        },
+        {
+          name: "🔗 Link",
+          value: `[Watch Video](${url})`,
+          inline: true
+        }
+      ],
+      timestamp: new Date().toISOString(),
+      footer: {
+        text: `TikTok Analytics Dashboard • Phase 1 Alert`
+      }
+    };
+
+    const payload = { embeds: [embed] };
+
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.ok) {
+      console.log(`✅ Phase 1 Discord notification sent for @${username}`);
+    }
+  } catch (error) {
+    console.error('❌ Error sending Phase 1 notification:', error);
+  }
+}
+
+// Send Phase 2 notification
+export async function notifyPhase2(
+  username: string,
+  platform: string,
+  url: string,
+  description: string,
+  views: number,
+  hourlyGrowth: number
+): Promise<void> {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) return;
+
+  try {
+    const platformEmoji = getPlatformEmoji(platform);
+
+    const embed = {
+      title: `🚀 Phase 2 Alert! ${platformEmoji}`,
+      description: `**@${username}**'s video is showing exponential growth!`,
+      color: 0xff4444, // Red
+      fields: [
+        {
+          name: "📝 Description", 
+          value: description.length > 200 ? description.substring(0, 200) + "..." : description,
+          inline: false
+        },
+        {
+          name: "🚀 Phase 2 Criteria Met",
+          value: `👀 ${formatNumber(views)} total views\n📈 +${formatNumber(hourlyGrowth)} views in last hour\n🔥 Exponential growth detected!`,
+          inline: true
+        },
+        {
+          name: "🔗 Link",
+          value: `[Watch Video](${url})`,
+          inline: true
+        }
+      ],
+      timestamp: new Date().toISOString(),
+      footer: {
+        text: `TikTok Analytics Dashboard • Phase 2 Alert`
+      }
+    };
+
+    const payload = { embeds: [embed] };
+
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.ok) {
+      console.log(`✅ Phase 2 Discord notification sent for @${username}`);
+    }
+  } catch (error) {
+    console.error('❌ Error sending Phase 2 notification:', error);
+  }
+}
