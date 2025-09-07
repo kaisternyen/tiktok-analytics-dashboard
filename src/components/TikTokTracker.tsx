@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, Brush } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -91,6 +91,10 @@ export default function TikTokTracker() {
     const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('W');
     const [showDelta, setShowDelta] = useState(true); // Default to delta view
     const [timeGranularity, setTimeGranularity] = useState<'hourly' | 'daily' | 'weekly'>('daily');
+    
+    // Custom date range state
+    const [customDateRange, setCustomDateRange] = useState<[string, string] | null>(null);
+    const [showDatePicker, setShowDatePicker] = useState(false);
 
     // Individual video chart states (separate from overview)
     const [selectedVideoTimePeriod, setSelectedVideoTimePeriod] = useState<TimePeriod>('W');
@@ -102,8 +106,13 @@ export default function TikTokTracker() {
     const [filters, setFilters] = useState<FilterGroup>({ operator: 'AND', conditions: [] });
     const [sorts, setSorts] = useState<SortCondition[]>([]);
     
-    // Derive timeframe from selectedTimePeriod for unified control
+    // Derive timeframe from selectedTimePeriod or custom date range for unified control
     const timeframe = React.useMemo<[string, string] | null>(() => {
+        // Use custom date range if available
+        if (customDateRange) {
+            return customDateRange;
+        }
+        
         if (selectedTimePeriod === 'ALL') return null;
         
         const now = new Date();
@@ -130,7 +139,48 @@ export default function TikTokTracker() {
         }
         
         return [startDate.toISOString(), now.toISOString()];
-    }, [selectedTimePeriod]);
+    }, [selectedTimePeriod, customDateRange]);
+
+    // Handle chart point click to focus on specific day
+    const handleChartClick = (data: { activePayload?: Array<{ payload: { time: string } }> }) => {
+        if (data && data.activePayload && data.activePayload[0]) {
+            const clickedTime = data.activePayload[0].payload.time;
+            const clickedDate = new Date(clickedTime);
+            
+            // Set date range to the clicked day (24 hours)
+            const startOfDay = new Date(clickedDate);
+            startOfDay.setHours(0, 0, 0, 0);
+            const endOfDay = new Date(clickedDate);
+            endOfDay.setHours(23, 59, 59, 999);
+            
+            setCustomDateRange([startOfDay.toISOString(), endOfDay.toISOString()]);
+            setSelectedTimePeriod('D'); // Update period display
+        }
+    };
+
+    // Handle brush selection for date range
+    const handleBrushChange = (brushData: { startIndex?: number; endIndex?: number }) => {
+        if (brushData && brushData.startIndex !== undefined && brushData.endIndex !== undefined) {
+            const chartData = getChartData();
+            if (chartData.length > 0) {
+                const startData = chartData[brushData.startIndex];
+                const endData = chartData[brushData.endIndex];
+                
+                if (startData && endData) {
+                    setCustomDateRange([
+                        new Date(startData.time).toISOString(),
+                        new Date(endData.time).toISOString()
+                    ]);
+                }
+            }
+        }
+    };
+
+    // Clear custom date range
+    const clearCustomDateRange = () => {
+        setCustomDateRange(null);
+        setShowDatePicker(false);
+    };
 
     // Handle header click for sorting
     const handleHeaderClick = (field: string) => {
@@ -1147,23 +1197,108 @@ export default function TikTokTracker() {
                                                     ))}
                                                 </div>
                                                 {/* Unified Time Period Selector (controls both chart and videos) */}
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs text-gray-600">Time Period:</span>
-                                                    <div className="flex border border-gray-200 rounded-md">
-                                                        {(['D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
+                                                <div className="flex items-center gap-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-gray-600">Time Period:</span>
+                                                        <div className="flex border border-gray-200 rounded-md">
+                                                            {(['D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
+                                                                <button
+                                                                    key={period}
+                                                                    onClick={() => {
+                                                                        setSelectedTimePeriod(period);
+                                                                        setCustomDateRange(null); // Clear custom range when selecting preset
+                                                                    }}
+                                                                    className={`px-3 py-1 text-xs font-medium transition-colors ${selectedTimePeriod === period && !customDateRange
+                                                                        ? 'bg-blue-500 text-white'
+                                                                        : 'text-gray-600 hover:bg-gray-100'
+                                                                        } first:rounded-l-md last:rounded-r-md`}
+                                                                    >
+                                                                    {period}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* Custom Date Range Controls */}
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => setShowDatePicker(!showDatePicker)}
+                                                            className={`px-3 py-1 text-xs font-medium border rounded-md transition-colors ${customDateRange
+                                                                ? 'bg-green-500 text-white border-green-500'
+                                                                : 'text-gray-600 border-gray-200 hover:bg-gray-100'
+                                                                }`}
+                                                        >
+                                                            📅 Custom Range
+                                                        </button>
+                                                        {customDateRange && (
                                                             <button
-                                                                key={period}
-                                                                onClick={() => setSelectedTimePeriod(period)}
-                                                                className={`px-3 py-1 text-xs font-medium transition-colors ${selectedTimePeriod === period
-                                                                    ? 'bg-blue-500 text-white'
-                                                                    : 'text-gray-600 hover:bg-gray-100'
-                                                                    } first:rounded-l-md last:rounded-r-md`}
-                                                                >
-                                                                {period}
+                                                                onClick={clearCustomDateRange}
+                                                                className="px-2 py-1 text-xs text-gray-500 hover:text-red-500"
+                                                                title="Clear custom date range"
+                                                            >
+                                                                ✕
                                                             </button>
-                                                        ))}
+                                                        )}
                                                     </div>
                                                 </div>
+                                                
+                                                {/* Date Picker Panel */}
+                                                {showDatePicker && (
+                                                    <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <label className="text-xs text-gray-600">From:</label>
+                                                                <input
+                                                                    type="datetime-local"
+                                                                    className="px-2 py-1 text-xs border border-gray-300 rounded"
+                                                                    value={customDateRange ? new Date(customDateRange[0]).toISOString().slice(0, 16) : ''}
+                                                                    onChange={(e) => {
+                                                                        const startDate = e.target.value ? new Date(e.target.value).toISOString() : '';
+                                                                        if (startDate && customDateRange) {
+                                                                            setCustomDateRange([startDate, customDateRange[1]]);
+                                                                        } else if (startDate) {
+                                                                            const endDate = new Date(startDate);
+                                                                            endDate.setDate(endDate.getDate() + 1);
+                                                                            setCustomDateRange([startDate, endDate.toISOString()]);
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <label className="text-xs text-gray-600">To:</label>
+                                                                <input
+                                                                    type="datetime-local"
+                                                                    className="px-2 py-1 text-xs border border-gray-300 rounded"
+                                                                    value={customDateRange ? new Date(customDateRange[1]).toISOString().slice(0, 16) : ''}
+                                                                    onChange={(e) => {
+                                                                        const endDate = e.target.value ? new Date(e.target.value).toISOString() : '';
+                                                                        if (endDate && customDateRange) {
+                                                                            setCustomDateRange([customDateRange[0], endDate]);
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const now = new Date();
+                                                                    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                                                                    setCustomDateRange([yesterday.toISOString(), now.toISOString()]);
+                                                                }}
+                                                                className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                                                            >
+                                                                Last 24h
+                                                            </button>
+                                                        </div>
+                                                        {customDateRange && (
+                                                            <div className="mt-2 text-xs text-gray-600">
+                                                                Selected: {new Date(customDateRange[0]).toLocaleDateString()} - {new Date(customDateRange[1]).toLocaleDateString()}
+                                                                <span className="ml-2 text-blue-600 cursor-pointer hover:underline" onClick={() => setShowDatePicker(false)}>
+                                                                    Click chart points to focus on specific days, or drag on chart to select range
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 {/* Delta Toggle */}
                                                 <Button
                                                     variant={showDelta ? "default" : "outline"}
@@ -1178,7 +1313,11 @@ export default function TikTokTracker() {
                                         <div className="h-80">
                                             {chartData.length > 0 ? (
                                                 <ResponsiveContainer width="100%" height="100%">
-                                                    <AreaChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                                                    <AreaChart 
+                                                        data={chartData} 
+                                                        margin={{ top: 5, right: 30, left: 20, bottom: 25 }}
+                                                        onClick={handleChartClick}
+                                                    >
                                                         <XAxis
                                                             dataKey="time"
                                                             tickFormatter={formatXAxisTick}
@@ -1199,6 +1338,13 @@ export default function TikTokTracker() {
                                                             fill="#3b82f6"
                                                             fillOpacity={0.1}
                                                             strokeWidth={2}
+                                                        />
+                                                        <Brush
+                                                            dataKey="time"
+                                                            height={20}
+                                                            stroke="#3b82f6"
+                                                            onChange={handleBrushChange}
+                                                            tickFormatter={formatXAxisTick}
                                                         />
                                                     </AreaChart>
                                                 </ResponsiveContainer>
