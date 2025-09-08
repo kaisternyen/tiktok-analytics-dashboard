@@ -84,11 +84,12 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
         const lastScraped = new Date(video.lastScrapedAt);
         const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
         
-        // Only scrape if it's been more than 18 hours since last scrape (allows flexibility while maintaining daily cadence)
-        if (hoursSinceLastScrape >= 18) {
+        // Reduced from 18 to 12 hours to prevent "pending forever" with hourly cron
+        // This allows daily videos to be scraped roughly twice per day maximum
+        if (hoursSinceLastScrape >= 12) {
             return { shouldScrape: true, reason: `Daily video - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
         } else {
-            const hoursRemaining = Math.ceil(18 - hoursSinceLastScrape);
+            const hoursRemaining = Math.ceil(12 - hoursSinceLastScrape);
             return { shouldScrape: false, reason: `Daily video - scraped ${Math.floor(hoursSinceLastScrape)}h ago, wait ${hoursRemaining}h more` };
         }
     }
@@ -97,12 +98,12 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     if (video.scrapingCadence === 'hourly') {
         const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
         
-        // Allow scraping if it's been more than 50 minutes since last scrape
-        // This gives flexibility for cron timing while maintaining roughly hourly cadence
-        if (hoursSinceLastScrape >= 0.83) { // 50 minutes = 0.83 hours
+        // Reduced from 50 to 30 minutes to prevent "pending forever" with hourly cron
+        // This ensures videos scraped at any time can be re-scraped within 2 cron runs
+        if (hoursSinceLastScrape >= 0.5) { // 30 minutes = 0.5 hours
             return { shouldScrape: true, reason: `Hourly video - ${Math.floor(hoursSinceLastScrape * 60)}min since last scrape` };
         } else {
-            const minutesRemaining = Math.ceil((0.83 - hoursSinceLastScrape) * 60);
+            const minutesRemaining = Math.ceil((0.5 - hoursSinceLastScrape) * 60);
             return { shouldScrape: false, reason: `Hourly video - scraped ${Math.floor(hoursSinceLastScrape * 60)}min ago, wait ${minutesRemaining}min more` };
         }
     }
@@ -537,8 +538,8 @@ export async function GET() {
     console.log(`🔧 Environment: NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL}`);
     console.log(`🔧 Headers: User-Agent=${process.env.HTTP_USER_AGENT || 'Not set'}`);
     console.log(`⚡ HIGH-PERFORMANCE MODE: Optimized for thousands of videos`);
-    console.log(`⏰ Hourly scraping: Running every hour for high-performance videos`);
-    console.log(`🌙 Daily scraping: Running at 12:00 AM EST for lower-performance videos`);
+    console.log(`⏰ Hourly scraping: 30+ min intervals (prevents pending forever)`);
+    console.log(`🌙 Daily scraping: 12+ hour intervals (allows 2x per day max)`);
     console.log(`📋 Strategy: First week = hourly, After week 1 = performance-based switching`);
     
     // Test database connection immediately
