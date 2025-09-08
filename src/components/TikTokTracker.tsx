@@ -584,8 +584,8 @@ export default function TikTokTracker() {
         }
     };
 
-    // Handle adding a thread - increment threads count
-    const handleAddThread = async (videoId: string) => {
+    // Handle "Just Moderated" - marks last moderated date
+    const handleJustModerated = async (videoId: string) => {
         try {
             const response = await fetch(`/api/videos/${videoId}/moderation`, {
                 method: 'PATCH',
@@ -593,19 +593,18 @@ export default function TikTokTracker() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    action: 'update_threads',
-                    moderatedBy: 'user',
-                    threadsPlanted: 1 // Always add 1 thread
+                    action: 'mark_moderated',
+                    moderatedBy: 'user'
                 }),
             });
 
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.error || 'Failed to add thread');
+                throw new Error(result.error || 'Failed to mark as moderated');
             }
 
-            console.log(`📝 Thread added for video ${videoId}: +1 thread`);
+            console.log(`📝 Video ${videoId} marked as just moderated`);
 
             // Update local state
             setTracked(prev => prev.map(video => 
@@ -613,16 +612,54 @@ export default function TikTokTracker() {
                     ? {
                         ...video,
                         lastModeratedAt: result.video.lastModeratedAt,
-                        moderatedBy: result.video.moderatedBy,
-                        threadsPlanted: result.video.threadsPlanted
+                        moderatedBy: result.video.moderatedBy
                     }
                     : video
             ));
 
         } catch (err) {
-            console.error('💥 Error adding thread:', err);
+            console.error('💥 Error marking as moderated:', err);
             const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-            setError(`Failed to add thread: ${errorMessage}`);
+            setError(`Failed to mark as moderated: ${errorMessage}`);
+        }
+    };
+
+    // Handle top comment checkbox toggle
+    const handleTopCommentToggle = async (videoId: string, checked: boolean) => {
+        try {
+            const response = await fetch(`/api/videos/${videoId}/moderation`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'update_star',
+                    gotTopComment: checked
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to update top comment status');
+            }
+
+            console.log(`📝 Video ${videoId} top comment status: ${checked}`);
+
+            // Update local state
+            setTracked(prev => prev.map(video => 
+                video.id === videoId
+                    ? {
+                        ...video,
+                        gotTopComment: checked
+                    }
+                    : video
+            ));
+
+        } catch (err) {
+            console.error('💥 Error updating top comment status:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+            setError(`Failed to update top comment status: ${errorMessage}`);
         }
     };
 
@@ -1508,8 +1545,8 @@ export default function TikTokTracker() {
                                                                     </div>
                                                                 </th>
                                                                 {/* Moderation columns moved here for better visibility */}
-                                                                <th className="text-left p-4 font-medium text-gray-900">Add Thread</th>
-                                                                <th className="text-left p-4 font-medium text-gray-900">Total Threads</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Just Moderated</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Check for top comment</th>
                                                                 <th 
                                                                     className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                                                                     onClick={() => handleHeaderClick('Likes')}
@@ -1658,7 +1695,7 @@ export default function TikTokTracker() {
                                                                         </div>
                                                                     </td>
                                                                     <td className="p-4 font-medium">{formatNumber(video.views)}</td>
-                                                                    {/* Simplified Thread column */}
+                                                                    {/* Just Moderated column */}
                                                                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                                         <div className="flex items-center gap-2">
                                                                             <Button
@@ -1666,20 +1703,25 @@ export default function TikTokTracker() {
                                                                                 size="sm"
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
-                                                                                    handleAddThread(video.id);
+                                                                                    handleJustModerated(video.id);
                                                                                 }}
                                                                                 className="text-xs py-1 px-2 h-6 bg-blue-50 hover:bg-blue-100"
                                                                             >
-                                                                                Add Thread
+                                                                                Just Moderated
                                                                             </Button>
                                                                         </div>
                                                                     </td>
+                                                                    {/* Check for top comment column */}
                                                                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                                                                        <div className="text-center">
-                                                                            <div className="text-lg font-bold text-blue-600">
-                                                                                {video.threadsPlanted || 0}
-                                                                            </div>
-                                                                            <div className="text-xs text-gray-500">threads</div>
+                                                                        <div className="flex items-center justify-center">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={video.gotTopComment || false}
+                                                                                onChange={(e) => {
+                                                                                    handleTopCommentToggle(video.id, e.target.checked);
+                                                                                }}
+                                                                                className="w-4 h-4"
+                                                                            />
                                                                         </div>
                                                                     </td>
                                                                     <td className="p-4 font-medium">{formatNumber(video.likes)}</td>
