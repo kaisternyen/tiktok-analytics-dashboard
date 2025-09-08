@@ -59,6 +59,8 @@ interface VideoResult {
     shares?: number;
     error?: string;
     reason?: string;
+    url?: string;
+    removedFromDatabase?: boolean;
 }
 
 interface ProcessingResult {
@@ -66,6 +68,7 @@ interface ProcessingResult {
     successful: number;
     failed: number;
     skipped: number;
+    removedCount: number;
 }
 
 // CLEAR SPECIFIC PENDING VIDEOS - Only process videos that are actually pending
@@ -119,7 +122,7 @@ async function clearPendingVideos(): Promise<ProcessingResult> {
 
         if (pendingVideos.length === 0) {
             console.log('✅ No pending videos found to process - all caught up!');
-            return { results, successful, failed, skipped };
+            return { results, successful, failed, skipped, removedCount: 0 };
         }
 
         // Process in batches for better performance
@@ -136,8 +139,24 @@ async function clearPendingVideos(): Promise<ProcessingResult> {
             const batchPromises = batch.map(async (video, index) => {
                 try {
                     console.log(`🎬 [${i + index + 1}/${pendingVideos.length}] Processing @${video.username} (${video.platform})...`);
+                    console.log(`🔗 URL: ${video.url}`);
+                    console.log(`📅 Last scraped: ${video.lastScrapedAt}`);
+                    console.log(`⏰ Cadence: ${video.scrapingCadence}`);
 
                     const result = await scrapeMediaPost(video.url);
+                    
+                    // Log the full TikHub API response
+                    console.log(`📡 TikHub API Response for @${video.username}:`, {
+                        success: result.success,
+                        error: result.error,
+                        data: result.data ? {
+                            views: result.data.views,
+                            likes: result.data.likes,
+                            comments: result.data.comments,
+                            shares: 'shares' in result.data ? result.data.shares : 'N/A',
+                            // Don't log full data to avoid spam, just key metrics
+                        } : null
+                    });
 
                     if (result.success && result.data) {
                         const mediaData = result.data as TikTokVideoData | InstagramPostData | YouTubeVideoData;
@@ -202,22 +221,50 @@ async function clearPendingVideos(): Promise<ProcessingResult> {
                             reason: 'Cleared from pending'
                         };
                     } else {
-                        console.error(`❌ [${i + index + 1}] @${video.username} failed: ${result.error}`);
+                        console.error(`❌ [${i + index + 1}] @${video.username} (${video.platform}) FAILED`);
+                        console.error(`🔗 Failed URL: ${video.url}`);
+                        console.error(`📡 TikHub Error: ${result.error}`);
+                        console.error(`📊 Full TikHub Response:`, JSON.stringify(result, null, 2));
+                        
+                        // Check if this looks like a deleted/unavailable video
+                        const isLikelyDeleted = result.error && (
+                            result.error.includes('deleted') ||
+                            result.error.includes('private') ||
+                            result.error.includes('not found') ||
+                            result.error.includes('unavailable') ||
+                            result.error.includes('No video data returned')
+                        );
+                        
+                        if (isLikelyDeleted) {
+                            console.log(`🗑️ Removing @${video.username} from database due to: ${result.error}`);
+                            // Remove video completely from database
+                            await prisma.video.delete({
+                                where: { id: video.id }
+                            });
+                            console.log(`✅ Successfully removed @${video.username} from database`);
+                        }
+                        
                         return {
                             status: 'failed' as const,
                             username: video.username,
                             platform: video.platform,
-                            error: result.error || 'Unknown error'
+                            error: result.error || 'Unknown error',
+                            url: video.url,
+                            removedFromDatabase: !!isLikelyDeleted
                         };
                     }
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                    console.error(`💥 [${i + index + 1}] @${video.username} crashed: ${errorMessage}`);
+                    console.error(`💥 [${i + index + 1}] @${video.username} (${video.platform}) CRASHED`);
+                    console.error(`🔗 Crashed URL: ${video.url}`);
+                    console.error(`💥 Error: ${errorMessage}`);
+                    console.error(`📊 Full Error Object:`, error);
                     return {
                         status: 'failed' as const,
                         username: video.username,
                         platform: video.platform,
-                        error: errorMessage
+                        error: errorMessage,
+                        url: video.url
                     };
                 }
             });
@@ -240,11 +287,14 @@ async function clearPendingVideos(): Promise<ProcessingResult> {
         }
 
         const totalDuration = Date.now() - startTime;
+        const removedCount = results.filter(r => r.status === 'failed' && 'removedFromDatabase' in r && r.removedFromDatabase).length;
+        
         console.log(`🏁 ===== CLEARING COMPLETED =====`);
         console.log(`📊 Results: ${successful} successful, ${failed} failed, ${skipped} skipped`);
+        console.log(`🗑️ Removed from database: ${removedCount} deleted videos`);
         console.log(`⏱️ Total duration: ${totalDuration}ms`);
 
-        return { results, successful, failed, skipped };
+        return { results, successful, failed, skipped, removedCount };
 
     } catch (error) {
         console.error('💥 Error clearing pending videos:', error);
@@ -262,12 +312,13 @@ export async function POST() {
 
         return NextResponse.json({
             success: true,
-            message: `Cleared ${result.successful} videos successfully`,
+            message: `Cleared ${result.successful} videos successfully, removed ${result.removedCount} deleted videos`,
             status: {
                 totalProcessed: result.successful + result.failed,
                 successful: result.successful,
                 failed: result.failed,
                 skipped: result.skipped,
+                removedCount: result.removedCount,
                 duration
             },
             results: result.results.slice(0, 20) // Limit results in response
