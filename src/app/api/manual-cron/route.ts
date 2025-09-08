@@ -14,6 +14,8 @@ export async function POST(req: Request) {
         
         if (job === 'scrape-all' || job === 'all') {
             console.log('🔧 Manually triggering scrape-all...');
+            console.log('🔧 Using base URL:', baseUrl);
+            
             const response = await fetch(`${baseUrl}/api/scrape-all`, {
                 method: 'GET',
                 headers: {
@@ -21,13 +23,16 @@ export async function POST(req: Request) {
                 }
             });
             
+            console.log('🔧 Scrape-all response status:', response.status);
+            
             if (response.ok) {
                 result = await response.json();
                 console.log('✅ Scrape-all completed:', result);
             } else {
                 const error = await response.text();
-                console.error('❌ Scrape-all failed:', error);
-                throw new Error(`Scrape-all failed: ${response.status} - ${error}`);
+                console.error('❌ Scrape-all failed with status:', response.status);
+                console.error('❌ Scrape-all error body:', error);
+                throw new Error(`Scrape-all failed: ${response.status} - ${error.substring(0, 200)}`);
             }
         }
         

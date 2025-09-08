@@ -9,9 +9,25 @@ export async function GET() {
     const startTime = Date.now();
     console.log(`🚀 ===== TRACKED ACCOUNTS CHECK STARTED (${new Date().toISOString()}) =====`);
     console.log(`🔧 Process info: PID ${process.pid}, Memory: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
+    console.log(`🔧 Environment: NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL}`);
+    
+    // Test database connection immediately
+    try {
+        console.log(`📊 Step 1: Testing database connection...`);
+        const dbTest = await prisma.$queryRaw`SELECT 1 as test`;
+        console.log(`✅ Database connection successful:`, dbTest);
+    } catch (error) {
+        console.error(`❌ CRITICAL: Database connection failed:`, error);
+        return NextResponse.json({ 
+            error: 'Database connection failed', 
+            details: error instanceof Error ? error.message : 'Unknown',
+            timestamp: new Date().toISOString()
+        }, { status: 500 });
+    }
 
     try {
         // Fetch all active tracked accounts
+        console.log(`📊 Step 2: Fetching active tracked accounts from database...`);
         const dbStartTime = Date.now();
         const accounts = await prisma.trackedAccount.findMany({
             where: { isActive: true },
@@ -21,6 +37,10 @@ export async function GET() {
 
         console.log(`📋 Found ${accounts.length} active tracked accounts to check (DB query: ${dbDuration}ms)`);
         console.log(`📊 Account breakdown: ${accounts.map(a => `${a.platform}:${a.username}`).join(', ')}`);
+        
+        if (accounts.length === 0) {
+            console.log('❌ CRITICAL: No tracked accounts found - this explains why no new videos are being discovered!');
+        }
         
         if (accounts.length > 20) {
             console.log(`⚠️ WARNING: Processing ${accounts.length} accounts - this may take significant time`);

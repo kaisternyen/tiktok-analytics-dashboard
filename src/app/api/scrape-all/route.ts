@@ -564,10 +564,26 @@ export async function GET() {
     const startTime = Date.now();
     console.log(`🚀 ===== CRON JOB STARTED (${new Date().toISOString()}) =====`);
     console.log(`🔧 Process info: PID ${process.pid}, Memory: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
+    console.log(`🔧 Environment: NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL}`);
+    console.log(`🔧 Headers: User-Agent=${process.env.HTTP_USER_AGENT || 'Not set'}`);
     console.log(`⚡ HIGH-PERFORMANCE MODE: Optimized for thousands of videos`);
     console.log(`⏰ Hourly scraping: Running every hour for high-performance videos`);
     console.log(`🌙 Daily scraping: Running at 12:00 AM EST for lower-performance videos`);
     console.log(`📋 Strategy: First week = hourly, After week 1 = performance-based switching`);
+    
+    // Test database connection immediately
+    try {
+        console.log(`📊 Step 1: Testing database connection...`);
+        const dbTest = await prisma.$queryRaw`SELECT 1 as test`;
+        console.log(`✅ Database connection successful:`, dbTest);
+    } catch (error) {
+        console.error(`❌ CRITICAL: Database connection failed:`, error);
+        return NextResponse.json({ 
+            error: 'Database connection failed', 
+            details: error instanceof Error ? error.message : 'Unknown',
+            timestamp: new Date().toISOString()
+        }, { status: 500 });
+    }
     
     // Get current EST time for logging
     const now = new Date();
@@ -583,11 +599,12 @@ export async function GET() {
 
     try {
         // Fetch all active videos (with backward compatibility for missing cadence fields)
-        console.log('📋 Fetching active videos from database...');
+        console.log(`📊 Step 2: Fetching active videos from database...`);
         
         let videos: VideoRecord[] = [];
         
         try {
+            console.log(`🔍 Query conditions: isActive=true AND (trackingMode=null OR trackingMode!='deleted')`);
             // Try to fetch with new cadence fields
             const rawVideos = await prisma.video.findMany({
                 where: { 
@@ -662,8 +679,31 @@ export async function GET() {
         const oldVideos = videos.filter(v => (new Date().getTime() - v.createdAt.getTime()) / (1000 * 60 * 60 * 24) >= 7);
         console.log(`📊 Age distribution: ${newVideos.length} videos <7 days (hourly), ${oldVideos.length} videos 7+ days (10k threshold)`);
         
+        // Log detailed breakdown
+        const hourlyCount = videos.filter(v => v.scrapingCadence === 'hourly').length;
+        const dailyCount = videos.filter(v => v.scrapingCadence === 'daily').length;
+        const otherCount = videos.length - hourlyCount - dailyCount;
+        console.log(`📊 Cadence breakdown: ${hourlyCount} hourly, ${dailyCount} daily, ${otherCount} other`);
+        
+        // Log platform breakdown
+        const platformStats = videos.reduce((acc, v) => {
+            acc[v.platform] = (acc[v.platform] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+        console.log(`📊 Platform breakdown:`, platformStats);
+        
+        // Log oldest videos
+        const oldestVideos = videos.sort((a, b) => new Date(a.lastScrapedAt).getTime() - new Date(b.lastScrapedAt).getTime()).slice(0, 3);
+        console.log(`📊 Oldest 3 videos by lastScrapedAt:`, oldestVideos.map(v => ({
+            username: v.username,
+            platform: v.platform,
+            lastScrapedAt: v.lastScrapedAt,
+            minutesAgo: Math.floor((now.getTime() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60)),
+            cadence: v.scrapingCadence
+        })));
+        
         if (videos.length === 0) {
-            console.log('⚠️ No videos found in database');
+            console.log('❌ CRITICAL: No videos found in database - this explains why nothing is being scraped!');
             return NextResponse.json({
                 success: true,
                 message: 'No videos to process',
@@ -680,11 +720,23 @@ export async function GET() {
         }
 
         // Process videos with smart cadence management
+        console.log(`📊 Step 3: Processing ${videos.length} videos with smart cadence management...`);
         const result = await processVideosSmartly(videos);
 
         const duration = Date.now() - startTime;
         console.log(`🏁 ===== CRON JOB COMPLETED =====`);
         console.log(`📊 Results: ${result.successful} successful, ${result.failed} failed, ${result.skipped} skipped, ${result.cadenceChanges} cadence changes`);
+        
+        // Log any failures in detail
+        if (result.failed > 0) {
+            console.log(`❌ FAILURES DETECTED: ${result.failed} videos failed to process`);
+        }
+        if (result.skipped > 0) {
+            console.log(`⏭️ SKIPPED: ${result.skipped} videos were skipped`);
+        }
+        if (result.successful === 0 && videos.length > 0) {
+            console.log(`🚨 CRITICAL: 0 videos processed successfully out of ${videos.length} total!`);
+        }
         console.log(`⏱️ Duration: ${duration}ms`);
 
         // Build status summary

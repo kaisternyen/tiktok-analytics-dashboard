@@ -110,6 +110,7 @@ export function TrackedAccountsTab() {
     const [checkingAccounts, setCheckingAccounts] = useState(false);
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
     const [showCronDropdown, setShowCronDropdown] = useState(false);
+    const [manualTriggerStatus, setManualTriggerStatus] = useState<string>('');
     const [formData, setFormData] = useState<AddAccountForm>({
         username: '',
         platform: 'tiktok',
@@ -401,45 +402,107 @@ export function TrackedAccountsTab() {
                                                 )}
                                                 
                                                 {/* Manual trigger buttons for debugging */}
-                                                <div className="mt-3 flex gap-2">
-                                                    <button
-                                                        onClick={async () => {
-                                                            try {
-                                                                const response = await fetch('/api/manual-cron', {
-                                                                    method: 'POST',
-                                                                    headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({ job: 'scrape-all' })
-                                                                });
-                                                                const result = await response.json();
-                                                                console.log('Manual scrape-all result:', result);
-                                                                setTimeout(fetchCronStatus, 2000); // Refresh after 2s
-                                                            } catch (error) {
-                                                                console.error('Manual trigger failed:', error);
-                                                            }
-                                                        }}
-                                                        className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
-                                                    >
-                                                        🔧 Force Scrape Videos
-                                                    </button>
-                                                    <button
-                                                        onClick={async () => {
-                                                            try {
-                                                                const response = await fetch('/api/manual-cron', {
-                                                                    method: 'POST',
-                                                                    headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({ job: 'tracked-accounts' })
-                                                                });
-                                                                const result = await response.json();
-                                                                console.log('Manual tracked accounts result:', result);
-                                                                setTimeout(fetchCronStatus, 2000); // Refresh after 2s
-                                                            } catch (error) {
-                                                                console.error('Manual trigger failed:', error);
-                                                            }
-                                                        }}
-                                                        className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
-                                                    >
-                                                        🔧 Force Check Accounts
-                                                    </button>
+                                                <div className="mt-3">
+                                                    <div className="flex gap-2 mb-2">
+                                                        <button
+                                                            onClick={async () => {
+                                                                setManualTriggerStatus('🔄 Triggering video scraping...');
+                                                                try {
+                                                                    const response = await fetch('/api/manual-cron', {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ job: 'scrape-all' })
+                                                                    });
+                                                                    const result = await response.json();
+                                                                    console.log('Manual scrape-all result:', result);
+                                                                    
+                                                                    if (result.success) {
+                                                                        setManualTriggerStatus(`✅ Video scraping completed! Check console for details.`);
+                                                                    } else {
+                                                                        setManualTriggerStatus(`❌ Video scraping failed: ${result.error}`);
+                                                                    }
+                                                                    
+                                                                    // Refresh cron status after 3 seconds
+                                                                    setTimeout(() => {
+                                                                        fetchCronStatus();
+                                                                        setManualTriggerStatus('');
+                                                                    }, 5000);
+                                                                } catch (error) {
+                                                                    console.error('Manual trigger failed:', error);
+                                                                    setManualTriggerStatus(`❌ Request failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
+                                                                }
+                                                            }}
+                                                            disabled={manualTriggerStatus.includes('🔄')}
+                                                            className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                                                        >
+                                                            🔧 Force Scrape Videos
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                setManualTriggerStatus('🔄 Checking tracked accounts...');
+                                                                try {
+                                                                    const response = await fetch('/api/manual-cron', {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ job: 'tracked-accounts' })
+                                                                    });
+                                                                    const result = await response.json();
+                                                                    console.log('Manual tracked accounts result:', result);
+                                                                    
+                                                                    if (result.success) {
+                                                                        setManualTriggerStatus(`✅ Account check completed! Check console for details.`);
+                                                                    } else {
+                                                                        setManualTriggerStatus(`❌ Account check failed: ${result.error}`);
+                                                                    }
+                                                                    
+                                                                    // Refresh cron status after 3 seconds
+                                                                    setTimeout(() => {
+                                                                        fetchCronStatus();
+                                                                        setManualTriggerStatus('');
+                                                                    }, 5000);
+                                                                } catch (error) {
+                                                                    console.error('Manual trigger failed:', error);
+                                                                    setManualTriggerStatus(`❌ Request failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
+                                                                }
+                                                            }}
+                                                            disabled={manualTriggerStatus.includes('🔄')}
+                                                            className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                                                        >
+                                                            🔧 Force Check Accounts
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const response = await fetch('/api/debug-pending');
+                                                                    const result = await response.json();
+                                                                    console.log('🔍 DEBUG PENDING JOBS:', result);
+                                                                    setManualTriggerStatus('🔍 Debug data logged to console - check browser dev tools!');
+                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
+                                                                } catch (error) {
+                                                                    console.error('Debug failed:', error);
+                                                                    setManualTriggerStatus(`❌ Debug failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
+                                                                }
+                                                            }}
+                                                            className="px-2 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600"
+                                                        >
+                                                            🔍 Debug Pending
+                                                        </button>
+                                                    </div>
+                                                    
+                                                    {/* Status feedback */}
+                                                    {manualTriggerStatus && (
+                                                        <div className={`text-xs p-2 rounded ${
+                                                            manualTriggerStatus.includes('✅') ? 'bg-green-100 text-green-800' :
+                                                            manualTriggerStatus.includes('❌') ? 'bg-red-100 text-red-800' :
+                                                            manualTriggerStatus.includes('🔍') ? 'bg-purple-100 text-purple-800' :
+                                                            'bg-blue-100 text-blue-800'
+                                                        }`}>
+                                                            {manualTriggerStatus}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         ) : (
