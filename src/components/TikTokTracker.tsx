@@ -678,7 +678,9 @@ export default function TikTokTracker() {
                 console.log(`📊 TikHub API Response:`, result.tikHubResult);
                 
                 // Refresh the video data
+                console.log(`🔄 REFRESHING VIDEO DATA AFTER UPDATE FOR @${username}`);
                 await fetchVideos();
+                console.log(`✅ VIDEO DATA REFRESHED FOR @${username}`);
             } else {
                 console.error(`❌ REFRESH FAILED FOR @${username}:`, result.error);
                 console.error(`📊 TikHub Error Details:`, result.tikHubResult);

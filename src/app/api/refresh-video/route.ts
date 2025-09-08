@@ -89,6 +89,15 @@ export async function POST(req: Request) {
             });
 
             // Update database with new values
+            console.log(`💾 ATTEMPTING DATABASE UPDATE FOR @${video.username}:`);
+            console.log(`📊 Values to save:`, {
+                currentViews: views,
+                currentLikes: mediaData.likes || 0,
+                currentComments: mediaData.comments || 0,
+                currentShares: shares,
+                lastScrapedAt: new Date()
+            });
+            
             const updatedVideo = await prisma.video.update({
                 where: { id: videoId },
                 data: {
@@ -99,12 +108,41 @@ export async function POST(req: Request) {
                     lastScrapedAt: new Date(),
                 }
             });
+            
+            console.log(`💾 DATABASE UPDATE RESULT FOR @${video.username}:`);
+            console.log(`📊 Prisma returned:`, {
+                currentViews: updatedVideo.currentViews,
+                currentLikes: updatedVideo.currentLikes,
+                currentComments: updatedVideo.currentComments,
+                currentShares: updatedVideo.currentShares
+            });
 
             console.log(`✅ DATABASE UPDATED FOR @${video.username}:`, {
                 views: updatedVideo.currentViews,
                 likes: updatedVideo.currentLikes,
                 comments: updatedVideo.currentComments,
                 shares: updatedVideo.currentShares
+            });
+            
+            // VERIFICATION: Double-check what's actually in the database
+            const verificationVideo = await prisma.video.findUnique({
+                where: { id: videoId },
+                select: {
+                    currentViews: true,
+                    currentLikes: true,
+                    currentComments: true,
+                    currentShares: true,
+                    lastScrapedAt: true
+                }
+            });
+            
+            console.log(`🔍 DATABASE VERIFICATION FOR @${video.username}:`);
+            console.log(`📊 Actually in database after update:`, {
+                views: verificationVideo?.currentViews,
+                likes: verificationVideo?.currentLikes,
+                comments: verificationVideo?.currentComments,
+                shares: verificationVideo?.currentShares,
+                lastScrapedAt: verificationVideo?.lastScrapedAt
             });
 
             return NextResponse.json({
