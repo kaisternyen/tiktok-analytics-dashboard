@@ -492,9 +492,40 @@ export function TrackedAccountsTab() {
                                                         </button>
                                                         <button
                                                             onClick={async () => {
-                                                                setManualTriggerStatus('🚀 CLEARING ALL PENDING - This will take a while...');
                                                                 try {
-                                                                    // Clear pending videos
+                                                                    const response = await fetch('/api/get-pending-videos');
+                                                                    const result = await response.json();
+                                                                    console.log('📋 PENDING VIDEOS ANALYSIS:', result);
+                                                                    
+                                                                    if (result.success) {
+                                                                        const { summary, pendingVideos } = result;
+                                                                        setManualTriggerStatus(`📋 PENDING ANALYSIS: ${summary.pendingVideos} videos pending (${summary.pendingByCadence.hourly || 0} hourly, ${summary.pendingByCadence.daily || 0} daily). Oldest: @${summary.oldestPending?.username} (${summary.oldestPending?.minutesAgo}min ago). Check console for full list.`);
+                                                                        
+                                                                        // Show pending videos in console
+                                                                        console.log('🎯 SPECIFIC PENDING VIDEOS TO CLEAR:');
+                                                                        pendingVideos.forEach((video: { username: string; platform: string; scrapingCadence: string; minutesAgo: number; reason: string }, index: number) => {
+                                                                            console.log(`${index + 1}. @${video.username} (${video.platform}, ${video.scrapingCadence}) - ${video.minutesAgo}min ago - ${video.reason}`);
+                                                                        });
+                                                                    } else {
+                                                                        setManualTriggerStatus(`❌ Failed to analyze pending videos: ${result.error}`);
+                                                                    }
+                                                                    
+                                                                    setTimeout(() => setManualTriggerStatus(''), 8000);
+                                                                } catch (error) {
+                                                                    console.error('Analyze pending failed:', error);
+                                                                    setManualTriggerStatus(`❌ Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
+                                                                }
+                                                            }}
+                                                            className="px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600"
+                                                        >
+                                                            📋 Show Pending
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                setManualTriggerStatus('🚀 CLEARING SPECIFIC PENDING VIDEOS - This will be faster...');
+                                                                try {
+                                                                    // Clear pending videos (now only processes specific pending ones)
                                                                     const videosResponse = await fetch('/api/clear-pending', {
                                                                         method: 'POST',
                                                                         headers: { 'Content-Type': 'application/json' }
@@ -511,7 +542,7 @@ export function TrackedAccountsTab() {
                                                                     console.log('Clear pending accounts result:', accountsResult);
                                                                     
                                                                     if (videosResult.success && accountsResult.success) {
-                                                                        setManualTriggerStatus(`✅ CLEARED ALL PENDING! Videos: ${videosResult.status.successful} processed, Accounts: ${accountsResult.status.successful} processed, ${accountsResult.status.totalNewVideos} new videos added`);
+                                                                        setManualTriggerStatus(`✅ CLEARED SPECIFIC PENDING! Videos: ${videosResult.status.successful} processed, Accounts: ${accountsResult.status.successful} processed, ${accountsResult.status.totalNewVideos} new videos added`);
                                                                     } else {
                                                                         setManualTriggerStatus(`⚠️ Partial success - Videos: ${videosResult.success ? 'OK' : 'FAILED'}, Accounts: ${accountsResult.success ? 'OK' : 'FAILED'}`);
                                                                     }
@@ -530,7 +561,7 @@ export function TrackedAccountsTab() {
                                                             disabled={manualTriggerStatus.includes('🚀')}
                                                             className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 font-bold"
                                                         >
-                                                            🚀 CLEAR ALL PENDING
+                                                            🚀 CLEAR PENDING
                                                         </button>
                                                         <button
                                                             onClick={async () => {

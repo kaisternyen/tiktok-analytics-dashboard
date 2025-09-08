@@ -24,19 +24,19 @@ interface ProcessingResult {
     skipped: number;
 }
 
-// CLEAR ALL PENDING VIDEOS - Force scrape everything regardless of timing
-async function clearAllPendingVideos(): Promise<ProcessingResult> {
+// CLEAR SPECIFIC PENDING VIDEOS - Only process videos that are actually pending
+async function clearPendingVideos(): Promise<ProcessingResult> {
     const startTime = Date.now();
     const results: VideoResult[] = [];
     let successful = 0;
     let failed = 0;
     const skipped = 0;
 
-    console.log(`🚀 ===== CLEARING ALL PENDING VIDEOS =====`);
+    console.log(`🚀 ===== CLEARING SPECIFIC PENDING VIDEOS =====`);
 
     try {
-        // Get ALL active videos - ignore timing completely
-        const videos = await prisma.video.findMany({
+        // Get ALL active videos first
+        const allVideos = await prisma.video.findMany({
             where: { 
                 isActive: true,
                 OR: [
@@ -63,27 +63,51 @@ async function clearAllPendingVideos(): Promise<ProcessingResult> {
             }
         });
 
-        console.log(`📊 Found ${videos.length} active videos to process`);
+        console.log(`📊 Found ${allVideos.length} total active videos`);
 
-        if (videos.length === 0) {
-            console.log('❌ No videos found to process');
+        // Filter to only pending videos using the same logic as scrape-all
+        const pendingVideos = allVideos.filter(video => {
+            const now = new Date();
+            const lastScraped = new Date(video.lastScrapedAt);
+            
+            if (video.trackingMode === 'deleted') return false;
+            
+            if (video.scrapingCadence === 'testing') return true;
+            
+            if (video.scrapingCadence === 'daily') {
+                const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+                return hoursSinceLastScrape >= 12;
+            }
+            
+            if (video.scrapingCadence === 'hourly') {
+                const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+                return hoursSinceLastScrape >= 0.5;
+            }
+            
+            return true;
+        });
+
+        console.log(`📊 Found ${pendingVideos.length} pending videos to process (out of ${allVideos.length} total)`);
+
+        if (pendingVideos.length === 0) {
+            console.log('✅ No pending videos found to process - all caught up!');
             return { results, successful, failed, skipped };
         }
 
         // Process in batches for better performance
         const batchSize = 10;
-        console.log(`🚀 Processing ${videos.length} videos in batches of ${batchSize}`);
+        console.log(`🚀 Processing ${pendingVideos.length} pending videos in batches of ${batchSize}`);
 
-        for (let i = 0; i < videos.length; i += batchSize) {
-            const batch = videos.slice(i, i + batchSize);
+        for (let i = 0; i < pendingVideos.length; i += batchSize) {
+            const batch = pendingVideos.slice(i, i + batchSize);
             const batchNum = Math.floor(i / batchSize) + 1;
-            const totalBatches = Math.ceil(videos.length / batchSize);
+            const totalBatches = Math.ceil(pendingVideos.length / batchSize);
             
             console.log(`📦 Processing batch ${batchNum}/${totalBatches}: ${batch.map(v => `@${v.username}`).join(', ')}`);
 
             const batchPromises = batch.map(async (video, index) => {
                 try {
-                    console.log(`🎬 [${i + index + 1}/${videos.length}] Processing @${video.username} (${video.platform})...`);
+                    console.log(`🎬 [${i + index + 1}/${pendingVideos.length}] Processing @${video.username} (${video.platform})...`);
 
                     const result = await scrapeMediaPost(video.url);
 
@@ -205,7 +229,7 @@ export async function POST() {
     console.log(`🚀 ===== CLEAR ALL PENDING VIDEOS REQUESTED =====`);
 
     try {
-        const result = await clearAllPendingVideos();
+        const result = await clearPendingVideos();
         const duration = Date.now() - startTime;
 
         return NextResponse.json({
