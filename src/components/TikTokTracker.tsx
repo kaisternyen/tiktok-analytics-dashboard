@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, Brush } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
@@ -103,6 +103,11 @@ export default function TikTokTracker() {
     // Custom date range state
     const [customDateRange, setCustomDateRange] = useState<[string, string] | null>(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
+    
+    // Chart drag selection state (TODO: implement drag selection)
+    // const [isDragging, setIsDragging] = useState(false);
+    // const [dragStart, setDragStart] = useState<number | null>(null);
+    // const [dragEnd, setDragEnd] = useState<number | null>(null);
 
     // Individual video chart states (separate from overview)
     const [selectedVideoTimePeriod, setSelectedVideoTimePeriod] = useState<TimePeriod>('W');
@@ -149,7 +154,7 @@ export default function TikTokTracker() {
         return [startDate.toISOString(), now.toISOString()];
     }, [selectedTimePeriod, customDateRange]);
 
-    // Handle chart point click to focus on specific day
+    // Handle chart point click to focus on specific day with hourly granularity
     const handleChartClick = (data: { activePayload?: Array<{ payload: { time: string } }> }) => {
         if (data && data.activePayload && data.activePayload[0]) {
             const clickedTime = data.activePayload[0].payload.time;
@@ -163,26 +168,14 @@ export default function TikTokTracker() {
             
             setCustomDateRange([startOfDay.toISOString(), endOfDay.toISOString()]);
             setSelectedTimePeriod('D'); // Update period display
+            setTimeGranularity('hourly'); // Switch to hourly view for day detail
         }
     };
 
-    // Handle brush selection for date range
-    const handleBrushChange = (brushData: { startIndex?: number; endIndex?: number }) => {
-        if (brushData && brushData.startIndex !== undefined && brushData.endIndex !== undefined) {
-            const chartData = getChartData();
-            if (chartData.length > 0) {
-                const startData = chartData[brushData.startIndex];
-                const endData = chartData[brushData.endIndex];
-                
-                if (startData && endData) {
-                    setCustomDateRange([
-                        new Date(startData.time).toISOString(),
-                        new Date(endData.time).toISOString()
-                    ]);
-                }
-            }
-        }
-    };
+    // TODO: Implement chart drag selection
+    // const handleMouseDown = (data: any) => { ... };
+    // const handleMouseMove = (data: any) => { ... };
+    // const handleMouseUp = () => { ... };
 
     // Clear custom date range
     const clearCustomDateRange = () => {
@@ -645,6 +638,8 @@ export default function TikTokTracker() {
         totalComments: tracked.reduce((sum, v) => sum + v.comments, 0),
         totalShares: tracked.reduce((sum, v) => sum + v.shares, 0),
         avgGrowth: tracked.length > 0 ? tracked.reduce((sum, v) => sum + v.growth.views, 0) / tracked.length : 0,
+        totalThreads: tracked.reduce((sum, v) => sum + (v.threadsPlanted || 0), 0),
+        moderatedVideos: tracked.filter(v => v.lastModeratedAt).length,
     };
 
     const formatNumber = (num: number) => {
@@ -1174,7 +1169,7 @@ export default function TikTokTracker() {
                         ) : (
                             <>
                                 {/* Metrics Cards */}
-                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                                     <Card>
                                         <CardContent className="p-4">
                                             <div className="text-2xl font-bold text-gray-900">{formatNumber(totalMetrics.totalViews)}</div>
@@ -1222,6 +1217,13 @@ export default function TikTokTracker() {
                                             <div className="text-xs mt-1 text-green-600">Active</div>
                                         </CardContent>
                                     </Card>
+                                    <Card>
+                                        <CardContent className="p-4">
+                                            <div className="text-2xl font-bold text-gray-900">{totalMetrics.totalThreads}</div>
+                                            <div className="text-sm text-gray-500">Total Threads Audited</div>
+                                            <div className="text-xs mt-1 text-blue-600">{totalMetrics.moderatedVideos} videos moderated</div>
+                                        </CardContent>
+                                    </Card>
                                 </div>
 
                                 {/* Enhanced Performance Chart */}
@@ -1248,7 +1250,7 @@ export default function TikTokTracker() {
                                                     ))}
                                                 </div>
                                                 {/* Unified Time Period Selector (controls both chart and videos) */}
-                                                <div className="flex items-center gap-4">
+                                                <div className="space-y-3">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-xs text-gray-600">Time Period:</span>
                                                         <div className="flex border border-gray-200 rounded-md">
@@ -1270,8 +1272,9 @@ export default function TikTokTracker() {
                                                         </div>
                                                     </div>
                                                     
-                                                    {/* Custom Date Range Controls */}
+                                                    {/* Custom Date Range Controls - Moved Below */}
                                                     <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-gray-600">Custom Range:</span>
                                                         <button
                                                             onClick={() => setShowDatePicker(!showDatePicker)}
                                                             className={`px-3 py-1 text-xs font-medium border rounded-md transition-colors ${customDateRange
@@ -1279,7 +1282,7 @@ export default function TikTokTracker() {
                                                                 : 'text-gray-600 border-gray-200 hover:bg-gray-100'
                                                                 }`}
                                                         >
-                                                            📅 Custom Range
+                                                            📅 Select Dates
                                                         </button>
                                                         {customDateRange && (
                                                             <button
@@ -1287,8 +1290,13 @@ export default function TikTokTracker() {
                                                                 className="px-2 py-1 text-xs text-gray-500 hover:text-red-500"
                                                                 title="Clear custom date range"
                                                             >
-                                                                ✕
+                                                                ✕ Clear
                                                             </button>
+                                                        )}
+                                                        {customDateRange && (
+                                                            <span className="text-xs text-gray-500">
+                                                                {new Date(customDateRange[0]).toLocaleDateString()} - {new Date(customDateRange[1]).toLocaleDateString()}
+                                                            </span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -1389,13 +1397,6 @@ export default function TikTokTracker() {
                                                             fill="#3b82f6"
                                                             fillOpacity={0.1}
                                                             strokeWidth={2}
-                                                        />
-                                                        <Brush
-                                                            dataKey="time"
-                                                            height={20}
-                                                            stroke="#3b82f6"
-                                                            onChange={handleBrushChange}
-                                                            tickFormatter={formatXAxisTick}
                                                         />
                                                     </AreaChart>
                                                 </ResponsiveContainer>
@@ -1502,6 +1503,10 @@ export default function TikTokTracker() {
                                                                         {renderSortIcon('Views')}
                                                                     </div>
                                                                 </th>
+                                                                {/* Moderation columns moved here for better visibility */}
+                                                                <th className="text-left p-4 font-medium text-gray-900">Moderated</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Threads</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">⭐</th>
                                                                 <th 
                                                                     className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                                                                     onClick={() => handleHeaderClick('Likes')}
@@ -1565,9 +1570,6 @@ export default function TikTokTracker() {
                                                                         {renderSortIcon('Status')}
                                                                     </div>
                                                                 </th>
-                                                                <th className="text-left p-4 font-medium text-gray-900">Last Moderated</th>
-                                                                <th className="text-left p-4 font-medium text-gray-900">Threads</th>
-                                                                <th className="text-left p-4 font-medium text-gray-900">Top Comment</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Actions</th>
                                                             </tr>
                                                         </thead>
@@ -1653,37 +1655,7 @@ export default function TikTokTracker() {
                                                                         </div>
                                                                     </td>
                                                                     <td className="p-4 font-medium">{formatNumber(video.views)}</td>
-                                                                    <td className="p-4 font-medium">{formatNumber(video.likes)}</td>
-                                                                    <td className="p-4 font-medium">{formatNumber(video.comments)}</td>
-                                                                    <td className="p-4">
-                                                                        {video.platform === 'instagram' || video.platform === 'youtube' ? 'N/A' : formatNumber(video.shares)}
-                                                                    </td>
-                                                                    <td className="p-4">{formatGrowth(video.growth.views)}</td>
-                                                                    <td className="p-4">{new Date(video.posted).toLocaleDateString()}</td>
-                                                                    <td className="p-4">
-                                                                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                                                                            video.scrapingCadence === 'hourly' 
-                                                                                ? 'bg-blue-100 text-blue-800' 
-                                                                                : video.scrapingCadence === 'daily'
-                                                                                ? 'bg-orange-100 text-orange-800'
-                                                                                : 'bg-purple-100 text-purple-800'
-                                                                        }`}>
-                                                                            {video.scrapingCadence === 'hourly' ? '1H' : 
-                                                                             video.scrapingCadence === 'daily' ? '1D' : 
-                                                                             '1M'}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td className="p-4">
-                                                                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                                                                            video.status === 'active'
-                                                                                ? 'bg-green-100 text-green-800'
-                                                                                : video.status === 'error'
-                                                                                ? 'bg-red-100 text-red-800'
-                                                                                : 'bg-yellow-100 text-yellow-800'
-                                                                        }`}>
-                                                                            {video.status}
-                                                                        </span>
-                                                                    </td>
+                                                                    {/* Moderation columns moved here */}
                                                                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                                         <div className="flex flex-col gap-1">
                                                                             <div className="text-xs text-gray-600">
@@ -1728,6 +1700,37 @@ export default function TikTokTracker() {
                                                                             className="w-4 h-4"
                                                                         />
                                                                         <span className="ml-1 text-yellow-500">⭐</span>
+                                                                    </td>
+                                                                    <td className="p-4 font-medium">{formatNumber(video.likes)}</td>
+                                                                    <td className="p-4 font-medium">{formatNumber(video.comments)}</td>
+                                                                    <td className="p-4">
+                                                                        {video.platform === 'instagram' || video.platform === 'youtube' ? 'N/A' : formatNumber(video.shares)}
+                                                                    </td>
+                                                                    <td className="p-4">{formatGrowth(video.growth.views)}</td>
+                                                                    <td className="p-4">{new Date(video.posted).toLocaleDateString()}</td>
+                                                                    <td className="p-4">
+                                                                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                                                                            video.scrapingCadence === 'hourly' 
+                                                                                ? 'bg-blue-100 text-blue-800' 
+                                                                                : video.scrapingCadence === 'daily'
+                                                                                ? 'bg-orange-100 text-orange-800'
+                                                                                : 'bg-purple-100 text-purple-800'
+                                                                        }`}>
+                                                                            {video.scrapingCadence === 'hourly' ? '1H' : 
+                                                                             video.scrapingCadence === 'daily' ? '1D' : 
+                                                                             '1M'}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="p-4">
+                                                                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                                                                            video.status === 'active'
+                                                                                ? 'bg-green-100 text-green-800'
+                                                                                : video.status === 'error'
+                                                                                ? 'bg-red-100 text-red-800'
+                                                                                : 'bg-yellow-100 text-yellow-800'
+                                                                        }`}>
+                                                                            {video.status}
+                                                                        </span>
                                                                     </td>
                                                                     <td className="p-4">
                                                                         <Button

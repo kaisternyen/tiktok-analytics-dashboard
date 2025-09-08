@@ -63,11 +63,6 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     const now = new Date();
     const interval = getIntervalForCadence(video.scrapingCadence);
     const lastScraped = new Date(video.lastScrapedAt);
-    const videoAgeInDays = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-    
-    // Get current EST time for daily video scheduling
-    const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-    const currentHour = estTime.getHours();
     
     // For testing mode (every minute), check if we're at a new normalized minute
     if (video.scrapingCadence === 'testing') {
@@ -81,21 +76,7 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
         }
     }
     
-    // All videos under 7 days old: scrape at the top of each EST hour
-    if (videoAgeInDays < 7) {
-        // Use EST timezone for hour boundaries
-        const estCurrentNormalizedTime = normalizeTimestamp(estTime, '60min');
-        const estLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/New_York"}));
-        const estLastScrapedNormalizedTime = normalizeTimestamp(estLastScrapedTime, '60min');
-        
-        if (estCurrentNormalizedTime !== estLastScrapedNormalizedTime) {
-            return { shouldScrape: true, reason: `Video ${videoAgeInDays.toFixed(1)} days old - new EST hour (${currentHour}:00)` };
-        } else {
-            const minutesIntoHour = estTime.getMinutes();
-            const minutesRemaining = 60 - minutesIntoHour;
-            return { shouldScrape: false, reason: `Same EST hour - wait for top of next hour (${minutesRemaining}m remaining)` };
-        }
-    }
+    // Remove conflicting "under 7 days" rule - let cadence-based logic handle all videos
     
     // Videos with daily cadence: scrape once per day, but allow flexible timing
     if (video.scrapingCadence === 'daily') {
