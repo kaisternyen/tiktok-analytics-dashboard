@@ -26,7 +26,9 @@ export async function POST(req: Request) {
                 currentLikes: true,
                 currentComments: true,
                 currentShares: true,
-                lastScrapedAt: true
+                lastScrapedAt: true,
+                isActive: true,
+                trackingMode: true
             }
         });
 
@@ -34,12 +36,50 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, error: 'Video not found' }, { status: 404 });
         }
 
+        // Check if video is active and not deleted
+        if (!video.isActive) {
+            return NextResponse.json({ 
+                success: false, 
+                error: 'Video is inactive',
+                video: {
+                    id: video.id,
+                    username: video.username,
+                    platform: video.platform,
+                    isActive: video.isActive,
+                    trackingMode: video.trackingMode
+                }
+            }, { status: 400 });
+        }
+
+        if (video.trackingMode === 'deleted') {
+            return NextResponse.json({ 
+                success: false, 
+                error: 'Video is marked as deleted/unavailable',
+                video: {
+                    id: video.id,
+                    username: video.username,
+                    platform: video.platform,
+                    trackingMode: video.trackingMode
+                }
+            }, { status: 400 });
+        }
+
         console.log(`🎯 Running single video scrape for @${video.username} (${video.platform}) - ID: ${videoId}`);
+        console.log(`🎯 Video status: isActive=${video.isActive}, trackingMode=${video.trackingMode}`);
 
         // Call TikHub API
+        console.log(`🎯 Calling TikHub API for URL: ${video.url}`);
         const tikHubResult = await scrapeMediaPost(video.url);
+        
+        console.log(`🎯 TikHub API result:`, {
+            success: tikHubResult.success,
+            hasData: !!tikHubResult.data,
+            error: tikHubResult.error,
+            duration: tikHubResult.debugInfo?.duration
+        });
 
         if (!tikHubResult.success) {
+            console.error(`❌ TikHub API failed for @${video.username}:`, tikHubResult.error);
             return NextResponse.json({
                 success: false,
                 error: 'TikHub API failed',
