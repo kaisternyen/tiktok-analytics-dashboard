@@ -3,47 +3,6 @@ import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
-// Function to determine why a video is pending
-function getPendingReason(video: { scrapingCadence: string; lastScrapedAt: Date; trackingMode?: string | null }, now: Date): string {
-    // Check if video is deleted/unavailable
-    if (video.trackingMode === 'deleted') {
-        return 'Video deleted/unavailable';
-    }
-    
-    const lastScraped = new Date(video.lastScrapedAt);
-    const minutesSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60);
-    
-    if (video.scrapingCadence === 'hourly') {
-        if (minutesSinceLastScrape >= 30) {
-            return `Overdue: ${Math.floor(minutesSinceLastScrape)}min since last scrape (threshold: 30min)`;
-        }
-    } else if (video.scrapingCadence === 'daily') {
-        const hoursSinceLastScrape = minutesSinceLastScrape / 60;
-        if (hoursSinceLastScrape >= 12) {
-            return `Overdue: ${Math.floor(hoursSinceLastScrape)}h since last scrape (threshold: 12h)`;
-        }
-    } else {
-        // Unknown cadence treated as daily
-        const hoursSinceLastScrape = minutesSinceLastScrape / 60;
-        if (hoursSinceLastScrape >= 12) {
-            return `Overdue: ${Math.floor(hoursSinceLastScrape)}h since last scrape (unknown cadence, threshold: 12h)`;
-        }
-    }
-    
-    return 'Within normal schedule';
-}
-
-// Function to determine why an account is pending
-function getAccountPendingReason(account: { lastChecked: Date }, now: Date): string {
-    const lastChecked = new Date(account.lastChecked);
-    const minutesSinceLastCheck = (now.getTime() - lastChecked.getTime()) / (1000 * 60);
-    
-    if (minutesSinceLastCheck >= 30) {
-        return `Overdue: ${Math.floor(minutesSinceLastCheck)}min since last check (threshold: 30min)`;
-    }
-    
-    return 'Within normal schedule';
-}
 
 // Simple cron job status endpoint - only essential info
 export async function GET() {
@@ -193,7 +152,7 @@ export async function GET() {
                 hourly: pendingHourlyVideos.map(v => ({
                     ...v,
                     minutesAgo: Math.floor((now.getTime() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60)),
-                    reason: getPendingReason(v, now),
+                    reason: 'Pending',
                     currentStats: {
                         views: v.currentViews,
                         likes: v.currentLikes,
@@ -204,7 +163,7 @@ export async function GET() {
                 daily: pendingDailyVideos.map(v => ({
                     ...v,
                     minutesAgo: Math.floor((now.getTime() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60)),
-                    reason: getPendingReason(v, now),
+                    reason: 'Pending',
                     currentStats: {
                         views: v.currentViews,
                         likes: v.currentLikes,
@@ -216,7 +175,7 @@ export async function GET() {
             pendingAccounts: pendingAccounts.map(a => ({
                 ...a,
                 minutesAgo: Math.floor((now.getTime() - new Date(a.lastChecked).getTime()) / (1000 * 60)),
-                reason: getAccountPendingReason(a, now)
+                reason: 'Pending'
             }))
         };
 
