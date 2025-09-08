@@ -10,7 +10,6 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart,
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
-import { formatDistanceToNow } from 'date-fns';
 import { TrackedAccountsTab } from '../components/TrackedAccountsTab';
 
 interface VideoHistory {
@@ -105,8 +104,7 @@ export default function TikTokTracker() {
     const [customDateRange, setCustomDateRange] = useState<[string, string] | null>(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
     
-    // Global star for top comment toggle
-    const [globalStarForTopComment, setGlobalStarForTopComment] = useState(false);
+    // Global star state removed - no longer needed with simplified moderation
     
     // Chart drag selection state (TODO: implement drag selection)
     // const [isDragging, setIsDragging] = useState(false);
@@ -586,8 +584,8 @@ export default function TikTokTracker() {
         }
     };
 
-    // Handle simple moderation - just increment the count
-    const handleSimpleModeration = async (videoId: string) => {
+    // Handle adding a thread - increment threads count
+    const handleAddThread = async (videoId: string) => {
         try {
             const response = await fetch(`/api/videos/${videoId}/moderation`, {
                 method: 'PATCH',
@@ -595,22 +593,19 @@ export default function TikTokTracker() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    action: 'add_moderation_session',
+                    action: 'update_threads',
                     moderatedBy: 'user',
-                    commentsModerated: 1, // Always add 1 comment
-                    threadsPlanted: 0,
-                    gotTopComment: globalStarForTopComment, // Use global setting
-                    notes: null
+                    threadsPlanted: 1 // Always add 1 thread
                 }),
             });
 
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.error || 'Failed to save moderation');
+                throw new Error(result.error || 'Failed to add thread');
             }
 
-            console.log(`📝 Simple moderation saved for video ${videoId}: +1 comment`);
+            console.log(`📝 Thread added for video ${videoId}: +1 thread`);
 
             // Update local state
             setTracked(prev => prev.map(video => 
@@ -619,24 +614,19 @@ export default function TikTokTracker() {
                         ...video,
                         lastModeratedAt: result.video.lastModeratedAt,
                         moderatedBy: result.video.moderatedBy,
-                        totalCommentsModerated: result.video.totalCommentsModerated,
-                        gotTopComment: globalStarForTopComment
+                        threadsPlanted: result.video.threadsPlanted
                     }
                     : video
             ));
 
         } catch (err) {
-            console.error('💥 Error saving moderation:', err);
+            console.error('💥 Error adding thread:', err);
             const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-            setError(`Failed to save moderation: ${errorMessage}`);
+            setError(`Failed to add thread: ${errorMessage}`);
         }
     };
 
-    // This function is no longer needed with simplified moderation
-    // Keeping it for backwards compatibility but it won't be used
-    const handleModerationUpdate = async (videoId: string, action: string, data?: Record<string, unknown>) => {
-        console.log('handleModerationUpdate called but not used in simplified moderation');
-    };
+    // handleModerationUpdate function removed - no longer needed with simplified moderation
 
     // Helper function to open video URL in new tab
     const openVideoInNewTab = (url: string, event: React.MouseEvent) => {
@@ -1233,9 +1223,9 @@ export default function TikTokTracker() {
                                     </Card>
                                     <Card>
                                         <CardContent className="p-4">
-                                            <div className="text-2xl font-bold text-gray-900">{formatNumber(totalMetrics.totalCommentsModerated)}</div>
-                                            <div className="text-sm text-gray-500">Comments Moderated</div>
-                                            <div className="text-xs mt-1 text-purple-600">{totalMetrics.totalThreads} threads • {totalMetrics.moderatedVideos} videos</div>
+                                            <div className="text-2xl font-bold text-gray-900">{formatNumber(totalMetrics.totalThreads)}</div>
+                                            <div className="text-sm text-gray-500">Threads Started</div>
+                                            <div className="text-xs mt-1 text-purple-600">{totalMetrics.moderatedVideos} videos with threads</div>
                                         </CardContent>
                                     </Card>
                                 </div>
@@ -1518,19 +1508,8 @@ export default function TikTokTracker() {
                                                                     </div>
                                                                 </th>
                                                                 {/* Moderation columns moved here for better visibility */}
-                                                                <th className="text-left p-4 font-medium text-gray-900">
-                                                                    <div className="flex items-center gap-2">
-                                                                        Moderated
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={globalStarForTopComment}
-                                                                            onChange={(e) => setGlobalStarForTopComment(e.target.checked)}
-                                                                            className="w-4 h-4"
-                                                                        />
-                                                                        <span className="text-yellow-500">⭐ Top Comment</span>
-                                                                    </div>
-                                                                </th>
-                                                                <th className="text-left p-4 font-medium text-gray-900">Total Modified</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Add Thread</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Total Threads</th>
                                                                 <th 
                                                                     className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                                                                     onClick={() => handleHeaderClick('Likes')}
@@ -1679,7 +1658,7 @@ export default function TikTokTracker() {
                                                                         </div>
                                                                     </td>
                                                                     <td className="p-4 font-medium">{formatNumber(video.views)}</td>
-                                                                    {/* Simplified Moderation column */}
+                                                                    {/* Simplified Thread column */}
                                                                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                                         <div className="flex items-center gap-2">
                                                                             <Button
@@ -1687,20 +1666,20 @@ export default function TikTokTracker() {
                                                                                 size="sm"
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
-                                                                                    handleSimpleModeration(video.id);
+                                                                                    handleAddThread(video.id);
                                                                                 }}
                                                                                 className="text-xs py-1 px-2 h-6 bg-blue-50 hover:bg-blue-100"
                                                                             >
-                                                                                Modified (+1)
+                                                                                Add Thread
                                                                             </Button>
                                                                         </div>
                                                                     </td>
                                                                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                                         <div className="text-center">
                                                                             <div className="text-lg font-bold text-blue-600">
-                                                                                {video.totalCommentsModerated || 0}
+                                                                                {video.threadsPlanted || 0}
                                                                             </div>
-                                                                            <div className="text-xs text-gray-500">comments</div>
+                                                                            <div className="text-xs text-gray-500">threads</div>
                                                                         </div>
                                                                     </td>
                                                                     <td className="p-4 font-medium">{formatNumber(video.likes)}</td>
