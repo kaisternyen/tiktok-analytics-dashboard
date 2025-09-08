@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { scrapeMediaPost } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
+import { sanitizeMetrics, logSanitizationWarnings } from '@/lib/metrics-validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,14 +82,28 @@ export async function POST(req: Request) {
             shares = 0; // YouTube doesn't track shares
         }
 
-        // Update database
+        // Sanitize metrics to prevent negative values and corruption
+        const sanitizedMetrics = sanitizeMetrics(
+            { views, likes, comments, shares },
+            { 
+                views: video.currentViews, 
+                likes: video.currentLikes, 
+                comments: video.currentComments, 
+                shares: video.currentShares 
+            }
+        );
+        
+        // Log any sanitization warnings
+        logSanitizationWarnings(video.username, sanitizedMetrics.warnings);
+
+        // Update database with sanitized metrics
         const updatedVideo = await prisma.video.update({
             where: { id: videoId },
             data: {
-                currentViews: views,
-                currentLikes: likes,
-                currentComments: comments,
-                currentShares: shares,
+                currentViews: sanitizedMetrics.views,
+                currentLikes: sanitizedMetrics.likes,
+                currentComments: sanitizedMetrics.comments,
+                currentShares: sanitizedMetrics.shares,
                 lastScrapedAt: new Date()
             },
             select: {
@@ -104,19 +119,19 @@ export async function POST(req: Request) {
             }
         });
 
-        // Create metrics history entry
+        // Create metrics history entry with sanitized values
         await prisma.metricsHistory.create({
             data: {
                 videoId: videoId,
-                views: views,
-                likes: likes,
-                comments: comments,
-                shares: shares,
+                views: sanitizedMetrics.views,
+                likes: sanitizedMetrics.likes,
+                comments: sanitizedMetrics.comments,
+                shares: sanitizedMetrics.shares,
                 timestamp: new Date()
             }
         });
 
-        console.log(`✅ Successfully updated @${video.username} - Views: ${views}, Likes: ${likes}, Comments: ${comments}, Shares: ${shares}`);
+        console.log(`✅ Successfully updated @${video.username} - Views: ${sanitizedMetrics.views}, Likes: ${sanitizedMetrics.likes}, Comments: ${sanitizedMetrics.comments}, Shares: ${sanitizedMetrics.shares}`);
 
         return NextResponse.json({
             success: true,
@@ -145,7 +160,8 @@ export async function POST(req: Request) {
                 hasData: !!tikHubResult.data,
                 duration: tikHubResult.debugInfo?.duration,
                 extractedValues: { views, likes, comments, shares }
-            }
+            },
+            warnings: sanitizedMetrics.warnings.length > 0 ? sanitizedMetrics.warnings : undefined
         });
 
     } catch (error) {
