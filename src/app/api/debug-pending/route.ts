@@ -6,8 +6,8 @@ export const dynamic = 'force-dynamic';
 // Debug endpoint to understand why jobs are pending
 export async function GET() {
     const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 65 * 60 * 1000); // 65 minutes ago
-    const oneDayAgo = new Date(now.getTime() - 25 * 60 * 60 * 1000); // 25 hours ago
+    const oneHourAgo = new Date(now.getTime() - 0.5 * 60 * 60 * 1000); // 30 minutes ago (matches scraping logic)
+    const oneDayAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000); // 12 hours ago (matches scraping logic)
 
     try {
         // Get sample of overdue videos
