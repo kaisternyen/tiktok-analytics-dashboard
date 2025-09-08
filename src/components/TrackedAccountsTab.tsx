@@ -41,6 +41,7 @@ interface PendingVideo {
     lastScrapedAt: string;
     scrapingCadence: string;
     minutesAgo: number;
+    reason: string;
     currentStats: {
         views: number;
         likes: number;
@@ -64,6 +65,7 @@ interface CronStatus {
         platform: string;
         lastChecked: string;
         minutesAgo: number;
+        reason: string;
     }>;
 }
 
@@ -458,6 +460,9 @@ export function TrackedAccountsTab() {
                                                                     <div className="flex-1 min-w-0">
                                                                         <div className="font-medium truncate">@{video.username}</div>
                                                                         <div className="text-gray-600">{video.platform} • {video.minutesAgo}m ago</div>
+                                                                        <div className="text-gray-500 text-xs truncate" title={video.reason}>
+                                                                            {video.reason}
+                                                                        </div>
                                                                     </div>
                                                                     <button
                                                                         onClick={() => runSingleVideo(video.id)}
@@ -487,6 +492,9 @@ export function TrackedAccountsTab() {
                                                                     <div className="flex-1 min-w-0">
                                                                         <div className="font-medium truncate">@{video.username}</div>
                                                                         <div className="text-gray-600">{video.platform} • {video.minutesAgo}m ago</div>
+                                                                        <div className="text-gray-500 text-xs truncate" title={video.reason}>
+                                                                            {video.reason}
+                                                                        </div>
                                                                     </div>
                                                                     <button
                                                                         onClick={() => runSingleVideo(video.id)}
@@ -516,6 +524,9 @@ export function TrackedAccountsTab() {
                                                                     <div className="flex-1 min-w-0">
                                                                         <div className="font-medium truncate">@{account.username}</div>
                                                                         <div className="text-gray-600">{account.platform} • {account.minutesAgo}m ago</div>
+                                                                        <div className="text-gray-500 text-xs truncate" title={account.reason}>
+                                                                            {account.reason}
+                                                                        </div>
                                                                     </div>
                                                                     <button
                                                                         onClick={async () => {
