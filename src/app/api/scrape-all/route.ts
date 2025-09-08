@@ -97,26 +97,18 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
         }
     }
     
-    // Videos 7+ days old with daily cadence: scrape only at 12:00 AM EST
+    // Videos with daily cadence: scrape once per day, but allow flexible timing
     if (video.scrapingCadence === 'daily') {
-        if (currentHour === 0) {
-            // Use EST timezone for day boundaries (normalize to start of day)
-            const estCurrentDayStart = new Date(estTime);
-            estCurrentDayStart.setHours(0, 0, 0, 0);
-            
-            const estLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/New_York"}));
-            const estLastScrapedDayStart = new Date(estLastScrapedTime);
-            estLastScrapedDayStart.setHours(0, 0, 0, 0);
-            
-            // Check if we're in a different day than when last scraped
-            if (estCurrentDayStart.getTime() !== estLastScrapedDayStart.getTime()) {
-                return { shouldScrape: true, reason: `Daily video - new EST day (midnight window)` };
-            } else {
-                return { shouldScrape: false, reason: `Daily video - already scraped today` };
-            }
+        const now = new Date();
+        const lastScraped = new Date(video.lastScrapedAt);
+        const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+        
+        // Only scrape if it's been more than 20 hours since last scrape (allows some flexibility)
+        if (hoursSinceLastScrape >= 20) {
+            return { shouldScrape: true, reason: `Daily video - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
         } else {
-            const hoursUntilMidnight = 24 - currentHour;
-            return { shouldScrape: false, reason: `Daily video - waiting for midnight EST (in ${hoursUntilMidnight}h)` };
+            const hoursRemaining = Math.ceil(20 - hoursSinceLastScrape);
+            return { shouldScrape: false, reason: `Daily video - scraped ${Math.floor(hoursSinceLastScrape)}h ago, wait ${hoursRemaining}h more` };
         }
     }
     

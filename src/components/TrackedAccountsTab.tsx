@@ -490,6 +490,24 @@ export function TrackedAccountsTab() {
                                                         >
                                                             🔍 Debug Pending
                                                         </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const response = await fetch('/api/test-scrape');
+                                                                    const result = await response.json();
+                                                                    console.log('🧪 SCRAPE-ALL PREREQUISITE TEST:', result);
+                                                                    setManualTriggerStatus('🧪 Prerequisite test logged to console - check for errors!');
+                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
+                                                                } catch (error) {
+                                                                    console.error('Test failed:', error);
+                                                                    setManualTriggerStatus(`❌ Test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
+                                                                }
+                                                            }}
+                                                            className="px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600"
+                                                        >
+                                                            🧪 Test Prerequisites
+                                                        </button>
                                                     </div>
                                                     
                                                     {/* Status feedback */}

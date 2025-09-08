@@ -32,7 +32,8 @@ export async function POST(req: Request) {
                 const error = await response.text();
                 console.error('❌ Scrape-all failed with status:', response.status);
                 console.error('❌ Scrape-all error body:', error);
-                throw new Error(`Scrape-all failed: ${response.status} - ${error.substring(0, 200)}`);
+                console.error('❌ Response headers:', Object.fromEntries(response.headers.entries()));
+                throw new Error(`Scrape-all failed: ${response.status} - ${error.substring(0, 500)}`);
             }
         }
         
