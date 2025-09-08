@@ -1697,7 +1697,7 @@ export default function TikTokTracker() {
                                                                     <td className="p-4 font-medium">{formatNumber(video.views)}</td>
                                                                     {/* Just Moderated column */}
                                                                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                                                                        <div className="flex items-center gap-2">
+                                                                        <div className="flex flex-col gap-1">
                                                                             <Button
                                                                                 variant="outline"
                                                                                 size="sm"
@@ -1709,6 +1709,11 @@ export default function TikTokTracker() {
                                                                             >
                                                                                 Just Moderated
                                                                             </Button>
+                                                                            {video.lastModeratedAt && (
+                                                                                <div className="text-xs text-gray-500">
+                                                                                    {new Date(video.lastModeratedAt).toLocaleDateString()} {new Date(video.lastModeratedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     </td>
                                                                     {/* Check for top comment column */}
