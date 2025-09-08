@@ -787,6 +787,30 @@ export async function scrapeInstagramPost(url: string): Promise<ScrapedInstagram
             throw new Error('URL must be a valid Instagram URL');
         }
 
+        // Validate URL format
+        try {
+            new URL(cleanUrl);
+            console.log('✅ URL format is valid');
+        } catch (urlError) {
+            console.error('❌ INVALID URL FORMAT:', urlError);
+            throw new Error('Invalid URL format');
+        }
+
+        // Check for specific Instagram URL patterns
+        const urlPatterns = [
+            /instagram\.com\/p\/[A-Za-z0-9_-]+/,
+            /instagram\.com\/reel\/[A-Za-z0-9_-]+/,
+            /instagram\.com\/tv\/[A-Za-z0-9_-]+/
+        ];
+
+        const isValidPattern = urlPatterns.some(pattern => pattern.test(cleanUrl));
+        if (!isValidPattern) {
+            console.error('❌ URL does not match Instagram post/reel/tv pattern:', cleanUrl);
+            throw new Error('URL must be a valid Instagram post, reel, or TV URL');
+        }
+
+        console.log('✅ URL pattern validation passed');
+
         // Check if TikHub API key is configured
         const apiKey = process.env.TIKHUB_API_KEY;
         if (!apiKey) {
@@ -802,6 +826,8 @@ export async function scrapeInstagramPost(url: string): Promise<ScrapedInstagram
 
         console.log('📡 Making request to TikHub Instagram API...');
         console.log('🎯 Endpoint:', endpoint);
+        console.log('🎯 Full URL:', fullUrl);
+        console.log('🎯 Encoded URL parameter:', encodeURIComponent(cleanUrl));
 
         const response = await fetch(fullUrl, {
             method: 'GET',
@@ -813,12 +839,24 @@ export async function scrapeInstagramPost(url: string): Promise<ScrapedInstagram
         });
 
         console.log('📥 Response status:', response.status);
+        console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
 
         if (!response.ok) {
+            const errorText = await response.text();
             console.error('❌ API request failed:', {
                 status: response.status,
-                statusText: response.statusText
+                statusText: response.statusText,
+                errorBody: errorText
             });
+            
+            // Try to parse error response for more details
+            try {
+                const errorData = JSON.parse(errorText);
+                console.error('❌ Parsed error response:', errorData);
+            } catch {
+                console.error('❌ Could not parse error response as JSON');
+            }
+            
             throw new Error(`TikHub API request failed: ${response.status} ${response.statusText}`);
         }
 
