@@ -294,12 +294,36 @@ export async function GET(req: Request) {
                         likes = end.likes - start.likes;
                         comments = end.comments - start.comments;
                         shares = end.shares - start.shares;
+                        
+                        // DEBUG: Log timeframe calculation for @antoine.lockedin
+                        if (video.username === 'antoine.lockedin') {
+                            console.log(`🔍 TIMEFRAME CALCULATION FOR @${video.username}:`, {
+                                historyLength: history.length,
+                                startViews: start.views,
+                                endViews: end.views,
+                                deltaViews: views,
+                                startLikes: start.likes,
+                                endLikes: end.likes,
+                                deltaLikes: likes
+                            });
+                        }
                     } else {
-                        // Not enough data points in timeframe, delta is 0
-                        views = 0;
-                        likes = 0;
-                        comments = 0;
-                        shares = 0;
+                        // Not enough data points in timeframe, use current values instead of 0
+                        views = video.currentViews;
+                        likes = video.currentLikes;
+                        comments = video.currentComments;
+                        shares = video.currentShares;
+                        
+                        // DEBUG: Log insufficient data points for @antoine.lockedin
+                        if (video.username === 'antoine.lockedin') {
+                            console.log(`⚠️ INSUFFICIENT DATA POINTS - USING CURRENT VALUES FOR @${video.username}:`, {
+                                historyLength: history.length,
+                                timeframe: timeframe,
+                                currentViews: video.currentViews,
+                                currentLikes: video.currentLikes,
+                                usingCurrentValues: true
+                            });
+                        }
                     }
                 } else {
                     // No timeframe, use current values
