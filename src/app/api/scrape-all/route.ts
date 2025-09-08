@@ -77,43 +77,41 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     
     // Remove conflicting "under 7 days" rule - let cadence-based logic handle all videos
     
-    // Videos with daily cadence: scrape once per day with guaranteed processing
-    if (video.scrapingCadence === 'daily') {
-        const now = new Date();
-        const lastScraped = new Date(video.lastScrapedAt);
-        const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
-        
-        // GUARANTEED PROCESSING: Daily videos get scraped every 12+ hours
-        // This ensures they're processed at least twice per day with no pending
-        if (hoursSinceLastScrape >= 12) {
-            return { shouldScrape: true, reason: `Daily video - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
+    // PROPER CADENCE LOGIC: Respect cadence but eliminate pending confusion
+    const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+    const minutesSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60);
+    
+    // Videos with hourly cadence: scrape every hour (with 5-minute safety net)
+    if (video.scrapingCadence === 'hourly') {
+        if (hoursSinceLastScrape >= 1) {
+            return { shouldScrape: true, reason: `Hourly video - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
+        } else if (minutesSinceLastScrape >= 65) { // Safety net: if missed by 5+ minutes
+            return { shouldScrape: true, reason: `Hourly video - missed scrape (${Math.floor(minutesSinceLastScrape)}min ago)` };
         } else {
-            const hoursRemaining = Math.ceil(12 - hoursSinceLastScrape);
+            const minutesRemaining = Math.ceil(60 - minutesSinceLastScrape);
+            return { shouldScrape: false, reason: `Hourly video - scraped ${Math.floor(minutesSinceLastScrape)}min ago, wait ${minutesRemaining}min more` };
+        }
+    }
+    
+    // Videos with daily cadence: scrape once per day (with 5-minute safety net)
+    if (video.scrapingCadence === 'daily') {
+        if (hoursSinceLastScrape >= 24) {
+            return { shouldScrape: true, reason: `Daily video - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
+        } else if (minutesSinceLastScrape >= 1445) { // Safety net: if missed by 5+ minutes (24h 5min)
+            return { shouldScrape: true, reason: `Daily video - missed scrape (${Math.floor(minutesSinceLastScrape)}min ago)` };
+        } else {
+            const hoursRemaining = Math.ceil(24 - hoursSinceLastScrape);
             return { shouldScrape: false, reason: `Daily video - scraped ${Math.floor(hoursSinceLastScrape)}h ago, wait ${hoursRemaining}h more` };
         }
     }
     
-    // Videos with hourly cadence: GUARANTEED processing every hour
-    if (video.scrapingCadence === 'hourly') {
-        const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
-        
-        // GUARANTEED PROCESSING: Hourly videos get scraped every 30+ minutes
-        // This ensures 100% reliability - every video processes within 2 cron runs maximum
-        if (hoursSinceLastScrape >= 0.5) { // 30 minutes = 0.5 hours
-            return { shouldScrape: true, reason: `Hourly video - ${Math.floor(hoursSinceLastScrape * 60)}min since last scrape` };
-        } else {
-            const minutesRemaining = Math.ceil((0.5 - hoursSinceLastScrape) * 60);
-            return { shouldScrape: false, reason: `Hourly video - scraped ${Math.floor(hoursSinceLastScrape * 60)}min ago, wait ${minutesRemaining}min more` };
-        }
-    }
-    
     // Handle unknown/null cadence - treat as daily
-    const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
-    
-    if (hoursSinceLastScrape >= 12) {
+    if (hoursSinceLastScrape >= 24) {
         return { shouldScrape: true, reason: `Unknown cadence (treated as daily) - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
+    } else if (minutesSinceLastScrape >= 1445) { // Safety net: if missed by 5+ minutes
+        return { shouldScrape: true, reason: `Unknown cadence (treated as daily) - missed scrape (${Math.floor(minutesSinceLastScrape)}min ago)` };
     } else {
-        const hoursRemaining = Math.ceil(12 - hoursSinceLastScrape);
+        const hoursRemaining = Math.ceil(24 - hoursSinceLastScrape);
         return { shouldScrape: false, reason: `Unknown cadence (treated as daily) - scraped ${Math.floor(hoursSinceLastScrape)}h ago, wait ${hoursRemaining}h more` };
     }
 }

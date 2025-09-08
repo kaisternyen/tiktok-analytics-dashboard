@@ -6,8 +6,8 @@ export const dynamic = 'force-dynamic';
 // Debug endpoint to understand why jobs are pending
 export async function GET() {
     const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 0.5 * 60 * 60 * 1000); // 30 minutes ago (matches scraping logic)
-    const oneDayAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000); // 12 hours ago (matches scraping logic)
+    const hourlyThreshold = new Date(now.getTime() - 65 * 60 * 1000); // 65 minutes ago (1h + 5min safety net)
+    const dailyThreshold = new Date(now.getTime() - 1445 * 60 * 1000); // 1445 minutes ago (24h + 5min safety net)
 
     try {
         // Get sample of overdue videos
@@ -15,7 +15,7 @@ export async function GET() {
             where: {
                 isActive: true,
                 scrapingCadence: 'hourly',
-                lastScrapedAt: { lt: oneHourAgo }
+                lastScrapedAt: { lt: hourlyThreshold }
             },
             select: {
                 id: true,
@@ -35,7 +35,7 @@ export async function GET() {
             where: {
                 isActive: true,
                 scrapingCadence: 'daily',
-                lastScrapedAt: { lt: oneDayAgo }
+                lastScrapedAt: { lt: dailyThreshold }
             },
             select: {
                 id: true,
@@ -54,7 +54,7 @@ export async function GET() {
         const overdueAccounts = await prisma.trackedAccount.findMany({
             where: {
                 isActive: true,
-                lastChecked: { lt: oneHourAgo }
+                lastChecked: { lt: hourlyThreshold }
             },
             select: {
                 id: true,
@@ -64,7 +64,7 @@ export async function GET() {
                 isActive: true
             },
             orderBy: { lastChecked: 'asc' },
-            take: 5
+            take: 10
         });
 
         // Check what the scrape-all query would actually return
