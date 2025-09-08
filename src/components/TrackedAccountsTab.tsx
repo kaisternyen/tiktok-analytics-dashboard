@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Users, Edit, Play, Pause, Trash2, ChevronDown } from 'lucide-react';
+import { Plus, RefreshCw, Users, Edit, Play, Trash2, ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 
 interface TrackedAccount {
@@ -33,11 +33,38 @@ interface AddAccountForm {
     includeExistingContent: boolean;
 }
 
+interface PendingVideo {
+    id: string;
+    username: string;
+    platform: string;
+    url: string;
+    lastScrapedAt: string;
+    scrapingCadence: string;
+    minutesAgo: number;
+    currentStats: {
+        views: number;
+        likes: number;
+        comments: number;
+        shares: number;
+    };
+}
+
 interface CronStatus {
-    system: { timestamp: string; memoryUsage: number };
+    system: { timestamp: string; memoryUsage: number; videosNeedingScrape: number };
     database: { status: string; latency: string };
     issues: { overdueHourlyVideos: number; overdueDailyVideos: number; overdueAccounts: number; totalOverdue: number };
     oldestPending?: { username: string; platform: string; minutesAgo: number };
+    pendingVideos: {
+        hourly: PendingVideo[];
+        daily: PendingVideo[];
+    };
+    pendingAccounts: Array<{
+        id: string;
+        username: string;
+        platform: string;
+        lastChecked: string;
+        minutesAgo: number;
+    }>;
 }
 
 // Add a helper to extract username/handle from a pasted URL
@@ -111,6 +138,7 @@ export function TrackedAccountsTab() {
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
     const [showCronDropdown, setShowCronDropdown] = useState(false);
     const [manualTriggerStatus, setManualTriggerStatus] = useState<string>('');
+    const [runningVideos, setRunningVideos] = useState<Set<string>>(new Set());
     const [formData, setFormData] = useState<AddAccountForm>({
         username: '',
         platform: 'tiktok',
@@ -130,6 +158,32 @@ export function TrackedAccountsTab() {
             }
         } catch (err) {
             console.error('Failed to fetch cron status:', err);
+        }
+    };
+
+    const runSingleVideo = async (videoId: string) => {
+        try {
+            setRunningVideos(prev => new Set(prev).add(videoId));
+
+            const response = await fetch('/api/run-single-video', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ videoId })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                await fetchCronStatus();
+            }
+        } catch (err) {
+            console.error('Failed to run single video:', err);
+        } finally {
+            setRunningVideos(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(videoId);
+                return newSet;
+            });
         }
     };
 
@@ -287,6 +341,7 @@ export function TrackedAccountsTab() {
             const response = await fetch(`/api/tracked-accounts?id=${id}`, {
                 method: 'DELETE'
             });
+            
             const data = await response.json();
             if (data.success) {
                 setSuccess(data.message);
@@ -371,237 +426,138 @@ export function TrackedAccountsTab() {
                                 <ChevronDown className={`w-4 h-4 transition-transform ${showCronDropdown ? 'rotate-180' : ''}`} />
                             </button>
                             {showCronDropdown && cronStatus && (
-                                <div className="absolute top-full left-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                <div className="absolute top-full left-0 mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
                                     <div className="p-4">
                                         <div className="text-sm text-gray-600 mb-3">
                                             Last updated: {new Date(cronStatus.system.timestamp).toLocaleTimeString()}
                                         </div>
-                                        {cronStatus.issues.totalOverdue > 0 ? (
-                                            <div className="space-y-2">
-                                                <div className="text-sm font-medium text-orange-700">Pending Jobs:</div>
-                                                {cronStatus.issues.overdueHourlyVideos > 0 && (
-                                                    <div className="text-sm text-gray-700">• {cronStatus.issues.overdueHourlyVideos} hourly videos overdue</div>
-                                                )}
-                                                {cronStatus.issues.overdueDailyVideos > 0 && (
-                                                    <div className="text-sm text-gray-700">• {cronStatus.issues.overdueDailyVideos} daily videos overdue</div>
-                                                )}
-                                                {cronStatus.issues.overdueAccounts > 0 && (
-                                                    <div className="text-sm text-gray-700">• {cronStatus.issues.overdueAccounts} accounts overdue</div>
-                                                )}
-                                                {cronStatus.oldestPending && (
-                                                    <div className="mt-3 p-2 bg-orange-50 rounded text-sm">
-                                                        <div className="font-medium">Oldest pending:</div>
-                                                        <div>{cronStatus.oldestPending.platform}:{cronStatus.oldestPending.username}</div>
-                                                        <div className="text-orange-600">{cronStatus.oldestPending.minutesAgo} minutes ago</div>
-                                                        {cronStatus.oldestPending.minutesAgo > 1440 && (
-                                                            <div className="mt-2 text-red-600 font-medium">
-                                                                🚨 CRITICAL: Jobs haven&apos;t run in {Math.floor(cronStatus.oldestPending.minutesAgo / 1440)} days!
-                                                            </div>
-                                                        )}
+                                        
+                                        {/* Summary */}
+                                        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                                            <div className="text-sm font-medium text-gray-700 mb-2">Status Summary:</div>
+                                            <div className="text-xs space-y-1">
+                                                <div>• {cronStatus.issues.overdueHourlyVideos} hourly videos pending</div>
+                                                <div>• {cronStatus.issues.overdueDailyVideos} daily videos pending</div>
+                                                <div>• {cronStatus.issues.overdueAccounts} accounts pending</div>
+                                                <div className="text-gray-500">DB: {cronStatus.database.status} ({cronStatus.database.latency}ms) | Memory: {cronStatus.system.memoryUsage}MB</div>
+                                            </div>
+                                        </div>
+
+                                        {/* Pending Videos List */}
+                                        {(cronStatus.pendingVideos?.hourly?.length > 0 || cronStatus.pendingVideos?.daily?.length > 0) ? (
+                                            <div className="space-y-3">
+                                                <div className="text-sm font-medium text-orange-700">Pending Videos:</div>
+                                                
+                                                {/* Hourly Videos */}
+                                                {cronStatus.pendingVideos?.hourly?.length > 0 && (
+                                                    <div>
+                                                        <div className="text-xs font-medium text-blue-700 mb-2">Hourly ({cronStatus.pendingVideos.hourly.length})</div>
+                                                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                                                            {cronStatus.pendingVideos.hourly.slice(0, 10).map((video) => (
+                                                                <div key={video.id} className="flex items-center justify-between bg-blue-50 p-2 rounded text-xs">
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="font-medium truncate">@{video.username}</div>
+                                                                        <div className="text-gray-600">{video.platform} • {video.minutesAgo}m ago</div>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => runSingleVideo(video.id)}
+                                                                        disabled={runningVideos.has(video.id)}
+                                                                        className="ml-2 px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50"
+                                                                    >
+                                                                        {runningVideos.has(video.id) ? '...' : 'Run'}
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                            {cronStatus.pendingVideos.hourly.length > 10 && (
+                                                                <div className="text-xs text-gray-500 text-center py-1">
+                                                                    +{cronStatus.pendingVideos.hourly.length - 10} more...
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 )}
                                                 
-                                                {/* Manual trigger buttons for debugging */}
-                                                <div className="mt-3">
-                                                    <div className="flex gap-2 mb-2">
-                                                        <button
-                                                            onClick={async () => {
-                                                                setManualTriggerStatus('🔄 Triggering video scraping...');
-                                                                try {
-                                                                    const response = await fetch('/api/manual-cron', {
-                                                                        method: 'POST',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ job: 'scrape-all' })
-                                                                    });
-                                                                    const result = await response.json();
-                                                                    console.log('Manual scrape-all result:', result);
-                                                                    
-                                                                    if (result.success) {
-                                                                        setManualTriggerStatus(`✅ Video scraping completed! Check console for details.`);
-                                                                    } else {
-                                                                        setManualTriggerStatus(`❌ Video scraping failed: ${result.error}`);
-                                                                    }
-                                                                    
-                                                                    // Refresh cron status after 3 seconds
-                                                                    setTimeout(() => {
-                                                                        fetchCronStatus();
-                                                                        setManualTriggerStatus('');
-                                                                    }, 5000);
-                                                                } catch (error) {
-                                                                    console.error('Manual trigger failed:', error);
-                                                                    setManualTriggerStatus(`❌ Request failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
-                                                                }
-                                                            }}
-                                                            disabled={manualTriggerStatus.includes('🔄')}
-                                                            className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-                                                        >
-                                                            🔧 Force Scrape Videos
-                                                        </button>
-                                                        <button
-                                                            onClick={async () => {
-                                                                setManualTriggerStatus('🔄 Checking tracked accounts...');
-                                                                try {
-                                                                    const response = await fetch('/api/manual-cron', {
-                                                                        method: 'POST',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ job: 'tracked-accounts' })
-                                                                    });
-                                                                    const result = await response.json();
-                                                                    console.log('Manual tracked accounts result:', result);
-                                                                    
-                                                                    if (result.success) {
-                                                                        setManualTriggerStatus(`✅ Account check completed! Check console for details.`);
-                                                                    } else {
-                                                                        setManualTriggerStatus(`❌ Account check failed: ${result.error}`);
-                                                                    }
-                                                                    
-                                                                    // Refresh cron status after 3 seconds
-                                                                    setTimeout(() => {
-                                                                        fetchCronStatus();
-                                                                        setManualTriggerStatus('');
-                                                                    }, 5000);
-                                                                } catch (error) {
-                                                                    console.error('Manual trigger failed:', error);
-                                                                    setManualTriggerStatus(`❌ Request failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
-                                                                }
-                                                            }}
-                                                            disabled={manualTriggerStatus.includes('🔄')}
-                                                            className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
-                                                        >
-                                                            🔧 Force Check Accounts
-                                                        </button>
-                                                        <button
-                                                            onClick={async () => {
-                                                                try {
-                                                                    const response = await fetch('/api/debug-pending');
-                                                                    const result = await response.json();
-                                                                    console.log('🔍 DEBUG PENDING JOBS:', result);
-                                                                    setManualTriggerStatus('🔍 Debug data logged to console - check browser dev tools!');
-                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
-                                                                } catch (error) {
-                                                                    console.error('Debug failed:', error);
-                                                                    setManualTriggerStatus(`❌ Debug failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
-                                                                }
-                                                            }}
-                                                            className="px-2 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600"
-                                                        >
-                                                            🔍 Debug Pending
-                                                        </button>
-                                                        <button
-                                                            onClick={async () => {
-                                                                try {
-                                                                    const response = await fetch('/api/get-pending-videos');
-                                                                    const result = await response.json();
-                                                                    console.log('📋 PENDING VIDEOS ANALYSIS:', result);
-                                                                    
-                                                                    if (result.success) {
-                                                                        const { summary, pendingVideos } = result;
-                                                                        setManualTriggerStatus(`📋 PENDING ANALYSIS: ${summary.pendingVideos} videos pending (${summary.pendingByCadence.hourly || 0} hourly, ${summary.pendingByCadence.daily || 0} daily). Oldest: @${summary.oldestPending?.username} (${summary.oldestPending?.minutesAgo}min ago). Check console for full list.`);
-                                                                        
-                                                                        // Show pending videos in console
-                                                                        console.log('🎯 SPECIFIC PENDING VIDEOS TO CLEAR:');
-                                                                        pendingVideos.forEach((video: { username: string; platform: string; scrapingCadence: string; minutesAgo: number; reason: string }, index: number) => {
-                                                                            console.log(`${index + 1}. @${video.username} (${video.platform}, ${video.scrapingCadence}) - ${video.minutesAgo}min ago - ${video.reason}`);
-                                                                        });
-                                                                    } else {
-                                                                        setManualTriggerStatus(`❌ Failed to analyze pending videos: ${result.error}`);
-                                                                    }
-                                                                    
-                                                                    setTimeout(() => setManualTriggerStatus(''), 8000);
-                                                                } catch (error) {
-                                                                    console.error('Analyze pending failed:', error);
-                                                                    setManualTriggerStatus(`❌ Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
-                                                                }
-                                                            }}
-                                                            className="px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                                                        >
-                                                            📋 Show Pending
-                                                        </button>
-                                                        <button
-                                                            onClick={async () => {
-                                                                setManualTriggerStatus('🚀 CLEARING SPECIFIC PENDING VIDEOS - This will be faster...');
-                                                                try {
-                                                                    // Clear pending videos (now only processes specific pending ones)
-                                                                    const videosResponse = await fetch('/api/clear-pending', {
-                                                                        method: 'POST',
-                                                                        headers: { 'Content-Type': 'application/json' }
-                                                                    });
-                                                                    const videosResult = await videosResponse.json();
-                                                                    console.log('Clear pending videos result:', videosResult);
-                                                                    
-                                                                    // Clear pending accounts
-                                                                    const accountsResponse = await fetch('/api/clear-pending-accounts', {
-                                                                        method: 'POST',
-                                                                        headers: { 'Content-Type': 'application/json' }
-                                                                    });
-                                                                    const accountsResult = await accountsResponse.json();
-                                                                    console.log('Clear pending accounts result:', accountsResult);
-                                                                    
-                                                                    if (videosResult.success && accountsResult.success) {
-                                                                        setManualTriggerStatus(`✅ CLEARED SPECIFIC PENDING! Videos: ${videosResult.status.successful} processed, Accounts: ${accountsResult.status.successful} processed, ${accountsResult.status.totalNewVideos} new videos added`);
-                                                                    } else {
-                                                                        setManualTriggerStatus(`⚠️ Partial success - Videos: ${videosResult.success ? 'OK' : 'FAILED'}, Accounts: ${accountsResult.success ? 'OK' : 'FAILED'}`);
-                                                                    }
-                                                                    
-                                                                    // Refresh cron status after 10 seconds
-                                                                    setTimeout(() => {
-                                                                        fetchCronStatus();
-                                                                        setManualTriggerStatus('');
-                                                                    }, 10000);
-                                                                } catch (error) {
-                                                                    console.error('Clear pending failed:', error);
-                                                                    setManualTriggerStatus(`❌ Clear failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                                                    setTimeout(() => setManualTriggerStatus(''), 10000);
-                                                                }
-                                                            }}
-                                                            disabled={manualTriggerStatus.includes('🚀')}
-                                                            className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 font-bold"
-                                                        >
-                                                            🚀 CLEAR PENDING
-                                                        </button>
-                                                        <button
-                                                            onClick={async () => {
-                                                                try {
-                                                                    const response = await fetch('/api/test-scrape');
-                                                                    const result = await response.json();
-                                                                    console.log('🧪 SCRAPE-ALL PREREQUISITE TEST:', result);
-                                                                    setManualTriggerStatus('🧪 Prerequisite test logged to console - check for errors!');
-                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
-                                                                } catch (error) {
-                                                                    console.error('Test failed:', error);
-                                                                    setManualTriggerStatus(`❌ Test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                                                                    setTimeout(() => setManualTriggerStatus(''), 5000);
-                                                                }
-                                                            }}
-                                                            className="px-2 py-1 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                                                        >
-                                                            🧪 Test Prerequisites
-                                                        </button>
-                                                    </div>
-                                                    
-                                                    {/* Status feedback */}
-                                                    {manualTriggerStatus && (
-                                                        <div className={`text-xs p-2 rounded ${
-                                                            manualTriggerStatus.includes('✅') ? 'bg-green-100 text-green-800' :
-                                                            manualTriggerStatus.includes('❌') ? 'bg-red-100 text-red-800' :
-                                                            manualTriggerStatus.includes('🔍') ? 'bg-purple-100 text-purple-800' :
-                                                            'bg-blue-100 text-blue-800'
-                                                        }`}>
-                                                            {manualTriggerStatus}
+                                                {/* Daily Videos */}
+                                                {cronStatus.pendingVideos?.daily?.length > 0 && (
+                                                    <div>
+                                                        <div className="text-xs font-medium text-green-700 mb-2">Daily ({cronStatus.pendingVideos.daily.length})</div>
+                                                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                                                            {cronStatus.pendingVideos.daily.slice(0, 10).map((video) => (
+                                                                <div key={video.id} className="flex items-center justify-between bg-green-50 p-2 rounded text-xs">
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="font-medium truncate">@{video.username}</div>
+                                                                        <div className="text-gray-600">{video.platform} • {video.minutesAgo}m ago</div>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => runSingleVideo(video.id)}
+                                                                        disabled={runningVideos.has(video.id)}
+                                                                        className="ml-2 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:opacity-50"
+                                                                    >
+                                                                        {runningVideos.has(video.id) ? '...' : 'Run'}
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                            {cronStatus.pendingVideos.daily.length > 10 && (
+                                                                <div className="text-xs text-gray-500 text-center py-1">
+                                                                    +{cronStatus.pendingVideos.daily.length - 10} more...
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         ) : (
-                                            <div className="text-sm text-green-600">✓ All jobs up to date</div>
+                                            <div className="text-sm text-green-600">✓ All videos up to date</div>
                                         )}
-                                        <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500">
-                                            DB: {cronStatus.database.status} ({cronStatus.database.latency}) | 
-                                            Memory: {cronStatus.system.memoryUsage}MB
+
+                                        {/* Quick Actions */}
+                                        <div className="mt-4 pt-3 border-t border-gray-200">
+                                            <div className="text-xs font-medium text-gray-700 mb-2">Quick Actions:</div>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={async () => {
+                                                        setManualTriggerStatus('🔄 Running all pending...');
+                                                        try {
+                                                            const response = await fetch('/api/clear-pending', { method: 'POST' });
+                                                            const result = await response.json();
+                                                            if (result.success) {
+                                                                setManualTriggerStatus(`✅ Processed ${result.status.successful} videos`);
+                                                            } else {
+                                                                setManualTriggerStatus(`❌ Failed: ${result.error}`);
+                                                            }
+                                                            setTimeout(() => {
+                                                                fetchCronStatus();
+                                                                setManualTriggerStatus('');
+                                                            }, 3000);
+                                                        } catch (error) {
+                                                            setManualTriggerStatus(`❌ Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+                                                            setTimeout(() => setManualTriggerStatus(''), 3000);
+                                                        }
+                                                    }}
+                                                    disabled={manualTriggerStatus.includes('🔄')}
+                                                    className="px-3 py-1 bg-orange-600 text-white rounded text-xs hover:bg-orange-700 disabled:opacity-50"
+                                                >
+                                                    Run All
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setShowCronDropdown(false);
+                                                        fetchCronStatus();
+                                                    }}
+                                                    className="px-3 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
+                                                >
+                                                    Refresh
+                                                </button>
+                                            </div>
+                                            {manualTriggerStatus && (
+                                                <div className={`mt-2 text-xs p-2 rounded ${
+                                                    manualTriggerStatus.includes('✅') ? 'bg-green-100 text-green-800' :
+                                                    manualTriggerStatus.includes('❌') ? 'bg-red-100 text-red-800' :
+                                                    'bg-blue-100 text-blue-800'
+                                                }`}>
+                                                    {manualTriggerStatus}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -626,13 +582,23 @@ export function TrackedAccountsTab() {
                 </div>
 
                 {/* Info Card */}
-                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="flex items-start gap-3">
-                        <div className="w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center mt-0.5">
-                            <span className="text-xs font-medium text-blue-600">i</span>
+                <div className="mb-8 p-6 bg-white rounded-lg shadow-sm border">
+                    <div className="flex items-center gap-3 mb-4">
+                        <Users className="w-6 h-6 text-blue-600" />
+                        <h2 className="text-xl font-semibold">How It Works</h2>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <h3 className="font-medium text-gray-900 mb-2">1. Add Accounts</h3>
+                            <p className="text-gray-600 text-sm">Add TikTok, Instagram, or YouTube accounts to track. Choose to track all content or specific keywords.</p>
                         </div>
-                        <div className="flex-1 text-sm text-blue-800">
-                            <p><strong>Fast Loading:</strong> Profile data (follower counts, total posts, profile pictures) will be populated during account checks to keep this page loading instantly.</p>
+                        <div>
+                            <h3 className="font-medium text-gray-900 mb-2">2. Automatic Monitoring</h3>
+                            <p className="text-gray-600 text-sm">We check for new content every hour and automatically add new videos to your tracking list.</p>
+                        </div>
+                        <div>
+                            <h3 className="font-medium text-gray-900 mb-2">3. Analytics Dashboard</h3>
+                            <p className="text-gray-600 text-sm">View detailed analytics, growth trends, and performance metrics for all tracked content.</p>
                         </div>
                     </div>
                 </div>
@@ -684,13 +650,11 @@ export function TrackedAccountsTab() {
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 >
                                     <option value="all">All Content</option>
-                                    <option value="keyword">Keyword Filter</option>
+                                    <option value="keyword">Keyword Only</option>
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    {formData.accountType === 'keyword' ? 'Keyword *' : 'Keyword'}
-                                </label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Keyword (optional)</label>
                                 <input
                                     type="text"
                                     value={formData.keyword}
@@ -701,10 +665,8 @@ export function TrackedAccountsTab() {
                                 />
                             </div>
                         </div>
-                        
-                        {/* Include Existing Content Option */}
-                        <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
-                            <div className="flex items-start gap-3">
+                        <div className="mt-4">
+                            <label className="flex items-center">
                                 <input
                                     type="checkbox"
                                     id="includeExistingContent"
@@ -712,22 +674,10 @@ export function TrackedAccountsTab() {
                                     onChange={(e) => setFormData({ ...formData, includeExistingContent: e.target.checked })}
                                     className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                 />
-                                <div>
-                                    <label htmlFor="includeExistingContent" className="text-sm font-medium text-gray-700 cursor-pointer">
-                                        Include existing content
-                                    </label>
-                                    <p className="text-xs text-gray-600 mt-1">
-                                        By default, only NEW content posted after adding this account will be tracked. 
-                                        Check this box to also add their existing content that meets your criteria
-                                        {formData.accountType === 'keyword' && formData.keyword && (
-                                            <span className="font-medium"> (only posts containing &ldquo;{formData.keyword}&rdquo;)</span>
-                                        )}.
-                                    </p>
-                                </div>
-                            </div>
+                                <span className="ml-2 text-sm text-gray-700">Include existing content (last 10 posts)</span>
+                            </label>
                         </div>
-                        
-                        <div className="flex gap-3 mt-6">
+                        <div className="mt-6 flex gap-3">
                             <button
                                 onClick={addAccount}
                                 disabled={!formData.username || (formData.accountType === 'keyword' && !formData.keyword)}
@@ -745,123 +695,103 @@ export function TrackedAccountsTab() {
                     </div>
                 )}
 
-                {/* Accounts List */}
-                {accounts.length === 0 ? (
-                    <div className="text-center py-12">
-                        <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No tracked accounts yet</h3>
-                        <p className="text-gray-600 mb-6">Start tracking your favorite creators to automatically add their new content</p>
-                        <button
-                            onClick={() => setShowAddForm(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 mx-auto"
-                        >
-                            <Plus className="w-4 h-4" />
-                            Add Your First Account
-                        </button>
-                    </div>
-                ) :
-                    <div className="space-y-4">
-                        {accounts.map((account) => (
-                            <div key={account.id} className="bg-white rounded-lg shadow-sm border p-6">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        {account.pfpUrl ? (
-                                            <Image 
-                                                src={`/api/image-proxy?url=${encodeURIComponent(account.pfpUrl)}`}
-                                                alt="Profile" 
-                                                width={48}
-                                                height={48}
-                                                className="w-12 h-12 rounded-full object-cover border" 
-                                            />
-                                        ) : (
-                                            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xl border">
-                                                <span>?</span>
-                                            </div>
-                                        )}
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                {getPlatformIcon(account.platform)}
-                                                <h3 className="text-lg font-semibold text-gray-900">{account.displayName || `@${account.username}`}</h3>
-                                                <span className="text-xs text-gray-500">({account.lookedUpUsername || account.username})</span>
-                                            </div>
-                                                    {typeof account.followers === 'number' && (
-                                                        <div className="text-xs text-gray-500">Followers: {account.followers.toLocaleString()}</div>
-                                                    )}
-                                                    {account.profileUrl && (
-                                                        <a href={account.profileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">View Profile</a>
-                                                    )}
-                                                    <div className="text-xs mt-1">
-                                                        {account.apiError || account.apiErrorMessage ? (
-                                                            <span className="text-red-600 font-semibold">
-                                                                ❌ {(account.apiErrorMessage || account.apiError || 'Account not found or API error').includes('rate limit') || 
-                                                                     (account.apiErrorMessage || account.apiError || '').includes('429') ? 
-                                                                     '⏳ Rate limited - will retry during next check' : 
-                                                                     account.apiErrorMessage || account.apiError || 'Account not found or API error'}
-                                                            </span>
-                                                        ) : account.totalPosts === null ? (
-                                                            <span className="text-gray-500">Profile data will load during next check</span>
-                                                        ) : (
-                                                            <div className="space-y-1">
-                                                                <span className="text-green-700">
-                                                                    Tracked: {account.trackedPosts || 0} / {account.totalPosts || 0} posts
-                                                                    {/* Show warning if tracked > total */}
-                                                                    {(account.trackedPosts || 0) > (account.totalPosts || 0) && (
-                                                                        <span className="text-orange-600 text-xs ml-2" title="We may have tracked posts that were later deleted">
-                                                                            ⚠️
-                                                                        </span>
-                                                                    )}
-                                                                </span>
-                                                                <div className="flex gap-4 text-xs text-gray-500">
-                                                                    <span>Last checked: {formatTimeAgo(account.lastChecked)}</span>
-                                                                    {account.lastPostAdded && (
-                                                                        <span className="font-medium text-blue-600">Last post: {formatTimeAgo(account.lastPostAdded)}</span>
-                                                                    )}
-                                                                </div>
-                                                                {/* Debug info for development */}
-                                                                {process.env.NODE_ENV === 'development' && (
-                                                                    <div className="text-xs text-gray-400 mt-1">
-                                                                        Debug: ID={account.id.substring(0, 8)}, Platform={account.platform}, User={account.username}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
+                {/* Tracked Accounts List */}
+                <div className="space-y-4">
+                    {accounts.map((account) => (
+                        <div key={account.id} className="bg-white rounded-lg shadow-sm border p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    {account.pfpUrl ? (
+                                        <Image
+                                            src={account.pfpUrl}
+                                            alt={`${account.username} profile`}
+                                            width={40}
+                                            height={40}
+                                            className="rounded-full"
+                                        />
+                                    ) : (
+                                        getPlatformIcon(account.platform)
+                                    )}
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-semibold text-gray-900">@{account.username}</h3>
+                                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                                                {account.platform}
+                                            </span>
+                                            {account.accountType === 'keyword' && account.keyword && (
+                                                <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded">
+                                                    {account.keyword}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-sm text-gray-500">
+                                            Last checked: {formatTimeAgo(account.lastChecked)}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                        <button
-                                            onClick={() => toggleAccountStatus(account)}
-                                            className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm ${
-                                                account.isActive
-                                                    ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                                                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                                            }`}
-                                        >
-                                            {account.isActive ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
-                                            {account.isActive ? 'Active' : 'Paused'}
-                                        </button>
-                                        <button
-                                            onClick={() => setEditingAccount(account)}
-                                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
-                                        >
-                                            <Edit className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => deleteAccount(account.id)}
-                                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => toggleAccountStatus(account)}
+                                        className={`px-3 py-1 text-xs rounded ${
+                                            account.isActive
+                                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        {account.isActive ? 'Active' : 'Paused'}
+                                    </button>
+                                    <button
+                                        onClick={() => setEditingAccount(account)}
+                                        className="p-2 text-gray-400 hover:text-gray-600"
+                                    >
+                                        <Edit className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => deleteAccount(account.id)}
+                                        className="p-2 text-gray-400 hover:text-red-600"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div>
+                                    <div className="text-gray-500">Posts Tracked</div>
+                                    <div className="font-medium">{account.trackedPosts || 0}</div>
+                                </div>
+                                <div>
+                                    <div className="text-gray-500">Total Posts</div>
+                                    <div className="font-medium">{account.totalPosts || 0}</div>
+                                </div>
+                                <div>
+                                    <div className="text-gray-500">Last Added</div>
+                                    <div className="font-medium">{formatTimeAgo(account.lastPostAdded)}</div>
+                                </div>
+                                <div>
+                                    <div className="text-gray-500">Status</div>
+                                    <div className={`font-medium ${
+                                        account.apiStatus === 'success' ? 'text-green-600' :
+                                        account.apiStatus === 'error' ? 'text-red-600' :
+                                        'text-gray-600'
+                                    }`}>
+                                        {account.apiStatus || 'Unknown'}
                                     </div>
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                }
+                            
+                            {account.apiError && (
+                                <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                                    Error: {account.apiError}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
 
                 {/* Edit Account Modal */}
                 {editingAccount && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white rounded-lg p-6 w-full max-w-md">
                             <h2 className="text-xl font-semibold mb-4">Edit Account</h2>
                             <div className="space-y-4">
@@ -873,40 +803,25 @@ export function TrackedAccountsTab() {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     >
                                         <option value="all">All Content</option>
-                                        <option value="keyword">Keyword Filter</option>
+                                        <option value="keyword">Keyword Only</option>
                                     </select>
                                 </div>
-                                {editingAccount.accountType === 'keyword' && (
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Keyword</label>
-                                        <input
-                                            type="text"
-                                            value={editingAccount.keyword || ''}
-                                            onChange={(e) => setEditingAccount({ ...editingAccount, keyword: e.target.value })}
-                                            placeholder="blok, #blok, @Blok"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        />
-                                    </div>
-                                )}
-                                <div className="flex items-center gap-2">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Keyword</label>
                                     <input
-                                        type="checkbox"
-                                        id="isActive"
-                                        checked={editingAccount.isActive}
-                                        onChange={(e) => setEditingAccount({ ...editingAccount, isActive: e.target.checked })}
-                                        className="rounded border-gray-300"
+                                        type="text"
+                                        value={editingAccount.keyword || ''}
+                                        onChange={(e) => setEditingAccount({ ...editingAccount, keyword: e.target.value })}
+                                        placeholder="blok, #blok, @Blok"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     />
-                                    <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
-                                        Active
-                                    </label>
                                 </div>
                             </div>
-                            <div className="flex gap-3 mt-6">
+                            <div className="mt-6 flex gap-3">
                                 <button
                                     onClick={() => updateAccount(editingAccount.id, {
                                         accountType: editingAccount.accountType,
-                                        keyword: editingAccount.keyword,
-                                        isActive: editingAccount.isActive
+                                        keyword: editingAccount.keyword
                                     })}
                                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                                 >
@@ -925,4 +840,4 @@ export function TrackedAccountsTab() {
             </div>
         </div>
     );
-} 
+}
