@@ -798,9 +798,9 @@ export async function scrapeInstagramPost(url: string): Promise<ScrapedInstagram
 
         // Check for specific Instagram URL patterns
         const urlPatterns = [
-            /instagram\.com\/p\/[A-Za-z0-9_-]+/,
-            /instagram\.com\/reel\/[A-Za-z0-9_-]+/,
-            /instagram\.com\/tv\/[A-Za-z0-9_-]+/
+            /(?:www\.)?instagram\.com\/p\/[A-Za-z0-9_-]+/,
+            /(?:www\.)?instagram\.com\/reel\/[A-Za-z0-9_-]+/,
+            /(?:www\.)?instagram\.com\/tv\/[A-Za-z0-9_-]+/
         ];
 
         const isValidPattern = urlPatterns.some(pattern => pattern.test(cleanUrl));
