@@ -890,9 +890,25 @@ export async function scrapeInstagramPost(url: string): Promise<ScrapedInstagram
             plays: postData.video_play_count || postData.plays || undefined,
             likes: postData.edge_media_preview_like?.count || postData.likes || 0,
             comments: postData.edge_media_to_parent_comment?.count || postData.comments || 0,
-            timestamp: postData.taken_at_timestamp 
-                ? new Date(postData.taken_at_timestamp * 1000).toISOString()
-                : new Date().toISOString(),
+            timestamp: (() => {
+                // Try multiple possible timestamp fields from TikHub Instagram response
+                const timestampFields = [
+                    postData.taken_at_timestamp,
+                    postData.taken_at,
+                    postData.created_time,
+                    postData.timestamp
+                ];
+                
+                for (const field of timestampFields) {
+                    if (field && typeof field === 'number') {
+                        // Convert Unix timestamp to ISO string
+                        return new Date(field * 1000).toISOString();
+                    }
+                }
+                
+                // Fallback to current time if no valid timestamp found
+                return new Date().toISOString();
+            })(),
             hashtags,
             thumbnailUrl: postData.thumbnail_src || postData.display_url,
             displayUrl: postData.display_url,
