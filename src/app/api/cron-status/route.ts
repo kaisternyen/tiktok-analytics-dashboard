@@ -68,8 +68,71 @@ export async function GET() {
             select: { username: true, platform: true, lastScrapedAt: true, scrapingCadence: true }
         });
 
+        // Get detailed list of pending videos
+        const pendingHourlyVideos = await prisma.video.findMany({
+            where: {
+                isActive: true,
+                scrapingCadence: 'hourly',
+                lastScrapedAt: { lt: hourlyThreshold }
+            },
+            select: {
+                id: true,
+                username: true,
+                platform: true,
+                url: true,
+                lastScrapedAt: true,
+                scrapingCadence: true,
+                currentViews: true,
+                currentLikes: true,
+                currentComments: true,
+                currentShares: true
+            },
+            orderBy: { lastScrapedAt: 'asc' },
+            take: 50
+        });
+
+        const pendingDailyVideos = await prisma.video.findMany({
+            where: {
+                isActive: true,
+                scrapingCadence: 'daily',
+                lastScrapedAt: { lt: dailyThreshold }
+            },
+            select: {
+                id: true,
+                username: true,
+                platform: true,
+                url: true,
+                lastScrapedAt: true,
+                scrapingCadence: true,
+                currentViews: true,
+                currentLikes: true,
+                currentComments: true,
+                currentShares: true
+            },
+            orderBy: { lastScrapedAt: 'asc' },
+            take: 50
+        });
+
+        const pendingAccounts = await prisma.trackedAccount.findMany({
+            where: {
+                isActive: true,
+                lastChecked: { lt: hourlyThreshold }
+            },
+            select: {
+                id: true,
+                username: true,
+                platform: true,
+                lastChecked: true
+            },
+            orderBy: { lastChecked: 'asc' },
+            take: 20
+        });
+
         const response = {
-            system: systemInfo,
+            system: {
+                ...systemInfo,
+                videosNeedingScrape: overdueHourlyVideos + overdueDailyVideos + overdueAccounts
+            },
             database: { status: dbStatus, latency: `${dbLatency}ms` },
             statistics: { totalVideos, totalAccounts, hourlyVideos, dailyVideos },
             issues: {
@@ -81,7 +144,33 @@ export async function GET() {
             oldestPending: oldestVideo ? {
                 ...oldestVideo,
                 minutesAgo: Math.floor((now.getTime() - new Date(oldestVideo.lastScrapedAt).getTime()) / (1000 * 60))
-            } : null
+            } : null,
+            pendingVideos: {
+                hourly: pendingHourlyVideos.map(v => ({
+                    ...v,
+                    minutesAgo: Math.floor((now.getTime() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60)),
+                    currentStats: {
+                        views: v.currentViews,
+                        likes: v.currentLikes,
+                        comments: v.currentComments,
+                        shares: v.currentShares
+                    }
+                })),
+                daily: pendingDailyVideos.map(v => ({
+                    ...v,
+                    minutesAgo: Math.floor((now.getTime() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60)),
+                    currentStats: {
+                        views: v.currentViews,
+                        likes: v.currentLikes,
+                        comments: v.currentComments,
+                        shares: v.currentShares
+                    }
+                }))
+            },
+            pendingAccounts: pendingAccounts.map(a => ({
+                ...a,
+                minutesAgo: Math.floor((now.getTime() - new Date(a.lastChecked).getTime()) / (1000 * 60))
+            }))
         };
 
         return NextResponse.json(response);

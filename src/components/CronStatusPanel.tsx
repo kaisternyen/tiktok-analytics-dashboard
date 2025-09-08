@@ -5,10 +5,35 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, AlertCircle, CheckCircle, Database, Activity } from "lucide-react";
 
+interface PendingVideo {
+    id: string;
+    username: string;
+    platform: string;
+    url: string;
+    lastScrapedAt: string;
+    scrapingCadence: string;
+    minutesAgo: number;
+    currentStats: {
+        views: number;
+        likes: number;
+        comments: number;
+        shares: number;
+    };
+}
+
+interface PendingAccount {
+    id: string;
+    username: string;
+    platform: string;
+    lastChecked: string;
+    minutesAgo: number;
+}
+
 interface CronStatusData {
     system: {
         timestamp: string;
         memoryUsage: number;
+        videosNeedingScrape: number;
     };
     database: {
         status: string;
@@ -32,12 +57,19 @@ interface CronStatusData {
         scrapingCadence: string;
         minutesAgo: number;
     } | null;
+    pendingVideos: {
+        hourly: PendingVideo[];
+        daily: PendingVideo[];
+    };
+    pendingAccounts: PendingAccount[];
 }
 
 export default function CronStatusPanel() {
     const [statusData, setStatusData] = useState<CronStatusData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [runningVideos, setRunningVideos] = useState<Set<string>>(new Set());
+    const [videoResults, setVideoResults] = useState<Map<string, { success: boolean; error?: string; video?: { newStats?: { views: number; likes: number; comments: number; shares: number } } }>>(new Map());
 
     const fetchStatus = async () => {
         try {
@@ -54,6 +86,38 @@ export default function CronStatusPanel() {
             console.error('Failed to fetch cron status:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const runSingleVideo = async (videoId: string) => {
+        try {
+            setRunningVideos(prev => new Set(prev).add(videoId));
+            setVideoResults(prev => new Map(prev).set(videoId, { success: false })); // Clear previous result
+
+            const response = await fetch('/api/run-single-video', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ videoId })
+            });
+
+            const result = await response.json();
+            setVideoResults(prev => new Map(prev).set(videoId, result));
+
+            if (result.success) {
+                // Refresh status to update pending list
+                await fetchStatus();
+            }
+        } catch (err) {
+            setVideoResults(prev => new Map(prev).set(videoId, {
+                success: false,
+                error: err instanceof Error ? err.message : 'Unknown error'
+            }));
+        } finally {
+            setRunningVideos(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(videoId);
+                return newSet;
+            });
         }
     };
 
@@ -178,6 +242,136 @@ export default function CronStatusPanel() {
                                 <div className="font-medium">Oldest pending:</div>
                                 <div>{statusData.oldestPending.platform}:{statusData.oldestPending.username}</div>
                                 <div className="text-orange-600">{statusData.oldestPending.minutesAgo} minutes ago</div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Detailed Pending Videos List */}
+            {(statusData.pendingVideos.hourly.length > 0 || statusData.pendingVideos.daily.length > 0) && (
+                <Card className="border-blue-200 bg-blue-50">
+                    <CardContent className="p-4">
+                        <div className="flex items-center gap-2 mb-4">
+                            <AlertCircle className="w-4 h-4 text-blue-600" />
+                            <h3 className="font-medium text-blue-900">Pending Videos ({statusData.pendingVideos.hourly.length + statusData.pendingVideos.daily.length})</h3>
+                        </div>
+                        
+                        {/* Hourly Videos */}
+                        {statusData.pendingVideos.hourly.length > 0 && (
+                            <div className="mb-4">
+                                <h4 className="font-medium text-blue-800 mb-2">Hourly Videos ({statusData.pendingVideos.hourly.length})</h4>
+                                <div className="space-y-2">
+                                    {statusData.pendingVideos.hourly.map((video) => (
+                                        <div key={video.id} className="bg-white p-3 rounded border border-blue-200">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium">@{video.username}</span>
+                                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">{video.platform}</span>
+                                                    <span className="text-xs text-gray-600">{video.minutesAgo}m ago</span>
+                                                </div>
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => runSingleVideo(video.id)}
+                                                    disabled={runningVideos.has(video.id)}
+                                                    className="text-xs"
+                                                >
+                                                    {runningVideos.has(video.id) ? (
+                                                        <>
+                                                            <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                                                            Running...
+                                                        </>
+                                                    ) : (
+                                                        'Run Now'
+                                                    )}
+                                                </Button>
+                                            </div>
+                                            
+                                            {/* Current Stats */}
+                                            <div className="text-xs text-gray-600 mb-2">
+                                                Current: {video.currentStats.views} views, {video.currentStats.likes} likes, {video.currentStats.comments} comments
+                                            </div>
+                                            
+                                            {/* Result Display */}
+                                            {videoResults.has(video.id) && videoResults.get(video.id) && (
+                                                <div className={`text-xs p-2 rounded ${
+                                                    videoResults.get(video.id)?.success 
+                                                        ? 'bg-green-100 text-green-800' 
+                                                        : 'bg-red-100 text-red-800'
+                                                }`}>
+                                                    {videoResults.get(video.id)?.success ? (
+                                                        <div>
+                                                            ✅ Success! New stats: {videoResults.get(video.id)?.video?.newStats?.views} views, {videoResults.get(video.id)?.video?.newStats?.likes} likes
+                                                        </div>
+                                                    ) : (
+                                                        <div>
+                                                            ❌ Error: {videoResults.get(video.id)?.error || 'Unknown error'}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Daily Videos */}
+                        {statusData.pendingVideos.daily.length > 0 && (
+                            <div>
+                                <h4 className="font-medium text-blue-800 mb-2">Daily Videos ({statusData.pendingVideos.daily.length})</h4>
+                                <div className="space-y-2">
+                                    {statusData.pendingVideos.daily.map((video) => (
+                                        <div key={video.id} className="bg-white p-3 rounded border border-blue-200">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium">@{video.username}</span>
+                                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">{video.platform}</span>
+                                                    <span className="text-xs text-gray-600">{video.minutesAgo}m ago</span>
+                                                </div>
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => runSingleVideo(video.id)}
+                                                    disabled={runningVideos.has(video.id)}
+                                                    className="text-xs"
+                                                >
+                                                    {runningVideos.has(video.id) ? (
+                                                        <>
+                                                            <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                                                            Running...
+                                                        </>
+                                                    ) : (
+                                                        'Run Now'
+                                                    )}
+                                                </Button>
+                                            </div>
+                                            
+                                            {/* Current Stats */}
+                                            <div className="text-xs text-gray-600 mb-2">
+                                                Current: {video.currentStats.views} views, {video.currentStats.likes} likes, {video.currentStats.comments} comments
+                                            </div>
+                                            
+                                            {/* Result Display */}
+                                            {videoResults.has(video.id) && videoResults.get(video.id) && (
+                                                <div className={`text-xs p-2 rounded ${
+                                                    videoResults.get(video.id)?.success 
+                                                        ? 'bg-green-100 text-green-800' 
+                                                        : 'bg-red-100 text-red-800'
+                                                }`}>
+                                                    {videoResults.get(video.id)?.success ? (
+                                                        <div>
+                                                            ✅ Success! New stats: {videoResults.get(video.id)?.video?.newStats?.views} views, {videoResults.get(video.id)?.video?.newStats?.likes} likes
+                                                        </div>
+                                                    ) : (
+                                                        <div>
+                                                            ❌ Error: {videoResults.get(video.id)?.error || 'Unknown error'}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </CardContent>
