@@ -224,6 +224,18 @@ export async function GET(req: Request) {
         });
 
         console.log(`✅ Found ${videos.length} videos in database`);
+        
+        // DEBUG: Log specific video data from database
+        const antoineVideo = videos.find(v => v.username === 'antoine.lockedin');
+        if (antoineVideo) {
+            console.log(`🔍 Database query result for @antoine.lockedin:`, {
+                currentViews: antoineVideo.currentViews,
+                currentLikes: antoineVideo.currentLikes,
+                currentComments: antoineVideo.currentComments,
+                currentShares: antoineVideo.currentShares,
+                lastScrapedAt: antoineVideo.lastScrapedAt
+            });
+        }
 
         // If timeframe filter is present, filter metricsHistory and videos accordingly
         let filteredVideos = videos;
@@ -247,6 +259,7 @@ export async function GET(req: Request) {
         // Transform data for frontend
         let transformedVideos;
         try {
+            console.log(`🔄 Starting transformation of ${filteredVideos.length} videos`);
             transformedVideos = filteredVideos.map((video) => {
                 // Parse JSON fields
                 const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
@@ -300,9 +313,20 @@ export async function GET(req: Request) {
                     likes = video.currentLikes;
                     comments = video.currentComments;
                     shares = video.currentShares;
+                    
+                    // DEBUG: Log the values being returned for this video
+                    if (video.username === 'antoine.lockedin') {
+                        console.log(`🔍 API/Videos returning for @${video.username}:`, {
+                            currentViews: video.currentViews,
+                            currentLikes: video.currentLikes,
+                            currentComments: video.currentComments,
+                            currentShares: video.currentShares,
+                            lastScrapedAt: video.lastScrapedAt
+                        });
+                    }
                 }
 
-                return {
+                const transformedVideo = {
                     id: video.id,
                     url: video.url,
                     username: video.username,
@@ -336,6 +360,18 @@ export async function GET(req: Request) {
                         shares: h.shares
                     })).reverse() // Oldest first for charts
                 };
+                
+                // DEBUG: Log the final transformed data for this video
+                if (video.username === 'antoine.lockedin') {
+                    console.log(`🔍 API/Videos final transformed data for @${video.username}:`, {
+                        views: transformedVideo.views,
+                        likes: transformedVideo.likes,
+                        comments: transformedVideo.comments,
+                        shares: transformedVideo.shares
+                    });
+                }
+                
+                return transformedVideo;
             });
             console.log('Videos after delta transformation:', transformedVideos.length, transformedVideos.map(v => ({ username: v.username, views: v.views })));
         } catch (err) {
