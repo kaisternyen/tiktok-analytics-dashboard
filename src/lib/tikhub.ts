@@ -359,16 +359,50 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             views: videoData.statistics?.play_count,
             likes: videoData.statistics?.digg_count
         });
+        
+        // DETAILED LOGGING FOR VIEWS EXTRACTION
+        console.log('🔍 DETAILED VIEWS EXTRACTION DEBUG:');
+        console.log('📊 videoData.statistics:', videoData.statistics);
+        console.log('📊 videoData.stats:', videoData.stats);
+        console.log('📊 videoData.statistics?.play_count:', videoData.statistics?.play_count);
+        console.log('📊 videoData.stats?.play_count:', videoData.stats?.play_count);
+        console.log('📊 videoData.statistics keys:', videoData.statistics ? Object.keys(videoData.statistics) : 'N/A');
+        console.log('📊 videoData.stats keys:', videoData.stats ? Object.keys(videoData.stats) : 'N/A');
+        
+        // Check all possible view count fields
+        const possibleViewFields = [
+            'play_count', 'view_count', 'views', 'playCount', 'viewCount',
+            'video_play_count', 'video_view_count', 'aweme_statistics'
+        ];
+        
+        console.log('🔍 CHECKING ALL POSSIBLE VIEW FIELDS:');
+        possibleViewFields.forEach(field => {
+            const statsValue = videoData.statistics?.[field as keyof typeof videoData.statistics];
+            const dataValue = (videoData as Record<string, unknown>)[field];
+            console.log(`📊 statistics.${field}:`, statsValue);
+            console.log(`📊 data.${field}:`, dataValue);
+        });
 
         // Transform TikHub data to our standard format
+        const extractedViews = videoData.statistics?.play_count || videoData.stats?.play_count || 0;
+        const extractedLikes = videoData.statistics?.digg_count || videoData.stats?.digg_count || 0;
+        const extractedComments = videoData.statistics?.comment_count || videoData.stats?.comment_count || 0;
+        const extractedShares = videoData.statistics?.share_count || videoData.stats?.share_count || 0;
+        
+        console.log('🔍 EXTRACTED VALUES:');
+        console.log('📊 Extracted views:', extractedViews, '(type:', typeof extractedViews, ')');
+        console.log('📊 Extracted likes:', extractedLikes, '(type:', typeof extractedLikes, ')');
+        console.log('📊 Extracted comments:', extractedComments, '(type:', typeof extractedComments, ')');
+        console.log('📊 Extracted shares:', extractedShares, '(type:', typeof extractedShares, ')');
+        
         const transformedData: TikTokVideoData = {
             id: videoData.aweme_id || videoData.group_id || videoId,
             username: videoData.author?.unique_id || videoData.author?.nickname || 'N/A',
             description: videoData.desc || videoData.content || 'N/A',
-            views: videoData.statistics?.play_count || videoData.stats?.play_count || 0,
-            likes: videoData.statistics?.digg_count || videoData.stats?.digg_count || 0,
-            comments: videoData.statistics?.comment_count || videoData.stats?.comment_count || 0,
-            shares: videoData.statistics?.share_count || videoData.stats?.share_count || 0,
+            views: extractedViews,
+            likes: extractedLikes,
+            comments: extractedComments,
+            shares: extractedShares,
             timestamp: videoData.create_time ? new Date(videoData.create_time * 1000).toISOString() :
                 videoData.created_at ? new Date(videoData.created_at * 1000).toISOString() :
                     new Date().toISOString(),
@@ -458,6 +492,17 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             };
         }
 
+        console.log('🎉 FINAL SUCCESS RESULT:');
+        console.log('📊 Final transformed data:', {
+            id: transformedData.id,
+            username: transformedData.username,
+            views: transformedData.views,
+            likes: transformedData.likes,
+            comments: transformedData.comments,
+            shares: transformedData.shares,
+            url: transformedData.url
+        });
+        
         return {
             success: true,
             data: transformedData,

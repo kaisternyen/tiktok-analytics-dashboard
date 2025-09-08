@@ -155,11 +155,27 @@ async function clearPendingVideos(): Promise<ProcessingResult> {
                             comments: result.data.comments,
                             shares: 'shares' in result.data ? result.data.shares : 'N/A',
                             // Don't log full data to avoid spam, just key metrics
+                        } : null,
+                        // Log the debug info if available (contains actual TikHub API response)
+                        debugInfo: result.debugInfo ? {
+                            tikHubUrl: result.debugInfo.tikHubUrl,
+                            videoId: result.debugInfo.videoId,
+                            apiResponse: result.debugInfo.apiResponse
                         } : null
                     });
 
                     if (result.success && result.data) {
                         const mediaData = result.data as TikTokVideoData | InstagramPostData | YouTubeVideoData;
+                        
+                        console.log('🔍 EXTRACTING VALUES FROM MEDIA DATA:');
+                        console.log('📊 Platform:', video.platform);
+                        console.log('📊 Raw mediaData:', {
+                            views: mediaData.views,
+                            likes: mediaData.likes,
+                            comments: mediaData.comments,
+                            shares: 'shares' in mediaData ? mediaData.shares : 'N/A',
+                            type: typeof mediaData.views
+                        });
                         
                         // Get views based on platform
                         let views = 0;
@@ -169,15 +185,29 @@ async function clearPendingVideos(): Promise<ProcessingResult> {
                             const instaData = mediaData as InstagramPostData;
                             views = instaData.plays || instaData.views || 0;
                             shares = 0;
+                            console.log('📊 Instagram extraction:', { plays: instaData.plays, views: instaData.views, finalViews: views });
                         } else if (video.platform === 'youtube') {
                             const youtubeData = mediaData as YouTubeVideoData;
                             views = youtubeData.views || 0;
                             shares = 0;
+                            console.log('📊 YouTube extraction:', { views: youtubeData.views, finalViews: views });
                         } else {
                             const tiktokData = mediaData as TikTokVideoData;
                             views = tiktokData.views || 0;
                             shares = tiktokData.shares || 0;
+                            console.log('📊 TikTok extraction:', { views: tiktokData.views, shares: tiktokData.shares, finalViews: views, finalShares: shares });
                         }
+
+                        console.log('💾 SAVING TO DATABASE:');
+                        console.log('📊 Video ID:', video.id);
+                        console.log('📊 Username:', video.username);
+                        console.log('📊 Platform:', video.platform);
+                        console.log('📊 Views to save:', views, '(type:', typeof views, ')');
+                        console.log('📊 Likes to save:', mediaData.likes, '(type:', typeof mediaData.likes, ')');
+                        console.log('📊 Comments to save:', mediaData.comments, '(type:', typeof mediaData.comments, ')');
+                        console.log('📊 Shares to save:', shares, '(type:', typeof shares, ')');
+                        console.log('📊 Previous views:', video.currentViews);
+                        console.log('📊 Daily growth:', video.lastDailyViews !== null ? Math.max(0, views - video.lastDailyViews) : null);
 
                         // Update video metrics
                         await prisma.video.update({
@@ -193,6 +223,8 @@ async function clearPendingVideos(): Promise<ProcessingResult> {
                                 needsCadenceCheck: false,
                             }
                         });
+                        
+                        console.log('✅ Database update completed for @' + video.username);
 
                         // Add metrics history entry
                         await prisma.metricsHistory.create({
@@ -226,14 +258,43 @@ async function clearPendingVideos(): Promise<ProcessingResult> {
                         console.error(`📡 TikHub Error: ${result.error}`);
                         console.error(`📊 Full TikHub Response:`, JSON.stringify(result, null, 2));
                         
-                        // Check if this looks like a deleted/unavailable video
-                        const isLikelyDeleted = result.error && (
+                        // Log the actual TikHub API response if available
+                        if (result.debugInfo && result.debugInfo.apiResponse) {
+                            console.error(`🔍 ACTUAL TikHub API Response:`, JSON.stringify(result.debugInfo.apiResponse, null, 2));
+                            console.error(`🌐 TikHub API URL used: ${result.debugInfo.tikHubUrl}`);
+                            console.error(`🆔 Video ID extracted: ${result.debugInfo.videoId}`);
+                        }
+                        
+                        // Check if this looks like a deleted/unavailable video based on actual TikHub API response
+                        let isLikelyDeleted = false;
+                        
+                        // Check the actual TikHub API response first
+                        if (result.debugInfo && result.debugInfo.apiResponse) {
+                            const apiResponse = result.debugInfo.apiResponse;
+                            
+                            // Check TikHub API error codes that indicate deleted/private videos
+                            if (apiResponse.code === 404 || 
+                                apiResponse.code === 403 || 
+                                apiResponse.msg?.includes('not found') ||
+                                apiResponse.msg?.includes('private') ||
+                                apiResponse.msg?.includes('deleted') ||
+                                apiResponse.msg?.includes('unavailable')) {
+                                isLikelyDeleted = true;
+                                console.log(`🗑️ TikHub API indicates video is deleted/private: code=${apiResponse.code}, msg=${apiResponse.msg}`);
+                            }
+                        }
+                        
+                        // Fallback to generic error message check
+                        if (!isLikelyDeleted && result.error && (
                             result.error.includes('deleted') ||
                             result.error.includes('private') ||
                             result.error.includes('not found') ||
                             result.error.includes('unavailable') ||
                             result.error.includes('No video data returned')
-                        );
+                        )) {
+                            isLikelyDeleted = true;
+                            console.log(`🗑️ Generic error message indicates video is deleted: ${result.error}`);
+                        }
                         
                         if (isLikelyDeleted) {
                             console.log(`🗑️ Removing @${video.username} from database due to: ${result.error}`);
