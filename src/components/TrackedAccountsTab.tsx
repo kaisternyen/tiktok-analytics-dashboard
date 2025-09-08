@@ -392,8 +392,55 @@ export function TrackedAccountsTab() {
                                                         <div className="font-medium">Oldest pending:</div>
                                                         <div>{cronStatus.oldestPending.platform}:{cronStatus.oldestPending.username}</div>
                                                         <div className="text-orange-600">{cronStatus.oldestPending.minutesAgo} minutes ago</div>
+                                                        {cronStatus.oldestPending.minutesAgo > 1440 && (
+                                                            <div className="mt-2 text-red-600 font-medium">
+                                                                🚨 CRITICAL: Jobs haven&apos;t run in {Math.floor(cronStatus.oldestPending.minutesAgo / 1440)} days!
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
+                                                
+                                                {/* Manual trigger buttons for debugging */}
+                                                <div className="mt-3 flex gap-2">
+                                                    <button
+                                                        onClick={async () => {
+                                                            try {
+                                                                const response = await fetch('/api/manual-cron', {
+                                                                    method: 'POST',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ job: 'scrape-all' })
+                                                                });
+                                                                const result = await response.json();
+                                                                console.log('Manual scrape-all result:', result);
+                                                                setTimeout(fetchCronStatus, 2000); // Refresh after 2s
+                                                            } catch (error) {
+                                                                console.error('Manual trigger failed:', error);
+                                                            }
+                                                        }}
+                                                        className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                                                    >
+                                                        🔧 Force Scrape Videos
+                                                    </button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            try {
+                                                                const response = await fetch('/api/manual-cron', {
+                                                                    method: 'POST',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ job: 'tracked-accounts' })
+                                                                });
+                                                                const result = await response.json();
+                                                                console.log('Manual tracked accounts result:', result);
+                                                                setTimeout(fetchCronStatus, 2000); // Refresh after 2s
+                                                            } catch (error) {
+                                                                console.error('Manual trigger failed:', error);
+                                                            }
+                                                        }}
+                                                        className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
+                                                    >
+                                                        🔧 Force Check Accounts
+                                                    </button>
+                                                </div>
                                             </div>
                                         ) : (
                                             <div className="text-sm text-green-600">✓ All jobs up to date</div>
