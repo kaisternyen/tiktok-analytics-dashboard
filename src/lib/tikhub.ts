@@ -917,19 +917,6 @@ export async function scrapeInstagramPost(url: string): Promise<ScrapedInstagram
             edge_media_to_parent_comment_count: postData.edge_media_to_parent_comment?.count
         });
         
-        // DETAILED TIMESTAMP DEBUGGING
-        console.log('📅 TIMESTAMP DEBUGGING:');
-        console.log('📊 Available timestamp fields:', {
-            taken_at_timestamp: postData.taken_at_timestamp,
-            taken_at: postData.taken_at,
-            created_time: postData.created_time,
-            date: postData.date,
-            timestamp: postData.timestamp,
-            published_at: postData.published_at
-        });
-        console.log('📊 taken_at_timestamp type:', typeof postData.taken_at_timestamp);
-        console.log('📊 taken_at_timestamp value:', postData.taken_at_timestamp);
-
         // Map TikHub Instagram response to our interface
         const instagramData: InstagramPostData = {
             id: postData.id || postData.shortcode || 'unknown',
@@ -941,33 +928,9 @@ export async function scrapeInstagramPost(url: string): Promise<ScrapedInstagram
             plays: postData.video_play_count || postData.plays || undefined,
             likes: postData.edge_media_preview_like?.count || postData.likes || 0,
             comments: postData.edge_media_to_parent_comment?.count || postData.comments || 0,
-            timestamp: (() => {
-                // Try multiple possible timestamp fields
-                const timestampFields = [
-                    postData.taken_at_timestamp,
-                    postData.taken_at,
-                    postData.created_time,
-                    postData.date,
-                    postData.timestamp,
-                    postData.published_at
-                ];
-                
-                for (const field of timestampFields) {
-                    if (field) {
-                        // Handle both Unix timestamp (seconds) and milliseconds
-                        const timestamp = typeof field === 'number' ? field : parseInt(field);
-                        if (!isNaN(timestamp)) {
-                            // If timestamp is in seconds (less than year 2000 in milliseconds), multiply by 1000
-                            const date = timestamp < 946684800000 ? new Date(timestamp * 1000) : new Date(timestamp);
-                            console.log(`📅 Using timestamp field: ${field} -> ${date.toISOString()}`);
-                            return date.toISOString();
-                        }
-                    }
-                }
-                
-                console.log('📅 No valid timestamp found, using current time');
-                return new Date().toISOString();
-            })(),
+            timestamp: postData.taken_at_timestamp 
+                ? new Date(postData.taken_at_timestamp * 1000).toISOString()
+                : new Date().toISOString(),
             hashtags,
             thumbnailUrl: postData.thumbnail_src || postData.display_url,
             displayUrl: postData.display_url,
