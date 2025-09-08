@@ -444,9 +444,9 @@ export function TrackedAccountsTab() {
                                         </div>
 
                                         {/* Pending Videos List */}
-                                        {(cronStatus.pendingVideos?.hourly?.length > 0 || cronStatus.pendingVideos?.daily?.length > 0) ? (
+                                        {(cronStatus.pendingVideos?.hourly?.length > 0 || cronStatus.pendingVideos?.daily?.length > 0 || cronStatus.pendingAccounts?.length > 0) ? (
                                             <div className="space-y-3">
-                                                <div className="text-sm font-medium text-orange-700">Pending Videos:</div>
+                                                <div className="text-sm font-medium text-orange-700">Pending Items:</div>
                                                 
                                                 {/* Hourly Videos */}
                                                 {cronStatus.pendingVideos?.hourly?.length > 0 && (
@@ -505,9 +505,56 @@ export function TrackedAccountsTab() {
                                                         </div>
                                                     </div>
                                                 )}
+                                                
+                                                {/* Pending Accounts */}
+                                                {cronStatus.pendingAccounts?.length > 0 && (
+                                                    <div>
+                                                        <div className="text-xs font-medium text-purple-700 mb-2">Accounts ({cronStatus.pendingAccounts.length})</div>
+                                                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                                                            {cronStatus.pendingAccounts.slice(0, 10).map((account) => (
+                                                                <div key={account.id} className="flex items-center justify-between bg-purple-50 p-2 rounded text-xs">
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="font-medium truncate">@{account.username}</div>
+                                                                        <div className="text-gray-600">{account.platform} • {account.minutesAgo}m ago</div>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            setManualTriggerStatus('🔄 Checking account...');
+                                                                            try {
+                                                                                const response = await fetch('/api/tracked-accounts/check', { method: 'POST' });
+                                                                                const result = await response.json();
+                                                                                if (result.success) {
+                                                                                    setManualTriggerStatus(`✅ Account checked - ${result.results.totalNewVideos} new videos`);
+                                                                                } else {
+                                                                                    setManualTriggerStatus(`❌ Failed: ${result.error}`);
+                                                                                }
+                                                                                setTimeout(() => {
+                                                                                    fetchCronStatus();
+                                                                                    setManualTriggerStatus('');
+                                                                                }, 3000);
+                                                                            } catch (error) {
+                                                                                setManualTriggerStatus(`❌ Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+                                                                                setTimeout(() => setManualTriggerStatus(''), 3000);
+                                                                            }
+                                                                        }}
+                                                                        disabled={manualTriggerStatus.includes('🔄')}
+                                                                        className="ml-2 px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 disabled:opacity-50"
+                                                                    >
+                                                                        {manualTriggerStatus.includes('🔄') ? '...' : 'Check'}
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                            {cronStatus.pendingAccounts.length > 10 && (
+                                                                <div className="text-xs text-gray-500 text-center py-1">
+                                                                    +{cronStatus.pendingAccounts.length - 10} more...
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         ) : (
-                                            <div className="text-sm text-green-600">✓ All videos up to date</div>
+                                            <div className="text-sm text-green-600">✓ All items up to date</div>
                                         )}
 
                                         {/* Quick Actions */}
