@@ -225,17 +225,11 @@ export async function GET(req: Request) {
 
         console.log(`✅ Found ${videos.length} videos in database`);
         
-        // DEBUG: Log specific video data from database
-        const antoineVideo = videos.find(v => v.username === 'antoine.lockedin');
-        if (antoineVideo) {
-            console.log(`🔍 Database query result for @antoine.lockedin:`, {
-                currentViews: antoineVideo.currentViews,
-                currentLikes: antoineVideo.currentLikes,
-                currentComments: antoineVideo.currentComments,
-                currentShares: antoineVideo.currentShares,
-                lastScrapedAt: antoineVideo.lastScrapedAt
-            });
-        }
+        // DEBUG: Log ALL videos from database
+        console.log(`🔍 DATABASE VALUES FOR ALL ${videos.length} VIDEOS:`);
+        videos.forEach((video, index) => {
+            console.log(`Video ${index + 1}/${videos.length}: @${video.username} (${video.platform}) - views: ${video.currentViews}, likes: ${video.currentLikes}, comments: ${video.currentComments}, shares: ${video.currentShares}`);
+        });
 
         // If timeframe filter is present, filter metricsHistory and videos accordingly
         let filteredVideos = videos;
@@ -373,6 +367,13 @@ export async function GET(req: Request) {
                 
                 return transformedVideo;
             });
+            
+            // DEBUG: Log ALL transformed videos being sent to frontend
+            console.log(`🔍 TRANSFORMED VALUES BEING SENT TO FRONTEND FOR ALL ${transformedVideos.length} VIDEOS:`);
+            transformedVideos.forEach((video, index) => {
+                console.log(`Frontend Video ${index + 1}/${transformedVideos.length}: @${video.username} (${video.platform}) - views: ${video.views}, likes: ${video.likes}, comments: ${video.comments}, shares: ${video.shares}`);
+            });
+            
             console.log('Videos after delta transformation:', transformedVideos.length, transformedVideos.map(v => ({ username: v.username, views: v.views })));
         } catch (err) {
             console.error('Error during delta transformation:', err);
