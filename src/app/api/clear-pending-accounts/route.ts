@@ -58,67 +58,88 @@ async function clearAllPendingAccounts(): Promise<ProcessingResult> {
             return { results, successful, failed, skipped, totalNewVideos };
         }
 
-        // Process accounts one by one (they're more complex than videos)
-        console.log(`🚀 Processing ${accounts.length} accounts`);
+        // Process accounts in smaller batches with timeout protection
+        const batchSize = 3; // Smaller batches for accounts
+        console.log(`🚀 Processing ${accounts.length} accounts in batches of ${batchSize}`);
 
-        for (let i = 0; i < accounts.length; i++) {
-            const account = accounts[i];
+        for (let i = 0; i < accounts.length; i += batchSize) {
+            const batch = accounts.slice(i, i + batchSize);
+            const batchNum = Math.floor(i / batchSize) + 1;
+            const totalBatches = Math.ceil(accounts.length / batchSize);
             
-            try {
-                console.log(`👤 [${i + 1}/${accounts.length}] Processing @${account.username} (${account.platform})...`);
+            console.log(`📦 Processing account batch ${batchNum}/${totalBatches}: ${batch.map(a => `@${a.username}`).join(', ')}`);
 
-                // Check the tracked account
-                const result = await checkTrackedAccount({
-                    id: account.id,
-                    username: account.username,
-                    platform: account.platform,
-                    accountType: account.accountType as 'all' | 'keyword',
-                    keyword: account.keyword || undefined
-                });
+            const batchPromises = batch.map(async (account, index) => {
+                try {
+                    console.log(`👤 [${i + index + 1}/${accounts.length}] Processing @${account.username} (${account.platform})...`);
 
-                if (result.status === 'success' || result.status === 'no_new_content') {
-                    // Update account last checked time
-                    await prisma.trackedAccount.update({
-                        where: { id: account.id },
-                        data: {
-                            lastChecked: new Date(),
-                            lastVideoId: account.lastVideoId, // Keep existing since we don't track this in the result
-                            lastPostAdded: result.newVideos > 0 ? new Date() : account.lastPostAdded
-                        }
+                    // Add timeout protection for individual account checks
+                    const timeoutPromise = new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error('Account check timeout after 30 seconds')), 30000);
                     });
 
-                    totalNewVideos += result.newVideos;
-                    console.log(`✅ [${i + 1}] @${account.username}: ${result.newVideos} new videos added`);
-
-                    results.push({
-                        status: 'success',
+                    const checkPromise = checkTrackedAccount({
+                        id: account.id,
                         username: account.username,
                         platform: account.platform,
-                        newVideos: result.newVideos,
-                        reason: 'Account checked successfully'
+                        accountType: account.accountType as 'all' | 'keyword',
+                        keyword: account.keyword || undefined
                     });
-                    successful++;
-                } else {
-                    console.error(`❌ [${i + 1}] @${account.username} failed: ${result.error}`);
-                    results.push({
-                        status: 'failed',
+
+                    const result = await Promise.race([checkPromise, timeoutPromise]) as {
+                        status: 'success' | 'failed' | 'no_new_content';
+                        newVideos: number;
+                        error?: string;
+                    };
+
+                    if (result.status === 'success' || result.status === 'no_new_content') {
+                        // Update account last checked time
+                        await prisma.trackedAccount.update({
+                            where: { id: account.id },
+                            data: {
+                                lastChecked: new Date(),
+                                lastVideoId: account.lastVideoId, // Keep existing since we don't track this in the result
+                                lastPostAdded: result.newVideos > 0 ? new Date() : account.lastPostAdded
+                            }
+                        });
+
+                        totalNewVideos += result.newVideos;
+                        console.log(`✅ [${i + index + 1}] @${account.username}: ${result.newVideos} new videos added`);
+
+                        return {
+                            status: 'success' as const,
+                            username: account.username,
+                            platform: account.platform,
+                            newVideos: result.newVideos,
+                            reason: 'Account checked successfully'
+                        };
+                    } else {
+                        console.error(`❌ [${i + index + 1}] @${account.username} failed: ${result.error}`);
+                        return {
+                            status: 'failed' as const,
+                            username: account.username,
+                            platform: account.platform,
+                            error: result.error || 'Unknown error'
+                        };
+                    }
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                    console.error(`💥 [${i + index + 1}] @${account.username} crashed: ${errorMessage}`);
+                    return {
+                        status: 'failed' as const,
                         username: account.username,
                         platform: account.platform,
-                        error: result.error || 'Unknown error'
-                    });
-                    failed++;
+                        error: errorMessage
+                    };
                 }
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                console.error(`💥 [${i + 1}] @${account.username} crashed: ${errorMessage}`);
-                results.push({
-                    status: 'failed',
-                    username: account.username,
-                    platform: account.platform,
-                    error: errorMessage
-                });
-                failed++;
-            }
+            });
+
+            const batchResults = await Promise.all(batchPromises);
+            batchResults.forEach(result => {
+                results.push(result);
+                if (result.status === 'success') successful++;
+                else if (result.status === 'failed') failed++;
+            });
         }
 
         const totalDuration = Date.now() - startTime;

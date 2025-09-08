@@ -5,6 +5,50 @@ import { prisma } from '@/lib/prisma';
 // Force dynamic rendering for cron jobs
 export const dynamic = 'force-dynamic';
 
+// Same logic as in scrape-all/route.ts to identify pending videos
+function shouldScrapeVideo(video: { trackingMode: string | null; scrapingCadence: string; lastScrapedAt: Date }): { shouldScrape: boolean; reason?: string } {
+    // Skip deleted videos entirely
+    if (video.trackingMode === 'deleted') {
+        return { shouldScrape: false, reason: 'Video marked as deleted/unavailable' };
+    }
+    
+    const now = new Date();
+    const lastScraped = new Date(video.lastScrapedAt);
+    
+    // For testing mode (every minute), check if we're at a new normalized minute
+    if (video.scrapingCadence === 'testing') {
+        return { shouldScrape: true, reason: 'Testing mode - always scrape for debugging' };
+    }
+    
+    // Videos with daily cadence: scrape once per day with guaranteed processing
+    if (video.scrapingCadence === 'daily') {
+        const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+        
+        // GUARANTEED PROCESSING: Daily videos get scraped every 12+ hours
+        if (hoursSinceLastScrape >= 12) {
+            return { shouldScrape: true, reason: `Daily video - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
+        } else {
+            const hoursRemaining = Math.ceil(12 - hoursSinceLastScrape);
+            return { shouldScrape: false, reason: `Daily video - scraped ${Math.floor(hoursSinceLastScrape)}h ago, wait ${hoursRemaining}h more` };
+        }
+    }
+    
+    // Videos with hourly cadence: GUARANTEED processing every hour
+    if (video.scrapingCadence === 'hourly') {
+        const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+        
+        // GUARANTEED PROCESSING: Hourly videos get scraped every 30+ minutes
+        if (hoursSinceLastScrape >= 0.5) { // 30 minutes = 0.5 hours
+            return { shouldScrape: true, reason: `Hourly video - ${Math.floor(hoursSinceLastScrape * 60)}min since last scrape` };
+        } else {
+            const minutesRemaining = Math.ceil((0.5 - hoursSinceLastScrape) * 60);
+            return { shouldScrape: false, reason: `Hourly video - scraped ${Math.floor(hoursSinceLastScrape * 60)}min ago, wait ${minutesRemaining}min more` };
+        }
+    }
+    
+    return { shouldScrape: true, reason: `Ready to scrape (unknown cadence)` };
+}
+
 interface VideoResult {
     status: 'success' | 'failed' | 'skipped';
     username: string;
@@ -65,26 +109,10 @@ async function clearPendingVideos(): Promise<ProcessingResult> {
 
         console.log(`📊 Found ${allVideos.length} total active videos`);
 
-        // Filter to only pending videos using the same logic as scrape-all
+        // Use the same shouldScrapeVideo logic as get-pending-videos
         const pendingVideos = allVideos.filter(video => {
-            const now = new Date();
-            const lastScraped = new Date(video.lastScrapedAt);
-            
-            if (video.trackingMode === 'deleted') return false;
-            
-            if (video.scrapingCadence === 'testing') return true;
-            
-            if (video.scrapingCadence === 'daily') {
-                const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
-                return hoursSinceLastScrape >= 12;
-            }
-            
-            if (video.scrapingCadence === 'hourly') {
-                const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
-                return hoursSinceLastScrape >= 0.5;
-            }
-            
-            return true;
+            const result = shouldScrapeVideo(video);
+            return result.shouldScrape;
         });
 
         console.log(`📊 Found ${pendingVideos.length} pending videos to process (out of ${allVideos.length} total)`);
