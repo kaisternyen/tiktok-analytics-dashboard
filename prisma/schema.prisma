@@ -39,8 +39,10 @@ model Video {
   moderatedBy       String?          // Who moderated it (username/identifier)
   threadsPlanted    Int              @default(0)      // Number of comment threads started
   gotTopComment     Boolean          @default(false)  // Star checkbox for top comment achievement
+  totalCommentsModerated Int         @default(0)      // Total comments moderated across all sessions
   
   metricsHistory    MetricsHistory[]
+  moderationHistory ModerationHistory[]
 
   @@unique([videoId, platform])
   @@map("videos")
@@ -57,6 +59,20 @@ model MetricsHistory {
   video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
 
   @@map("metrics_history")
+}
+
+model ModerationHistory {
+  id                  String   @id @default(cuid())
+  videoId             String
+  moderatedBy         String   // Who did the moderation
+  commentsModerated   Int      @default(0) // Number of comments moderated in this session
+  threadsStarted      Int      @default(0) // Number of new threads started in this session
+  gotTopComment       Boolean  @default(false) // Whether they got top comment in this session
+  notes               String?  // Optional notes about what was done
+  timestamp           DateTime @default(now())
+  video               Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@map("moderation_history")
 }
 
 model TrackedAccount {

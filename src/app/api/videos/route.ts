@@ -325,6 +325,7 @@ export async function GET(req: Request) {
                     moderatedBy: video.moderatedBy || null,
                     threadsPlanted: video.threadsPlanted || 0,
                     gotTopComment: video.gotTopComment || false,
+                    totalCommentsModerated: video.totalCommentsModerated || 0,
                     phase1Notified: video.phase1Notified || false,
                     phase2Notified: video.phase2Notified || false,
                     history: history.map((h) => ({

@@ -53,6 +53,7 @@ interface TrackedVideo {
     moderatedBy?: string | null;
     threadsPlanted?: number;
     gotTopComment?: boolean;
+    totalCommentsModerated?: number;
     phase1Notified?: boolean;
     phase2Notified?: boolean;
 }
@@ -103,6 +104,15 @@ export default function TikTokTracker() {
     // Custom date range state
     const [customDateRange, setCustomDateRange] = useState<[string, string] | null>(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
+    
+    // Moderation form state
+    const [showModerationForm, setShowModerationForm] = useState<string | null>(null);
+    const [moderationForm, setModerationForm] = useState({
+        commentsModerated: 0,
+        threadsStarted: 0,
+        gotTopComment: false,
+        notes: ''
+    });
     
     // Chart drag selection state (TODO: implement drag selection)
     // const [isDragging, setIsDragging] = useState(false);
@@ -582,6 +592,62 @@ export default function TikTokTracker() {
         }
     };
 
+    // Handle moderation session submission
+    const handleModerationSession = async (videoId: string) => {
+        try {
+            const response = await fetch(`/api/videos/${videoId}/moderation`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'add_moderation_session',
+                    moderatedBy: 'user', // You can make this dynamic later
+                    commentsModerated: moderationForm.commentsModerated,
+                    threadsPlanted: moderationForm.threadsStarted,
+                    gotTopComment: moderationForm.gotTopComment,
+                    notes: moderationForm.notes
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to save moderation session');
+            }
+
+            console.log(`📝 Moderation session saved for video ${videoId}:`, moderationForm);
+
+            // Update local state
+            setTracked(prev => prev.map(video => 
+                video.id === videoId 
+                    ? {
+                        ...video,
+                        lastModeratedAt: result.video.lastModeratedAt,
+                        moderatedBy: result.video.moderatedBy,
+                        threadsPlanted: result.video.threadsPlanted,
+                        gotTopComment: result.video.gotTopComment,
+                        totalCommentsModerated: result.video.totalCommentsModerated
+                    }
+                    : video
+            ));
+
+            // Reset form and close
+            setModerationForm({
+                commentsModerated: 0,
+                threadsStarted: 0,
+                gotTopComment: false,
+                notes: ''
+            });
+            setShowModerationForm(null);
+
+        } catch (err) {
+            console.error('💥 Error saving moderation session:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+            setError(`Failed to save moderation session: ${errorMessage}`);
+        }
+    };
+
     // Handle moderation updates
     const handleModerationUpdate = async (videoId: string, action: string, data?: Record<string, unknown>) => {
         try {
@@ -639,6 +705,7 @@ export default function TikTokTracker() {
         totalShares: tracked.reduce((sum, v) => sum + v.shares, 0),
         avgGrowth: tracked.length > 0 ? tracked.reduce((sum, v) => sum + v.growth.views, 0) / tracked.length : 0,
         totalThreads: tracked.reduce((sum, v) => sum + (v.threadsPlanted || 0), 0),
+        totalCommentsModerated: tracked.reduce((sum, v) => sum + (v.totalCommentsModerated || 0), 0),
         moderatedVideos: tracked.filter(v => v.lastModeratedAt).length,
     };
 
@@ -1219,9 +1286,9 @@ export default function TikTokTracker() {
                                     </Card>
                                     <Card>
                                         <CardContent className="p-4">
-                                            <div className="text-2xl font-bold text-gray-900">{totalMetrics.totalThreads}</div>
-                                            <div className="text-sm text-gray-500">Total Threads Audited</div>
-                                            <div className="text-xs mt-1 text-blue-600">{totalMetrics.moderatedVideos} videos moderated</div>
+                                            <div className="text-2xl font-bold text-gray-900">{formatNumber(totalMetrics.totalCommentsModerated)}</div>
+                                            <div className="text-sm text-gray-500">Comments Moderated</div>
+                                            <div className="text-xs mt-1 text-purple-600">{totalMetrics.totalThreads} threads • {totalMetrics.moderatedVideos} videos</div>
                                         </CardContent>
                                     </Card>
                                 </div>
@@ -1505,6 +1572,7 @@ export default function TikTokTracker() {
                                                                 </th>
                                                                 {/* Moderation columns moved here for better visibility */}
                                                                 <th className="text-left p-4 font-medium text-gray-900">Moderated</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Comments</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Threads</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">⭐</th>
                                                                 <th 
@@ -1669,12 +1737,20 @@ export default function TikTokTracker() {
                                                                                 size="sm"
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
-                                                                                    handleModerationUpdate(video.id, 'mark_moderated');
+                                                                                    setShowModerationForm(video.id);
                                                                                 }}
                                                                                 className="text-xs py-1 px-2 h-6"
                                                                             >
-                                                                                Just Moderated
+                                                                                Add Session
                                                                             </Button>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                                                                        <div className="text-center">
+                                                                            <div className="text-lg font-bold text-blue-600">
+                                                                                {video.totalCommentsModerated || 0}
+                                                                            </div>
+                                                                            <div className="text-xs text-gray-500">total</div>
                                                                         </div>
                                                                     </td>
                                                                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
@@ -2119,6 +2195,107 @@ export default function TikTokTracker() {
                     )}
                 </Tabs>
             </div>
+
+            {/* Moderation Session Form Modal */}
+            {showModerationForm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowModerationForm(null)}>
+                    <div className="bg-white rounded-lg p-6 w-96 max-w-90vw" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-semibold mb-4">Add Moderation Session</h3>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Comments Moderated
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={moderationForm.commentsModerated}
+                                    onChange={(e) => setModerationForm(prev => ({
+                                        ...prev,
+                                        commentsModerated: parseInt(e.target.value) || 0
+                                    }))}
+                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    placeholder="How many comments did you moderate?"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    New Threads Started
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={moderationForm.threadsStarted}
+                                    onChange={(e) => setModerationForm(prev => ({
+                                        ...prev,
+                                        threadsStarted: parseInt(e.target.value) || 0
+                                    }))}
+                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    placeholder="How many new threads did you start?"
+                                />
+                            </div>
+
+                            <div className="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    id="gotTopComment"
+                                    checked={moderationForm.gotTopComment}
+                                    onChange={(e) => setModerationForm(prev => ({
+                                        ...prev,
+                                        gotTopComment: e.target.checked
+                                    }))}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+                                />
+                                <label htmlFor="gotTopComment" className="ml-2 text-sm text-gray-700">
+                                    Got top comment ⭐
+                                </label>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Notes (optional)
+                                </label>
+                                <textarea
+                                    value={moderationForm.notes}
+                                    onChange={(e) => setModerationForm(prev => ({
+                                        ...prev,
+                                        notes: e.target.value
+                                    }))}
+                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    rows={3}
+                                    placeholder="Any additional notes about this moderation session..."
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-6">
+                            <Button
+                                onClick={() => handleModerationSession(showModerationForm)}
+                                className="flex-1"
+                            >
+                                Save Session
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setShowModerationForm(null);
+                                    setModerationForm({
+                                        commentsModerated: 0,
+                                        threadsStarted: 0,
+                                        gotTopComment: false,
+                                        notes: ''
+                                    });
+                                }}
+                                className="flex-1"
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 } 

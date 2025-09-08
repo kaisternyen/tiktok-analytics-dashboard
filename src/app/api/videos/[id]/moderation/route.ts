@@ -13,13 +13,15 @@ export async function PATCH(
       action, 
       moderatedBy, 
       threadsPlanted, 
-      gotTopComment 
+      gotTopComment,
+      commentsModerated,
+      notes
     } = body;
 
     // Validate input
-    if (!action || !['mark_moderated', 'update_threads', 'update_star'].includes(action)) {
+    if (!action || !['mark_moderated', 'update_threads', 'update_star', 'add_moderation_session'].includes(action)) {
       return NextResponse.json(
-        { error: 'Invalid action. Must be: mark_moderated, update_threads, or update_star' },
+        { error: 'Invalid action. Must be: mark_moderated, update_threads, update_star, or add_moderation_session' },
         { status: 400 }
       );
     }
@@ -53,6 +55,31 @@ export async function PATCH(
           );
         }
         updateData = { gotTopComment };
+        break;
+
+      case 'add_moderation_session':
+        // Create a detailed moderation history entry
+        await prisma.moderationHistory.create({
+          data: {
+            videoId,
+            moderatedBy: moderatedBy || 'anonymous',
+            commentsModerated: commentsModerated || 0,
+            threadsStarted: threadsPlanted || 0,
+            gotTopComment: gotTopComment || false,
+            notes: notes || null
+          }
+        });
+
+        // Update the video's totals
+        updateData = {
+          lastModeratedAt: new Date(),
+          moderatedBy: moderatedBy || 'anonymous',
+          totalCommentsModerated: {
+            increment: commentsModerated || 0
+          },
+          threadsPlanted: threadsPlanted || 0,
+          gotTopComment: gotTopComment || false
+        };
         break;
     }
 
