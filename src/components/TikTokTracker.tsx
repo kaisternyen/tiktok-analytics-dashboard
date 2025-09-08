@@ -356,7 +356,21 @@ export default function TikTokTracker() {
                         const sortedHistory = [...filteredHistory].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
                         const start = sortedHistory[0];
                         const end = sortedHistory[sortedHistory.length - 1];
-                        if (!start || !end || start === end) return null;
+                        
+                        // If insufficient history data, fall back to current values instead of null
+                        if (!start || !end || start === end) {
+                            console.log(`⚠️ Insufficient history data for @${video.username} - using current values instead of delta`);
+                            return {
+                                ...video,
+                                views: video.views, // Use current values from API
+                                likes: video.likes,
+                                comments: video.comments,
+                                shares: video.shares,
+                                growth: video.growth || { views: 0, likes: 0, comments: 0, shares: 0 },
+                                history: filteredHistory,
+                            };
+                        }
+                        
                         const views = end.views - start.views;
                         const likes = end.likes - start.likes;
                         const comments = end.comments - start.comments;
