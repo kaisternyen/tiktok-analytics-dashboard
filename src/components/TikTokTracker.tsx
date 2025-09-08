@@ -314,6 +314,20 @@ export default function TikTokTracker() {
                     } : null
                 });
                 
+                // Log stats for each video to identify 0 stats issues
+                console.log('📊 VIDEO STATS SUMMARY:');
+                result.videos.forEach((video: {
+                    username: string;
+                    platform?: string;
+                    views: number;
+                    likes: number;
+                    comments: number;
+                    shares: number;
+                }, index: number) => {
+                    const hasStats = video.views > 0 || video.likes > 0 || video.comments > 0;
+                    console.log(`Video ${index + 1}/${result.videos.length}: @${video.username} (${video.platform || 'unknown'}) - views: ${video.views}, likes: ${video.likes}, comments: ${video.comments}, shares: ${video.shares} ${hasStats ? '✅' : '❌ ZERO STATS'}`);
+                });
+                
                 const transformedVideos = result.videos.map((video: {
                     id: string;
                     url: string;
@@ -1145,12 +1159,36 @@ export default function TikTokTracker() {
                             </Button>
                             <Button
                                 variant="outline"
-                                className="flex items-center gap-2 cursor-default select-none"
-                                tabIndex={-1}
-                                aria-disabled="true"
+                                className="flex items-center gap-2"
+                                onClick={async () => {
+                                    setIsLoading(true);
+                                    try {
+                                        console.log('🚀 MANUAL REFRESH ALL TRIGGERED - Starting video scraping...');
+                                        const response = await fetch('/api/manual-cron', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ job: 'scrape-all' })
+                                        });
+                                        const result = await response.json();
+                                        console.log('✅ Manual refresh all completed:', result);
+                                        
+                                        if (result.success) {
+                                            console.log('🔄 Refreshing video data after scraping...');
+                                            await fetchVideos();
+                                            console.log('✅ Video data refreshed successfully');
+                                        } else {
+                                            console.error('❌ Manual refresh failed:', result.error);
+                                        }
+                                    } catch (error) {
+                                        console.error('💥 Manual refresh error:', error);
+                                    } finally {
+                                        setIsLoading(false);
+                                    }
+                                }}
+                                disabled={isLoading}
                             >
                                 <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                                {isLoading ? 'Refreshing...' : 'Refresh All'}
+                                {isLoading ? 'Scraping All Videos...' : 'Refresh All'}
                             </Button>
                             <Input
                                 placeholder="Paste TikTok or Instagram URL"
