@@ -33,6 +33,13 @@ model Video {
   trackingMode      String?
   phase1Notified    Boolean          @default(false)  // >5k views + >5 comments
   phase2Notified    Boolean          @default(false)  // >10k views in hour + exponential
+  
+  // Comment moderation tracking
+  lastModeratedAt   DateTime?        // When "Just Moderated" was last clicked
+  moderatedBy       String?          // Who moderated it (username/identifier)
+  threadsPlanted    Int              @default(0)      // Number of comment threads started
+  gotTopComment     Boolean          @default(false)  // Star checkbox for top comment achievement
+  
   metricsHistory    MetricsHistory[]
 
   @@unique([videoId, platform])

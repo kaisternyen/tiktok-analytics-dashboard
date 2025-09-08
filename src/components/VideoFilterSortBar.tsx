@@ -16,6 +16,11 @@ const FIELD_DEFS = [
   { name: 'createdAt', label: 'Posted', type: 'date' },
   { name: 'lastUpdate', label: 'Last Updated', type: 'date' },
   { name: 'scrapingCadence', label: 'Cadence', type: 'text' },
+  { name: 'lastModeratedAt', label: 'Last Moderated', type: 'date' },
+  { name: 'threadsPlanted', label: 'Threads Planted', type: 'number' },
+  { name: 'gotTopComment', label: 'Got Top Comment', type: 'boolean' },
+  { name: 'phase1Notified', label: 'Phase 1 Notified', type: 'boolean' },
+  { name: 'phase2Notified', label: 'Phase 2 Notified', type: 'boolean' },
   { name: 'timeframe', label: 'Timeframe', type: 'datetime' },
 ];
 
@@ -51,6 +56,10 @@ const OPERATORS = {
   ],
   datetime: [
     { value: 'is on or after', label: 'from...' },
+  ],
+  boolean: [
+    { value: 'is', label: 'is true' },
+    { value: 'is not', label: 'is false' },
   ],
 };
 

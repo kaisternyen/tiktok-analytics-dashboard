@@ -10,6 +10,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart,
 import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
+import { formatDistanceToNow } from 'date-fns';
 import { TrackedAccountsTab } from '../components/TrackedAccountsTab';
 
 interface VideoHistory {
@@ -47,6 +48,13 @@ interface TrackedVideo {
         comments: number;
         shares: number;
     };
+    // Moderation fields
+    lastModeratedAt?: string | null;
+    moderatedBy?: string | null;
+    threadsPlanted?: number;
+    gotTopComment?: boolean;
+    phase1Notified?: boolean;
+    phase2Notified?: boolean;
 }
 
 interface CronStatus {
@@ -578,6 +586,49 @@ export default function TikTokTracker() {
             setSuccess(null);
         } finally {
             setDeletingVideoId(null);
+        }
+    };
+
+    // Handle moderation updates
+    const handleModerationUpdate = async (videoId: string, action: string, data?: Record<string, unknown>) => {
+        try {
+            const response = await fetch(`/api/videos/${videoId}/moderation`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action,
+                    moderatedBy: 'user', // You can make this dynamic later
+                    ...data
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to update moderation');
+            }
+
+            console.log(`📝 Moderation updated for video ${videoId}:`, action, data);
+
+            // Update local state
+            setTracked(prev => prev.map(video => 
+                video.id === videoId 
+                    ? {
+                        ...video,
+                        lastModeratedAt: result.video.lastModeratedAt,
+                        moderatedBy: result.video.moderatedBy,
+                        threadsPlanted: result.video.threadsPlanted,
+                        gotTopComment: result.video.gotTopComment
+                    }
+                    : video
+            ));
+
+        } catch (err) {
+            console.error('💥 Error updating moderation:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+            setError(`Failed to update moderation: ${errorMessage}`);
         }
     };
 
@@ -1514,6 +1565,9 @@ export default function TikTokTracker() {
                                                                         {renderSortIcon('Status')}
                                                                     </div>
                                                                 </th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Last Moderated</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Threads</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Top Comment</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Actions</th>
                                                             </tr>
                                                         </thead>
@@ -1629,6 +1683,51 @@ export default function TikTokTracker() {
                                                                         }`}>
                                                                             {video.status}
                                                                         </span>
+                                                                    </td>
+                                                                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                                                                        <div className="flex flex-col gap-1">
+                                                                            <div className="text-xs text-gray-600">
+                                                                                {video.lastModeratedAt 
+                                                                                    ? formatDistanceToNow(new Date(video.lastModeratedAt), { addSuffix: true })
+                                                                                    : 'Never'
+                                                                                }
+                                                                            </div>
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleModerationUpdate(video.id, 'mark_moderated');
+                                                                                }}
+                                                                                className="text-xs py-1 px-2 h-6"
+                                                                            >
+                                                                                Just Moderated
+                                                                            </Button>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                                                                        <input
+                                                                            type="number"
+                                                                            min="0"
+                                                                            value={video.threadsPlanted || 0}
+                                                                            onChange={(e) => {
+                                                                                const value = parseInt(e.target.value) || 0;
+                                                                                handleModerationUpdate(video.id, 'update_threads', { threadsPlanted: value });
+                                                                            }}
+                                                                            className="w-16 text-xs p-1 border rounded"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                        />
+                                                                    </td>
+                                                                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={video.gotTopComment || false}
+                                                                            onChange={(e) => {
+                                                                                handleModerationUpdate(video.id, 'update_star', { gotTopComment: e.target.checked });
+                                                                            }}
+                                                                            className="w-4 h-4"
+                                                                        />
+                                                                        <span className="ml-1 text-yellow-500">⭐</span>
                                                                     </td>
                                                                     <td className="p-4">
                                                                         <Button

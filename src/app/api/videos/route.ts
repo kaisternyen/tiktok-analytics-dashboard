@@ -320,6 +320,13 @@ export async function GET(req: Request) {
                     platform: video.platform || 'tiktok',
                     scrapingCadence: video.scrapingCadence || 'hourly',
                     growth,
+                    // Moderation fields
+                    lastModeratedAt: video.lastModeratedAt ? video.lastModeratedAt.toISOString() : null,
+                    moderatedBy: video.moderatedBy || null,
+                    threadsPlanted: video.threadsPlanted || 0,
+                    gotTopComment: video.gotTopComment || false,
+                    phase1Notified: video.phase1Notified || false,
+                    phase2Notified: video.phase2Notified || false,
                     history: history.map((h) => ({
                         time: h.timestamp.toISOString(),
                         views: h.views,
