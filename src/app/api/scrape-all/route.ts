@@ -832,11 +832,25 @@ export async function GET() {
             dailyVideos: videos.filter(v => v.scrapingCadence === 'daily').length,
         };
 
+        // Include detailed failure information for debugging
+        const failedResults = result.results.filter(r => r.status === 'failed');
+        const zeroStatsResults = result.results.filter(r => r.status === 'success' && r.changes && r.changes.views === 0);
+        
         return NextResponse.json({
             success: true,
             message: `Processed ${result.successful}/${videos.length} videos successfully with ${result.cadenceChanges} cadence changes`,
             status,
-            results: result.results.slice(0, 10) // Limit results in response
+            results: result.results.slice(0, 20), // Show more results
+            debugInfo: {
+                totalVideos: videos.length,
+                successful: result.successful,
+                failed: result.failed,
+                skipped: result.skipped,
+                failedCount: failedResults.length,
+                zeroStatsCount: zeroStatsResults.length,
+                failedVideos: failedResults.slice(0, 10), // Show first 10 failures
+                zeroStatsVideos: zeroStatsResults.slice(0, 10) // Show first 10 zero stats
+            }
         });
 
     } catch (error) {

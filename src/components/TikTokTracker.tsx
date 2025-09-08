@@ -1172,6 +1172,42 @@ export default function TikTokTracker() {
                                         const result = await response.json();
                                         console.log('✅ Manual refresh all completed:', result);
                                         
+                                        // Log detailed debug information
+                                        if (result.debugInfo) {
+                                            console.log('🔍 SCRAPING DEBUG INFO:');
+                                            console.log(`📊 Total videos processed: ${result.debugInfo.totalVideos}`);
+                                            console.log(`✅ Successful scrapes: ${result.debugInfo.successful}`);
+                                            console.log(`❌ Failed scrapes: ${result.debugInfo.failed}`);
+                                            console.log(`⏭️ Skipped videos: ${result.debugInfo.skipped}`);
+                                            console.log(`🔢 Videos with 0 stats: ${result.debugInfo.zeroStatsCount}`);
+                                            
+                                            if (result.debugInfo.failedVideos && result.debugInfo.failedVideos.length > 0) {
+                                                console.log('❌ FAILED VIDEOS (first 10):');
+                                                result.debugInfo.failedVideos.forEach((video: {
+                                                    username: string;
+                                                    platform: string;
+                                                    error: string;
+                                                }, index: number) => {
+                                                    console.log(`  ${index + 1}. @${video.username} (${video.platform}): ${video.error}`);
+                                                });
+                                            }
+                                            
+                                            if (result.debugInfo.zeroStatsVideos && result.debugInfo.zeroStatsVideos.length > 0) {
+                                                console.log('🔢 VIDEOS WITH 0 STATS (first 10):');
+                                                result.debugInfo.zeroStatsVideos.forEach((video: {
+                                                    username: string;
+                                                    platform: string;
+                                                    changes?: {
+                                                        views?: number;
+                                                        likes?: number;
+                                                        comments?: number;
+                                                    };
+                                                }, index: number) => {
+                                                    console.log(`  ${index + 1}. @${video.username} (${video.platform}): views=${video.changes?.views || 0}, likes=${video.changes?.likes || 0}, comments=${video.changes?.comments || 0}`);
+                                                });
+                                            }
+                                        }
+                                        
                                         if (result.success) {
                                             console.log('🔄 Refreshing video data after scraping...');
                                             await fetchVideos();
@@ -1189,6 +1225,49 @@ export default function TikTokTracker() {
                             >
                                 <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                                 {isLoading ? 'Scraping All Videos...' : 'Refresh All'}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="flex items-center gap-2"
+                                onClick={async () => {
+                                    // Test the first video with 0 stats
+                                    const firstZeroStatsVideo = tracked.find(v => v.views === 0 && v.likes === 0 && v.comments === 0);
+                                    if (!firstZeroStatsVideo) {
+                                        console.log('❌ No videos with 0 stats found to test');
+                                        return;
+                                    }
+                                    
+                                    console.log(`🧪 TESTING SINGLE VIDEO: @${firstZeroStatsVideo.username} (${firstZeroStatsVideo.platform})`);
+                                    console.log(`📊 Current stats: views=${firstZeroStatsVideo.views}, likes=${firstZeroStatsVideo.likes}, comments=${firstZeroStatsVideo.comments}`);
+                                    
+                                    try {
+                                        const response = await fetch('/api/test-single-video', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ videoId: firstZeroStatsVideo.id })
+                                        });
+                                        const result = await response.json();
+                                        
+                                        console.log('🧪 SINGLE VIDEO TEST RESULT:', result);
+                                        
+                                        if (result.success) {
+                                            console.log('📊 TikHub API Response Details:');
+                                            console.log(`  Success: ${result.tikHubResult.success}`);
+                                            console.log(`  Has Data: ${result.tikHubResult.hasData}`);
+                                            console.log(`  Error: ${result.tikHubResult.error}`);
+                                            console.log(`  Duration: ${result.tikHubResult.duration}ms`);
+                                            console.log(`  Raw Data:`, result.tikHubResult.rawData);
+                                            console.log(`  Debug Info:`, result.tikHubResult.debugInfo);
+                                        } else {
+                                            console.error('❌ Single video test failed:', result.error);
+                                        }
+                                    } catch (error) {
+                                        console.error('💥 Single video test error:', error);
+                                    }
+                                }}
+                                disabled={isLoading}
+                            >
+                                🧪 Test Single Video
                             </Button>
                             <Input
                                 placeholder="Paste TikTok or Instagram URL"
