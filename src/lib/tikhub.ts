@@ -864,6 +864,20 @@ export async function scrapeInstagramPost(url: string): Promise<ScrapedInstagram
         // Extract caption and hashtags
         const caption = postData.edge_media_to_caption?.edges?.[0]?.node?.text || '';
         const hashtags = extractHashtagsFromCaption(caption);
+        
+        // DETAILED LOGGING FOR INSTAGRAM DATA EXTRACTION
+        console.log('🔍 INSTAGRAM DATA EXTRACTION DEBUG:');
+        console.log('📊 Raw postData keys:', Object.keys(postData));
+        console.log('📊 Available stats fields:', {
+            video_view_count: postData.video_view_count,
+            video_play_count: postData.video_play_count,
+            views: postData.views,
+            plays: postData.plays,
+            likes: postData.likes,
+            comments: postData.comments,
+            edge_media_preview_like_count: postData.edge_media_preview_like?.count,
+            edge_media_to_parent_comment_count: postData.edge_media_to_parent_comment?.count
+        });
 
         // Map TikHub Instagram response to our interface
         const instagramData: InstagramPostData = {
@@ -872,10 +886,10 @@ export async function scrapeInstagramPost(url: string): Promise<ScrapedInstagram
             username: postData.owner?.username || 'unknown',
             fullName: postData.owner?.full_name || '',
             description: caption,
-            views: postData.video_view_count || undefined,
-            plays: postData.video_play_count || undefined,
-            likes: postData.edge_media_preview_like?.count || 0,
-            comments: postData.edge_media_to_parent_comment?.count || 0,
+            views: postData.video_view_count || postData.views || undefined,
+            plays: postData.video_play_count || postData.plays || undefined,
+            likes: postData.edge_media_preview_like?.count || postData.likes || 0,
+            comments: postData.edge_media_to_parent_comment?.count || postData.comments || 0,
             timestamp: postData.taken_at_timestamp 
                 ? new Date(postData.taken_at_timestamp * 1000).toISOString()
                 : new Date().toISOString(),
@@ -924,14 +938,21 @@ export async function scrapeInstagramPost(url: string): Promise<ScrapedInstagram
         };
 
         console.log('✅ Successfully parsed Instagram post data');
-        console.log('📊 Final data summary:', {
+        console.log('📊 Final Instagram data summary:', {
             username: instagramData.username,
+            views: instagramData.views,
+            plays: instagramData.plays,
             likes: instagramData.likes,
             comments: instagramData.comments,
-            plays: instagramData.plays,
             hasVideo: instagramData.isVideo,
             hasThumbnail: !!instagramData.thumbnailUrl
         });
+        
+        console.log('🔍 EXTRACTED VALUES FOR INSTAGRAM:');
+        console.log('📊 Final views:', instagramData.views, '(type:', typeof instagramData.views, ')');
+        console.log('📊 Final plays:', instagramData.plays, '(type:', typeof instagramData.plays, ')');
+        console.log('📊 Final likes:', instagramData.likes, '(type:', typeof instagramData.likes, ')');
+        console.log('📊 Final comments:', instagramData.comments, '(type:', typeof instagramData.comments, ')');
 
         return {
             success: true,
