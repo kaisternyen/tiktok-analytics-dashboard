@@ -45,7 +45,15 @@ function shouldScrapeVideo(video: { trackingMode: string | null; scrapingCadence
         }
     }
     
-    return { shouldScrape: true, reason: `Ready to scrape (unknown cadence)` };
+    // Handle unknown/null cadence - treat as daily
+    const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+    
+    if (hoursSinceLastScrape >= 12) {
+        return { shouldScrape: true, reason: `Unknown cadence (treated as daily) - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
+    } else {
+        const hoursRemaining = Math.ceil(12 - hoursSinceLastScrape);
+        return { shouldScrape: false, reason: `Unknown cadence (treated as daily) - scraped ${Math.floor(hoursSinceLastScrape)}h ago, wait ${hoursRemaining}h more` };
+    }
 }
 
 export async function GET() {
@@ -96,6 +104,28 @@ export async function GET() {
             minutesAgo: number;
             reason: string;
         }> = [];
+        
+        // Fix videos with null/undefined cadence - set them to daily
+        const videosWithNullCadence = videos.filter(video => !video.scrapingCadence || video.scrapingCadence === 'null' || video.scrapingCadence === 'undefined');
+        if (videosWithNullCadence.length > 0) {
+            console.log(`🔧 Fixing ${videosWithNullCadence.length} videos with null/undefined cadence...`);
+            await prisma.video.updateMany({
+                where: {
+                    id: { in: videosWithNullCadence.map(v => v.id) }
+                },
+                data: {
+                    scrapingCadence: 'daily'
+                }
+            });
+            console.log(`✅ Updated ${videosWithNullCadence.length} videos to daily cadence`);
+            
+            // Update the local videos array to reflect the changes
+            videos.forEach(video => {
+                if (!video.scrapingCadence || video.scrapingCadence === 'null' || video.scrapingCadence === 'undefined') {
+                    video.scrapingCadence = 'daily';
+                }
+            });
+        }
         
         videos.forEach(video => {
             const result = shouldScrapeVideo(video);

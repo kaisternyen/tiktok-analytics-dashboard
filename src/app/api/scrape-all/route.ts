@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
-import { getCurrentNormalizedTimestamp, getIntervalForCadence, normalizeTimestamp, TimestampInterval } from '@/lib/timestamp-utils';
+import { getCurrentNormalizedTimestamp, normalizeTimestamp, TimestampInterval } from '@/lib/timestamp-utils';
 import { checkViralThresholds, notifyViralVideo, checkPhase1Criteria, checkPhase2Criteria, notifyPhase1, notifyPhase2 } from '@/lib/discord-notifications';
 
 // Force dynamic rendering for cron jobs
@@ -61,7 +61,6 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     }
     
     const now = new Date();
-    const interval = getIntervalForCadence(video.scrapingCadence);
     const lastScraped = new Date(video.lastScrapedAt);
     
     // For testing mode (every minute), check if we're at a new normalized minute
@@ -108,7 +107,15 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
         }
     }
     
-    return { shouldScrape: true, reason: `Ready to scrape (${interval} interval)` };
+    // Handle unknown/null cadence - treat as daily
+    const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
+    
+    if (hoursSinceLastScrape >= 12) {
+        return { shouldScrape: true, reason: `Unknown cadence (treated as daily) - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
+    } else {
+        const hoursRemaining = Math.ceil(12 - hoursSinceLastScrape);
+        return { shouldScrape: false, reason: `Unknown cadence (treated as daily) - scraped ${Math.floor(hoursSinceLastScrape)}h ago, wait ${hoursRemaining}h more` };
+    }
 }
 
 // Calculate if video should change cadence based on performance and age
@@ -265,11 +272,39 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
         const batchPromises = batch.map(async (video, index) => {
             try {
                 console.log(`🎬 [${i + index + 1}/${limitedVideos.length}] Starting @${video.username} (${video.platform}, ${video.scrapingCadence})...`);
+                console.log(`🔍 DETAILED SCRAPE ATTEMPT FOR @${video.username}:`);
+                console.log(`📊 Video ID: ${video.id}`);
+                console.log(`📊 URL: ${video.url}`);
+                console.log(`📊 Platform: ${video.platform}`);
+                console.log(`📊 Current Stats: views=${video.currentViews}, likes=${video.currentLikes}, comments=${video.currentComments}, shares=${video.currentShares}`);
+                console.log(`📊 Last Scraped: ${video.lastScrapedAt}`);
+                console.log(`📊 Cadence: ${video.scrapingCadence}`);
 
+                const scrapeStartTime = Date.now();
+                console.log(`🚀 CALLING TIKHUB API FOR @${video.username}...`);
+                
                 const result = await scrapeMediaPost(video.url);
+                
+                const scrapeDuration = Date.now() - scrapeStartTime;
+                console.log(`⏱️ TikHub API call completed in ${scrapeDuration}ms for @${video.username}`);
+                console.log(`📊 TikHub API Response for @${video.username}:`, {
+                    success: result.success,
+                    hasData: !!result.data,
+                    error: result.error,
+                    debugInfo: result.debugInfo ? 'Present' : 'Missing'
+                });
 
                 if (result.success && result.data) {
                     const mediaData = result.data as TikTokVideoData | InstagramPostData | YouTubeVideoData;
+                    
+                    console.log(`📊 RAW MEDIA DATA FOR @${video.username}:`, {
+                        views: mediaData.views,
+                        likes: mediaData.likes,
+                        comments: mediaData.comments,
+                        shares: 'shares' in mediaData ? mediaData.shares : 'N/A',
+                        type: typeof mediaData.views,
+                        platform: video.platform
+                    });
                     
                     // Get views based on platform
                     let views = 0;
@@ -279,15 +314,39 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         const instaData = mediaData as InstagramPostData;
                         views = instaData.plays || instaData.views || 0;
                         shares = 0; // Instagram doesn't track shares
+                        console.log(`📊 INSTAGRAM EXTRACTION FOR @${video.username}:`, {
+                            plays: instaData.plays,
+                            views: instaData.views,
+                            finalViews: views
+                        });
                     } else if (video.platform === 'youtube') {
                         const youtubeData = mediaData as YouTubeVideoData;
                         views = youtubeData.views || 0;
                         shares = 0; // YouTube doesn't track shares in our API
+                        console.log(`📊 YOUTUBE EXTRACTION FOR @${video.username}:`, {
+                            views: youtubeData.views,
+                            finalViews: views
+                        });
                     } else {
                         const tiktokData = mediaData as TikTokVideoData;
                         views = tiktokData.views || 0;
                         shares = tiktokData.shares || 0;
+                        console.log(`📊 TIKTOK EXTRACTION FOR @${video.username}:`, {
+                            views: tiktokData.views,
+                            shares: tiktokData.shares,
+                            finalViews: views,
+                            finalShares: shares
+                        });
                     }
+                    
+                    console.log(`📊 FINAL EXTRACTED VALUES FOR @${video.username}:`, {
+                        views: views,
+                        likes: mediaData.likes,
+                        comments: mediaData.comments,
+                        shares: shares,
+                        previousViews: video.currentViews,
+                        viewsChange: views - video.currentViews
+                    });
 
                     // Calculate daily views for cadence evaluation (views gained since last update)
                     let dailyViews: number | null = null;
@@ -308,6 +367,25 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         console.log(`🔄 @${video.username}: ${cadenceAction}`);
                     }
 
+                    console.log(`💾 SAVING TO DATABASE FOR @${video.username}:`);
+                    console.log(`📊 Video ID: ${video.id}`);
+                    console.log(`📊 Values to save:`, {
+                        currentViews: views,
+                        currentLikes: mediaData.likes,
+                        currentComments: mediaData.comments,
+                        currentShares: shares,
+                        scrapingCadence: newCadence,
+                        lastDailyViews: video.currentViews,
+                        dailyViewsGrowth: dailyViews
+                    });
+                    console.log(`📊 Previous values:`, {
+                        currentViews: video.currentViews,
+                        currentLikes: video.currentLikes,
+                        currentComments: video.currentComments,
+                        currentShares: video.currentShares,
+                        scrapingCadence: video.scrapingCadence
+                    });
+
                     // Update video metrics and cadence
                     await prisma.video.update({
                         where: { id: video.id },
@@ -324,6 +402,8 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                             needsCadenceCheck: false,
                         }
                     });
+                    
+                    console.log(`✅ DATABASE UPDATE COMPLETED FOR @${video.username}`);
 
                     // Check for viral thresholds and send Discord notifications
                     try {
@@ -477,7 +557,22 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         }
                     };
                 } else {
-                    console.error(`❌ [${i + index + 1}] @${video.username} (${video.platform}) failed: ${result.error}`);
+                    console.error(`❌ [${i + index + 1}] @${video.username} (${video.platform}) FAILED TO SCRAPE:`);
+                    console.error(`📊 TikHub API Error Details:`, {
+                        success: result.success,
+                        error: result.error,
+                        hasDebugInfo: !!result.debugInfo,
+                        debugInfo: result.debugInfo,
+                        url: video.url,
+                        platform: video.platform
+                    });
+                    console.error(`📊 Video Details:`, {
+                        id: video.id,
+                        username: video.username,
+                        currentViews: video.currentViews,
+                        lastScrapedAt: video.lastScrapedAt
+                    });
+                    
                     return {
                         status: 'failed' as const,
                         username: video.username,
@@ -488,7 +583,21 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                 }
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                console.error(`💥 [${i + index + 1}] @${video.username} (${video.platform}) crashed: ${errorMessage}`);
+                console.error(`💥 [${i + index + 1}] @${video.username} (${video.platform}) CRASHED:`);
+                console.error(`📊 Crash Details:`, {
+                    error: errorMessage,
+                    stack: error instanceof Error ? error.stack : 'No stack trace',
+                    url: video.url,
+                    platform: video.platform,
+                    id: video.id
+                });
+                console.error(`📊 Video State:`, {
+                    username: video.username,
+                    currentViews: video.currentViews,
+                    lastScrapedAt: video.lastScrapedAt,
+                    scrapingCadence: video.scrapingCadence
+                });
+                
                 return {
                     status: 'failed' as const,
                     username: video.username,
