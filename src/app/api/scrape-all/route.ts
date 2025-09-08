@@ -293,6 +293,13 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                     error: result.error,
                     debugInfo: result.debugInfo ? 'Present' : 'Missing'
                 });
+                
+                // Show complete TikHub API response structure for debugging
+                if (result.success && result.data) {
+                    console.log(`🔍 COMPLETE TIKHUB API RESPONSE STRUCTURE FOR @${video.username}:`);
+                    console.log(`📊 All available fields:`, Object.keys(result.data));
+                    console.log(`📊 Raw response data:`, JSON.stringify(result.data, null, 2));
+                }
 
                 if (result.success && result.data) {
                     const mediaData = result.data as TikTokVideoData | InstagramPostData | YouTubeVideoData;
@@ -346,6 +353,27 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         shares: shares,
                         previousViews: video.currentViews,
                         viewsChange: views - video.currentViews
+                    });
+                    
+                    // COMPARISON: TikHub API vs Database Values
+                    console.log(`🔍 TIKHUB API vs DATABASE COMPARISON FOR @${video.username}:`);
+                    console.log(`📊 TikHub API Response:`, {
+                        views: views,
+                        likes: mediaData.likes,
+                        comments: mediaData.comments,
+                        shares: shares
+                    });
+                    console.log(`📊 Database Before Update:`, {
+                        views: video.currentViews,
+                        likes: video.currentLikes,
+                        comments: video.currentComments,
+                        shares: video.currentShares
+                    });
+                    console.log(`📊 Will Save to Database:`, {
+                        views: views,
+                        likes: mediaData.likes,
+                        comments: mediaData.comments,
+                        shares: shares
                     });
 
                     // Calculate daily views for cadence evaluation (views gained since last update)
@@ -404,6 +432,25 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                     });
                     
                     console.log(`✅ DATABASE UPDATE COMPLETED FOR @${video.username}`);
+                    
+                    // VERIFY: Check what was actually saved to database
+                    const updatedVideo = await prisma.video.findUnique({
+                        where: { id: video.id },
+                        select: {
+                            currentViews: true,
+                            currentLikes: true,
+                            currentComments: true,
+                            currentShares: true
+                        }
+                    });
+                    
+                    console.log(`🔍 DATABASE VERIFICATION FOR @${video.username}:`);
+                    console.log(`📊 Actually Saved to Database:`, {
+                        views: updatedVideo?.currentViews,
+                        likes: updatedVideo?.currentLikes,
+                        comments: updatedVideo?.currentComments,
+                        shares: updatedVideo?.currentShares
+                    });
 
                     // Check for viral thresholds and send Discord notifications
                     try {

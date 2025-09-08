@@ -656,6 +656,38 @@ export default function TikTokTracker() {
         }
     };
 
+    // Handle "Refresh Video" - calls TikHub API for single video
+    const handleRefreshVideo = async (videoId: string, username: string) => {
+        try {
+            console.log(`🔄 REFRESHING VIDEO: @${username} (ID: ${videoId})`);
+            
+            const response = await fetch('/api/refresh-video', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ videoId }),
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log(`✅ REFRESH COMPLETED FOR @${username}:`, result);
+                console.log(`📊 Previous Stats:`, result.video.previousStats);
+                console.log(`📊 New Stats:`, result.video.newStats);
+                console.log(`📊 TikHub API Response:`, result.tikHubResult);
+                
+                // Refresh the video data
+                await fetchVideos();
+            } else {
+                console.error(`❌ REFRESH FAILED FOR @${username}:`, result.error);
+                console.error(`📊 TikHub Error Details:`, result.tikHubResult);
+            }
+        } catch (error) {
+            console.error(`💥 Error refreshing video @${username}:`, error);
+        }
+    };
+
     // Handle top comment checkbox toggle
     const handleTopCommentToggle = async (videoId: string, checked: boolean) => {
         try {
@@ -1792,7 +1824,7 @@ export default function TikTokTracker() {
                                                                                             }
                                                                                         }}
                                                                                         onLoad={() => {
-                                                                                            console.log('✅ Thumbnail loaded successfully for:', video.username);
+                                                                                            // Thumbnail loaded successfully
                                                                                         }}
                                                                                     />
                                                                                     {/* Fallback div for failed images */}
@@ -1852,6 +1884,17 @@ export default function TikTokTracker() {
                                                                                 className="text-xs py-1 px-2 h-6 bg-blue-50 hover:bg-blue-100"
                                                                             >
                                                                                 Just Moderated
+                                                                            </Button>
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleRefreshVideo(video.id, video.username);
+                                                                                }}
+                                                                                className="text-xs py-1 px-2 h-6 bg-green-50 hover:bg-green-100"
+                                                                            >
+                                                                                🔄 Refresh
                                                                             </Button>
                                                                             {video.lastModeratedAt && (
                                                                                 <div className="text-xs text-gray-500">
