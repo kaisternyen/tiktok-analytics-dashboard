@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
-import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw, LogOut } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
 import { TrackedAccountsTab } from '../components/TrackedAccountsTab';
@@ -171,6 +171,24 @@ export default function TikTokTracker() {
             setCustomDateRange([startOfDay.toISOString(), endOfDay.toISOString()]);
             setSelectedTimePeriod('D'); // Update period display
             setTimeGranularity('hourly'); // Switch to hourly view for day detail
+        }
+    };
+
+    // Logout function
+    const handleLogout = async () => {
+        try {
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+            // Redirect to login page
+            window.location.href = '/login';
+        } catch (error) {
+            console.error('Logout failed:', error);
+            // Still redirect even if logout API fails
+            window.location.href = '/login';
         }
     };
 
@@ -1116,6 +1134,15 @@ export default function TikTokTracker() {
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
+                            <Button
+                                variant="outline"
+                                onClick={handleLogout}
+                                className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Logout"
+                            >
+                                <LogOut className="w-4 h-4" />
+                                Logout
+                            </Button>
                             <Button
                                 variant="outline"
                                 className="flex items-center gap-2 cursor-default select-none"
