@@ -103,29 +103,26 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
         const lastScraped = new Date(video.lastScrapedAt);
         const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
         
-        // Only scrape if it's been more than 20 hours since last scrape (allows some flexibility)
-        if (hoursSinceLastScrape >= 20) {
+        // Only scrape if it's been more than 18 hours since last scrape (allows flexibility while maintaining daily cadence)
+        if (hoursSinceLastScrape >= 18) {
             return { shouldScrape: true, reason: `Daily video - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
         } else {
-            const hoursRemaining = Math.ceil(20 - hoursSinceLastScrape);
+            const hoursRemaining = Math.ceil(18 - hoursSinceLastScrape);
             return { shouldScrape: false, reason: `Daily video - scraped ${Math.floor(hoursSinceLastScrape)}h ago, wait ${hoursRemaining}h more` };
         }
     }
     
-    // Videos 7+ days old with hourly cadence: scrape at the top of each EST hour
+    // Videos with hourly cadence: scrape once per hour with flexible timing
     if (video.scrapingCadence === 'hourly') {
-        // Use EST timezone for hour boundaries
-        const estCurrentNormalizedTime = normalizeTimestamp(estTime, '60min');
-        const estLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/New_York"}));
-        const estLastScrapedNormalizedTime = normalizeTimestamp(estLastScrapedTime, '60min');
+        const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
         
-        if (estCurrentNormalizedTime !== estLastScrapedNormalizedTime) {
-            const isEvaluationHour = currentHour === 0 ? ' (+ cadence evaluation)' : '';
-            return { shouldScrape: true, reason: `High-performance video - new EST hour (${currentHour}:00)${isEvaluationHour}` };
+        // Allow scraping if it's been more than 50 minutes since last scrape
+        // This gives flexibility for cron timing while maintaining roughly hourly cadence
+        if (hoursSinceLastScrape >= 0.83) { // 50 minutes = 0.83 hours
+            return { shouldScrape: true, reason: `Hourly video - ${Math.floor(hoursSinceLastScrape * 60)}min since last scrape` };
         } else {
-            const minutesIntoHour = estTime.getMinutes();
-            const minutesRemaining = 60 - minutesIntoHour;
-            return { shouldScrape: false, reason: `Same EST hour - wait for top of next hour (${minutesRemaining}m remaining)` };
+            const minutesRemaining = Math.ceil((0.83 - hoursSinceLastScrape) * 60);
+            return { shouldScrape: false, reason: `Hourly video - scraped ${Math.floor(hoursSinceLastScrape * 60)}min ago, wait ${minutesRemaining}min more` };
         }
     }
     
