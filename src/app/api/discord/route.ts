@@ -215,6 +215,22 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Extract posted date from the scraped data
+      const getPostedDate = (mediaData: TikTokVideoData | InstagramPostData | YouTubeVideoData): Date => {
+        // Check for timestamp field (TikTok, Instagram)
+        if ('timestamp' in mediaData && mediaData.timestamp) {
+          return new Date(mediaData.timestamp);
+        }
+        
+        // Check for publishedAt field (YouTube)
+        if ('publishedAt' in mediaData && mediaData.publishedAt) {
+          return new Date(mediaData.publishedAt);
+        }
+        
+        // Fallback to current time if timestamp not available
+        return new Date();
+      };
+
       // Create video record
       const newVideo = await prisma.video.create({
         data: {
@@ -224,7 +240,7 @@ export async function POST(req: NextRequest) {
           description: getDescription(mediaData),
           thumbnailUrl: thumbnailUrl,
           platform: platform,
-          postedAt: 'timestamp' in mediaData && mediaData.timestamp ? new Date(mediaData.timestamp) : new Date(),
+          postedAt: getPostedDate(mediaData),
           currentViews: views,
           currentLikes: mediaData.likes,
           currentComments: mediaData.comments,
@@ -239,7 +255,7 @@ export async function POST(req: NextRequest) {
 
       // Add zero baseline metrics entry at the video's posted date
       // Only if the video was posted in the past (not just now)
-      const postedDate = 'timestamp' in mediaData && mediaData.timestamp ? new Date(mediaData.timestamp) : new Date();
+      const postedDate = getPostedDate(mediaData);
       const timeSincePosted = Date.now() - postedDate.getTime();
       const ONE_HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
       

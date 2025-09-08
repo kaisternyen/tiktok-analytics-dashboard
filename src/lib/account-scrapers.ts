@@ -884,6 +884,15 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
             console.log(`IGdebug 💾 Creating Instagram video record in database`);
         }
 
+        // Extract posted date from the content data
+        const getPostedDate = (content: AccountContent): Date => {
+            if (content.timestamp) {
+                return new Date(content.timestamp);
+            }
+            // Fallback to current time if timestamp not available
+            return new Date();
+        };
+
         // Create video record with enhanced duplicate prevention
         const newVideo = await prisma.video.create({
             data: {
@@ -893,7 +902,7 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
                 description: getDescription(mediaData),
                 thumbnailUrl: thumbnailUrl,
                 platform: platform,
-                postedAt: content.timestamp ? new Date(content.timestamp) : new Date(), // Add posted date
+                postedAt: getPostedDate(content), // Add posted date
                 currentViews: views,
                 currentLikes: mediaData.likes,
                 currentComments: mediaData.comments,
@@ -908,7 +917,7 @@ async function addVideoToTracking(content: AccountContent, accountType: 'all' | 
 
         // Add zero baseline metrics entry at the video's posted date
         // Only if the video was posted in the past (not just now)
-        const postedDate = content.timestamp ? new Date(content.timestamp) : new Date();
+        const postedDate = getPostedDate(content);
         const timeSincePosted = Date.now() - postedDate.getTime();
         const ONE_HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
         

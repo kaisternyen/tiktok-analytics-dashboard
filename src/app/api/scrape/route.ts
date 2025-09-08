@@ -243,9 +243,29 @@ export async function POST(request: NextRequest) {
 
         // Extract posted date from the scraped data
         const getPostedDate = (mediaData: TikTokVideoData | InstagramPostData | YouTubeVideoData): Date => {
+            console.log(`📅 DEBUG: Raw mediaData timestamp fields:`, {
+                hasTimestamp: 'timestamp' in mediaData,
+                hasPublishedAt: 'publishedAt' in mediaData,
+                timestamp: 'timestamp' in mediaData ? mediaData.timestamp : 'NOT_FOUND',
+                publishedAt: 'publishedAt' in mediaData ? mediaData.publishedAt : 'NOT_FOUND',
+                allKeys: Object.keys(mediaData)
+            });
+            
+            // Check for timestamp field (TikTok, Instagram)
             if ('timestamp' in mediaData && mediaData.timestamp) {
-                return new Date(mediaData.timestamp);
+                const extractedDate = new Date(mediaData.timestamp);
+                console.log(`📅 DEBUG: Extracted timestamp: ${mediaData.timestamp} -> ${extractedDate.toISOString()}`);
+                return extractedDate;
             }
+            
+            // Check for publishedAt field (YouTube)
+            if ('publishedAt' in mediaData && mediaData.publishedAt) {
+                const extractedDate = new Date(mediaData.publishedAt);
+                console.log(`📅 DEBUG: Extracted publishedAt: ${mediaData.publishedAt} -> ${extractedDate.toISOString()}`);
+                return extractedDate;
+            }
+            
+            console.log(`📅 DEBUG: No valid timestamp/publishedAt found, using current time`);
             // Fallback to current time if timestamp not available
             return new Date();
         };
