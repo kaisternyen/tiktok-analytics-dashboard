@@ -3,6 +3,7 @@ import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData }
 import { prisma } from '@/lib/prisma';
 import { getCurrentNormalizedTimestamp, normalizeTimestamp, TimestampInterval } from '@/lib/timestamp-utils';
 import { checkViralThresholds, notifyViralVideo, checkPhase1Criteria, checkPhase2Criteria, notifyPhase1, notifyPhase2 } from '@/lib/discord-notifications';
+import { sanitizeMetrics, logSanitizationWarnings } from '@/lib/metrics-validation';
 
 // Force dynamic rendering for cron jobs
 export const dynamic = 'force-dynamic';
@@ -412,14 +413,28 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         scrapingCadence: video.scrapingCadence
                     });
 
-                    // Update video metrics and cadence
+                    // Sanitize metrics to prevent negative values and corruption
+                    const sanitizedMetrics = sanitizeMetrics(
+                        { views, likes: mediaData.likes, comments: mediaData.comments, shares },
+                        { 
+                            views: video.currentViews, 
+                            likes: video.currentLikes, 
+                            comments: video.currentComments, 
+                            shares: video.currentShares 
+                        }
+                    );
+                    
+                    // Log any sanitization warnings
+                    logSanitizationWarnings(video.username, sanitizedMetrics.warnings);
+
+                    // Update video metrics and cadence with sanitized values
                     await prisma.video.update({
                         where: { id: video.id },
                         data: {
-                            currentViews: views,
-                            currentLikes: mediaData.likes,
-                            currentComments: mediaData.comments,
-                            currentShares: shares,
+                            currentViews: sanitizedMetrics.views,
+                            currentLikes: sanitizedMetrics.likes,
+                            currentComments: sanitizedMetrics.comments,
+                            currentShares: sanitizedMetrics.shares,
                             lastScrapedAt: new Date(),
                             // Enable cadence changes with user's 10k logic
                             scrapingCadence: newCadence,
