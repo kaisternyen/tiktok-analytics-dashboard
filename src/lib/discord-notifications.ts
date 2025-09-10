@@ -47,10 +47,12 @@ export interface DiscordNotificationData {
 }
 
 export async function sendDiscordNotification(message: string, channel: 'viral-alerts' | 'new-posts' = 'viral-alerts'): Promise<boolean> {
-  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  const webhookUrl = channel === 'viral-alerts' 
+    ? process.env.DISCORD_VIRAL_ALERTS_WEBHOOK_URL 
+    : process.env.DISCORD_NEW_POSTS_WEBHOOK_URL;
   
   if (!webhookUrl) {
-    console.log('⚠️ Discord webhook URL not configured, skipping notification');
+    console.log(`⚠️ Discord ${channel} webhook URL not configured, skipping notification`);
     return false;
   }
 
