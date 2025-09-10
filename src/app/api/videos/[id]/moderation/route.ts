@@ -145,6 +145,8 @@ export async function PATCH(
         threadsJustPlanted: true,
         totalThreadsPlanted: true,
         lastSessionThreads: true,
+        threadsJustModerated: true,
+        totalThreadsModerated: true,
         currentPhase: true,
         username: true,
         platform: true
@@ -195,6 +197,8 @@ export async function GET(
         threadsJustPlanted: true,
         totalThreadsPlanted: true,
         lastSessionThreads: true,
+        threadsJustModerated: true,
+        totalThreadsModerated: true,
         currentPhase: true,
         username: true,
         platform: true,
