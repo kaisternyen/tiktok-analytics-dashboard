@@ -59,6 +59,7 @@ interface TrackedVideo {
     // Threads moderation fields
     threadsJustModerated?: number;
     totalThreadsModerated?: number;
+    lastSessionThreads?: number; // Threads moderated in the last session
 }
 
 interface CronStatus {
@@ -634,17 +635,23 @@ export default function TikTokTracker() {
         }
     };
 
-    // Handle "Just Moderated" - marks last moderated date
+    // Handle "Just Moderated" - marks last moderated date and adds threads to total
     const handleJustModerated = async (videoId: string) => {
         try {
+            const video = tracked.find(v => v.id === videoId);
+            if (!video) return;
+
+            const threadsJustModerated = video.threadsJustModerated || 0;
+
             const response = await fetch(`/api/videos/${videoId}/moderation`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    action: 'mark_moderated',
-                    moderatedBy: 'user'
+                    action: 'mark_moderated_with_threads',
+                    moderatedBy: 'user',
+                    threadsJustModerated: threadsJustModerated
                 }),
             });
 
@@ -654,7 +661,7 @@ export default function TikTokTracker() {
                 throw new Error(result.error || 'Failed to mark as moderated');
             }
 
-            console.log(`📝 Video ${videoId} marked as just moderated`);
+            console.log(`📝 Video ${videoId} marked as moderated with ${threadsJustModerated} threads`);
 
             // Update local state
             setTracked(prev => prev.map(video => 
@@ -662,7 +669,10 @@ export default function TikTokTracker() {
                     ? {
                         ...video,
                         lastModeratedAt: result.video.lastModeratedAt,
-                        moderatedBy: result.video.moderatedBy
+                        moderatedBy: result.video.moderatedBy,
+                        totalThreadsModerated: result.video.totalThreadsModerated,
+                        lastSessionThreads: threadsJustModerated, // Store the threads from this session
+                        threadsJustModerated: 0 // Reset input to 0
                     }
                     : video
             ));
@@ -747,8 +757,8 @@ export default function TikTokTracker() {
         }
     };
 
-    // Handle threads just moderated input
-    const handleThreadsJustModerated = async (videoId: string, threadsCount: number) => {
+    // Handle phase change
+    const handlePhaseChange = async (videoId: string, newPhase: string) => {
         try {
             const response = await fetch(`/api/videos/${videoId}/moderation`, {
                 method: 'PATCH',
@@ -756,34 +766,33 @@ export default function TikTokTracker() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    action: 'update_threads_just_moderated',
-                    threadsJustModerated: threadsCount
+                    action: 'update_phase',
+                    currentPhase: newPhase
                 }),
             });
 
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.error || 'Failed to update threads just moderated');
+                throw new Error(result.error || 'Failed to update phase');
             }
 
-            console.log(`📝 Video ${videoId} threads just moderated: ${threadsCount}`);
+            console.log(`📝 Video ${videoId} phase updated to: ${newPhase}`);
 
             // Update local state
             setTracked(prev => prev.map(video => 
                 video.id === videoId
                     ? {
                         ...video,
-                        threadsJustModerated: threadsCount,
-                        totalThreadsModerated: (video.totalThreadsModerated || 0) + threadsCount
+                        currentPhase: newPhase
                     }
                     : video
             ));
 
         } catch (err) {
-            console.error('💥 Error updating threads just moderated:', err);
+            console.error('💥 Error updating phase:', err);
             const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-            setError(`Failed to update threads just moderated: ${errorMessage}`);
+            setError(`Failed to update phase: ${errorMessage}`);
         }
     };
 
@@ -1961,7 +1970,7 @@ export default function TikTokTracker() {
                                                                             </Button>
                                                                             {video.lastModeratedAt && (
                                                                                 <div className="text-xs text-gray-500">
-                                                                                    {new Date(video.lastModeratedAt).toLocaleDateString()} {new Date(video.lastModeratedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                                                    Last moderated {video.lastSessionThreads || 0} threads, {video.totalThreadsModerated || 0} total at {new Date(video.lastModeratedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                                                                 </div>
                                                                             )}
                                                                         </div>
@@ -1975,7 +1984,11 @@ export default function TikTokTracker() {
                                                                                 value={video.threadsJustModerated || 0}
                                                                                 onChange={(e) => {
                                                                                     const value = parseInt(e.target.value) || 0;
-                                                                                    handleThreadsJustModerated(video.id, value);
+                                                                                    setTracked(prev => prev.map(v => 
+                                                                                        v.id === video.id
+                                                                                            ? { ...v, threadsJustModerated: value }
+                                                                                            : v
+                                                                                    ));
                                                                                 }}
                                                                                 className="w-16 px-2 py-1 text-xs border rounded"
                                                                                 placeholder="0"
@@ -2002,22 +2015,30 @@ export default function TikTokTracker() {
                                                                         </div>
                                                                     </td>
                                                                     {/* Phase column */}
-                                                                    <td className="p-4">
-                                                                        <span className={`text-xs font-medium px-2 py-1 rounded ${
-                                                                            video.currentPhase === 'PHS 0' 
-                                                                                ? 'bg-gray-100 text-gray-800'
-                                                                                : video.currentPhase === 'In PHS 1'
-                                                                                ? 'bg-blue-100 text-blue-800'
-                                                                                : video.currentPhase === 'PHS 1 Complete'
-                                                                                ? 'bg-green-100 text-green-800'
-                                                                                : video.currentPhase === 'In PHS 2'
-                                                                                ? 'bg-orange-100 text-orange-800'
-                                                                                : video.currentPhase === 'PHS 2 Complete'
-                                                                                ? 'bg-purple-100 text-purple-800'
-                                                                                : 'bg-gray-100 text-gray-800'
-                                                                        }`}>
-                                                                            {video.currentPhase || 'PHS 0'}
-                                                                        </span>
+                                                                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                                                                        <select
+                                                                            value={video.currentPhase || 'PHS 0'}
+                                                                            onChange={(e) => handlePhaseChange(video.id, e.target.value)}
+                                                                            className={`text-xs font-medium px-2 py-1 rounded border-0 cursor-pointer ${
+                                                                                video.currentPhase === 'PHS 0' 
+                                                                                    ? 'bg-gray-100 text-gray-800'
+                                                                                    : video.currentPhase === 'In PHS 1'
+                                                                                    ? 'bg-blue-100 text-blue-800'
+                                                                                    : video.currentPhase === 'PHS 1 Complete'
+                                                                                    ? 'bg-green-100 text-green-800'
+                                                                                    : video.currentPhase === 'In PHS 2'
+                                                                                    ? 'bg-orange-100 text-orange-800'
+                                                                                    : video.currentPhase === 'PHS 2 Complete'
+                                                                                    ? 'bg-purple-100 text-purple-800'
+                                                                                    : 'bg-gray-100 text-gray-800'
+                                                                            }`}
+                                                                        >
+                                                                            <option value="PHS 0">PHS 0</option>
+                                                                            <option value="In PHS 1">In PHS 1</option>
+                                                                            <option value="PHS 1 Complete">PHS 1 Complete</option>
+                                                                            <option value="In PHS 2">In PHS 2</option>
+                                                                            <option value="PHS 2 Complete">PHS 2 Complete</option>
+                                                                        </select>
                                                                     </td>
                                                                     <td className="p-4 font-medium">{formatNumber(video.likes)}</td>
                                                                     <td className="p-4 font-medium">{formatNumber(video.comments)}</td>

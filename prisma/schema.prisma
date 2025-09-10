@@ -43,6 +43,7 @@ model Video {
   totalCommentsModerated Int         @default(0)      // Total comments moderated across all sessions
   threadsJustModerated Int           @default(0)      // Number of threads moderated in current session
   totalThreadsModerated Int          @default(0)      // Total threads moderated across all sessions
+  lastSessionThreads   Int           @default(0)      // Threads moderated in the last session
   
   metricsHistory    MetricsHistory[]
   moderationHistory ModerationHistory[]

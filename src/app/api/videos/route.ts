@@ -370,6 +370,7 @@ export async function GET(req: Request) {
                     totalCommentsModerated: video.totalCommentsModerated || 0,
                     threadsJustModerated: video.threadsJustModerated || 0,
                     totalThreadsModerated: video.totalThreadsModerated || 0,
+                    lastSessionThreads: video.lastSessionThreads || 0,
                     phase1Notified: video.phase1Notified || false,
                     phase2Notified: video.phase2Notified || false,
                     currentPhase: video.currentPhase || 'PHS 0',

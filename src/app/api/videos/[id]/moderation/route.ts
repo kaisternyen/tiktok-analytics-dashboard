@@ -16,13 +16,14 @@ export async function PATCH(
       gotTopComment,
       commentsModerated,
       notes,
-      threadsJustModerated
+      threadsJustModerated,
+      currentPhase
     } = body;
 
     // Validate input
-    if (!action || !['mark_moderated', 'update_threads', 'update_star', 'add_moderation_session', 'update_threads_just_moderated'].includes(action)) {
+    if (!action || !['mark_moderated', 'update_threads', 'update_star', 'add_moderation_session', 'update_threads_just_moderated', 'mark_moderated_with_threads', 'update_phase'].includes(action)) {
       return NextResponse.json(
-        { error: 'Invalid action. Must be: mark_moderated, update_threads, update_star, add_moderation_session, or update_threads_just_moderated' },
+        { error: 'Invalid action. Must be: mark_moderated, update_threads, update_star, add_moderation_session, update_threads_just_moderated, mark_moderated_with_threads, or update_phase' },
         { status: 400 }
       );
     }
@@ -73,6 +74,34 @@ export async function PATCH(
         };
         break;
 
+      case 'mark_moderated_with_threads':
+        if (typeof threadsJustModerated !== 'number' || threadsJustModerated < 0) {
+          return NextResponse.json(
+            { error: 'threadsJustModerated must be a non-negative number' },
+            { status: 400 }
+          );
+        }
+        updateData = {
+          lastModeratedAt: new Date(),
+          moderatedBy: moderatedBy || 'anonymous',
+          threadsJustModerated: 0, // Reset to 0 after adding to total
+          lastSessionThreads: threadsJustModerated, // Store the threads from this session
+          totalThreadsModerated: {
+            increment: threadsJustModerated
+          }
+        };
+        break;
+
+      case 'update_phase':
+        if (!currentPhase || !['PHS 0', 'In PHS 1', 'PHS 1 Complete', 'In PHS 2', 'PHS 2 Complete'].includes(currentPhase)) {
+          return NextResponse.json(
+            { error: 'currentPhase must be one of: PHS 0, In PHS 1, PHS 1 Complete, In PHS 2, PHS 2 Complete' },
+            { status: 400 }
+          );
+        }
+        updateData = { currentPhase };
+        break;
+
       case 'add_moderation_session':
         // Create a detailed moderation history entry
         await prisma.moderationHistory.create({
@@ -111,6 +140,8 @@ export async function PATCH(
         gotTopComment: true,
         threadsJustModerated: true,
         totalThreadsModerated: true,
+        lastSessionThreads: true,
+        currentPhase: true,
         username: true,
         platform: true
       }
@@ -159,6 +190,8 @@ export async function GET(
         gotTopComment: true,
         threadsJustModerated: true,
         totalThreadsModerated: true,
+        lastSessionThreads: true,
+        currentPhase: true,
         username: true,
         platform: true,
         phase1Notified: true,
