@@ -35,9 +35,9 @@ export async function GET() {
             prisma.video.count({ where: { isActive: true, scrapingCadence: 'daily' } })
         ]);
 
-        // Check for overdue items (matching actual scraping logic from get-pending-videos)
-        const hourlyThreshold = new Date(now.getTime() - 30 * 60 * 1000); // 30 minutes ago (0.5 hours)
-        const dailyThreshold = new Date(now.getTime() - 12 * 60 * 60 * 1000); // 12 hours ago
+        // Check for overdue items (matching actual scraping logic from scrape-all)
+        const hourlyThreshold = new Date(now.getTime() - 65 * 60 * 1000); // 65 minutes ago (matches scrape-all safety net)
+        const dailyThreshold = new Date(now.getTime() - 1445 * 60 * 1000); // 1445 minutes ago (24h 5min, matches scrape-all safety net)
 
         const [overdueHourlyVideos, overdueDailyVideos, overdueAccounts] = await Promise.all([
             prisma.video.count({

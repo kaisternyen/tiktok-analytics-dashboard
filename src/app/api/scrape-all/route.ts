@@ -59,11 +59,14 @@ interface VideoRecord {
 function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?: string } {
     // Skip deleted videos entirely
     if (video.trackingMode === 'deleted') {
+        console.log(`🗑️ CRON DEBUG: @${video.username} (${video.platform}) - SKIPPED: Video marked as deleted/unavailable`);
         return { shouldScrape: false, reason: 'Video marked as deleted/unavailable' };
     }
     
     const now = new Date();
     const lastScraped = new Date(video.lastScrapedAt);
+    
+    console.log(`🔍 CRON DEBUG: @${video.username} (${video.platform}) - Cadence: ${video.scrapingCadence}, Last scraped: ${lastScraped.toISOString()}`);
     
     // For testing mode (every minute), check if we're at a new normalized minute
     if (video.scrapingCadence === 'testing') {
@@ -86,11 +89,14 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     // Videos with hourly cadence: scrape every hour (with 5-minute safety net)
     if (video.scrapingCadence === 'hourly') {
         if (hoursSinceLastScrape >= 1) {
+            console.log(`✅ CRON DEBUG: @${video.username} (${video.platform}) - SCRAPE: Hourly video - ${Math.floor(hoursSinceLastScrape)}h since last scrape`);
             return { shouldScrape: true, reason: `Hourly video - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
         } else if (minutesSinceLastScrape >= 65) { // Safety net: if missed by 5+ minutes
+            console.log(`⚠️ CRON DEBUG: @${video.username} (${video.platform}) - SCRAPE: Hourly video - missed scrape (${Math.floor(minutesSinceLastScrape)}min ago)`);
             return { shouldScrape: true, reason: `Hourly video - missed scrape (${Math.floor(minutesSinceLastScrape)}min ago)` };
         } else {
             const minutesRemaining = Math.ceil(60 - minutesSinceLastScrape);
+            console.log(`⏭️ CRON DEBUG: @${video.username} (${video.platform}) - SKIP: Hourly video - scraped ${Math.floor(minutesSinceLastScrape)}min ago, wait ${minutesRemaining}min more`);
             return { shouldScrape: false, reason: `Hourly video - scraped ${Math.floor(minutesSinceLastScrape)}min ago, wait ${minutesRemaining}min more` };
         }
     }
@@ -98,22 +104,28 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     // Videos with daily cadence: scrape once per day (with 5-minute safety net)
     if (video.scrapingCadence === 'daily') {
         if (hoursSinceLastScrape >= 24) {
+            console.log(`✅ CRON DEBUG: @${video.username} (${video.platform}) - SCRAPE: Daily video - ${Math.floor(hoursSinceLastScrape)}h since last scrape`);
             return { shouldScrape: true, reason: `Daily video - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
         } else if (minutesSinceLastScrape >= 1445) { // Safety net: if missed by 5+ minutes (24h 5min)
+            console.log(`⚠️ CRON DEBUG: @${video.username} (${video.platform}) - SCRAPE: Daily video - missed scrape (${Math.floor(minutesSinceLastScrape)}min ago)`);
             return { shouldScrape: true, reason: `Daily video - missed scrape (${Math.floor(minutesSinceLastScrape)}min ago)` };
         } else {
             const hoursRemaining = Math.ceil(24 - hoursSinceLastScrape);
+            console.log(`⏭️ CRON DEBUG: @${video.username} (${video.platform}) - SKIP: Daily video - scraped ${Math.floor(hoursSinceLastScrape)}h ago, wait ${hoursRemaining}h more`);
             return { shouldScrape: false, reason: `Daily video - scraped ${Math.floor(hoursSinceLastScrape)}h ago, wait ${hoursRemaining}h more` };
         }
     }
     
     // Handle unknown/null cadence - treat as daily
     if (hoursSinceLastScrape >= 24) {
+        console.log(`✅ CRON DEBUG: @${video.username} (${video.platform}) - SCRAPE: Unknown cadence (treated as daily) - ${Math.floor(hoursSinceLastScrape)}h since last scrape`);
         return { shouldScrape: true, reason: `Unknown cadence (treated as daily) - ${Math.floor(hoursSinceLastScrape)}h since last scrape` };
     } else if (minutesSinceLastScrape >= 1445) { // Safety net: if missed by 5+ minutes
+        console.log(`⚠️ CRON DEBUG: @${video.username} (${video.platform}) - SCRAPE: Unknown cadence (treated as daily) - missed scrape (${Math.floor(minutesSinceLastScrape)}min ago)`);
         return { shouldScrape: true, reason: `Unknown cadence (treated as daily) - missed scrape (${Math.floor(minutesSinceLastScrape)}min ago)` };
     } else {
         const hoursRemaining = Math.ceil(24 - hoursSinceLastScrape);
+        console.log(`⏭️ CRON DEBUG: @${video.username} (${video.platform}) - SKIP: Unknown cadence (treated as daily) - scraped ${Math.floor(hoursSinceLastScrape)}h ago, wait ${hoursRemaining}h more`);
         return { shouldScrape: false, reason: `Unknown cadence (treated as daily) - scraped ${Math.floor(hoursSinceLastScrape)}h ago, wait ${hoursRemaining}h more` };
     }
 }
@@ -679,9 +691,10 @@ export async function GET() {
     console.log(`🔧 Environment: NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL}`);
     console.log(`🔧 Headers: User-Agent=${process.env.HTTP_USER_AGENT || 'Not set'}`);
     console.log(`⚡ 100% RELIABILITY MODE: Every video processed every hour`);
-    console.log(`⏰ Hourly videos: GUARANTEED processing every 30+ minutes`);
-    console.log(`🌙 Daily videos: GUARANTEED processing every 12+ hours`);
+    console.log(`⏰ Hourly videos: Scrape every 1h (65min safety net)`);
+    console.log(`🌙 Daily videos: Scrape every 24h (1445min safety net)`);
     console.log(`📋 Strategy: Zero pending videos - maximum 2 cron runs to process any video`);
+    console.log(`🔍 CRON DEBUG: This execution will be logged with detailed scraping decisions`);
     
     // Test database connection immediately
     try {
@@ -838,6 +851,16 @@ export async function GET() {
         const duration = Date.now() - startTime;
         console.log(`🏁 ===== CRON JOB COMPLETED =====`);
         console.log(`📊 Results: ${result.successful} successful, ${result.failed} failed, ${result.skipped} skipped, ${result.cadenceChanges} cadence changes`);
+        
+        // CRON DEBUG SUMMARY
+        console.log(`🔍 CRON DEBUG SUMMARY:`);
+        console.log(`   • Total videos checked: ${videos.length}`);
+        console.log(`   • Videos scraped: ${result.successful}`);
+        console.log(`   • Videos skipped: ${result.skipped}`);
+        console.log(`   • Videos failed: ${result.failed}`);
+        console.log(`   • Execution time: ${duration}ms`);
+        console.log(`   • Hourly videos: ${videos.filter(v => v.scrapingCadence === 'hourly').length}`);
+        console.log(`   • Daily videos: ${videos.filter(v => v.scrapingCadence === 'daily').length}`);
         
         // Log any failures in detail
         if (result.failed > 0) {
