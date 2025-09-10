@@ -55,6 +55,9 @@ interface TrackedVideo {
     totalCommentsModerated?: number;
     phase1Notified?: boolean;
     phase2Notified?: boolean;
+    // Threads moderation fields
+    threadsJustModerated?: number;
+    totalThreadsModerated?: number;
 }
 
 interface CronStatus {
@@ -740,6 +743,46 @@ export default function TikTokTracker() {
             console.error('💥 Error updating top comment status:', err);
             const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
             setError(`Failed to update top comment status: ${errorMessage}`);
+        }
+    };
+
+    // Handle threads just moderated input
+    const handleThreadsJustModerated = async (videoId: string, threadsCount: number) => {
+        try {
+            const response = await fetch(`/api/videos/${videoId}/moderation`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'update_threads_just_moderated',
+                    threadsJustModerated: threadsCount
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to update threads just moderated');
+            }
+
+            console.log(`📝 Video ${videoId} threads just moderated: ${threadsCount}`);
+
+            // Update local state
+            setTracked(prev => prev.map(video => 
+                video.id === videoId
+                    ? {
+                        ...video,
+                        threadsJustModerated: threadsCount,
+                        totalThreadsModerated: (video.totalThreadsModerated || 0) + threadsCount
+                    }
+                    : video
+            ));
+
+        } catch (err) {
+            console.error('💥 Error updating threads just moderated:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+            setError(`Failed to update threads just moderated: ${errorMessage}`);
         }
     };
 
@@ -1738,6 +1781,8 @@ export default function TikTokTracker() {
                                                                 </th>
                                                                 {/* Moderation columns moved here for better visibility */}
                                                                 <th className="text-left p-4 font-medium text-gray-900">Just Moderated</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Threads Just Moderated</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Total Threads Moderated</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Check for top comment</th>
                                                                 <th 
                                                                     className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
@@ -1917,6 +1962,28 @@ export default function TikTokTracker() {
                                                                                     {new Date(video.lastModeratedAt).toLocaleDateString()} {new Date(video.lastModeratedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                                                                 </div>
                                                                             )}
+                                                                        </div>
+                                                                    </td>
+                                                                    {/* Threads Just Moderated column */}
+                                                                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                                                                        <div className="flex items-center">
+                                                                            <input
+                                                                                type="number"
+                                                                                min="0"
+                                                                                value={video.threadsJustModerated || 0}
+                                                                                onChange={(e) => {
+                                                                                    const value = parseInt(e.target.value) || 0;
+                                                                                    handleThreadsJustModerated(video.id, value);
+                                                                                }}
+                                                                                className="w-16 px-2 py-1 text-xs border rounded"
+                                                                                placeholder="0"
+                                                                            />
+                                                                        </div>
+                                                                    </td>
+                                                                    {/* Total Threads Moderated column */}
+                                                                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                                                                        <div className="text-sm font-medium">
+                                                                            {video.totalThreadsModerated || 0}
                                                                         </div>
                                                                     </td>
                                                                     {/* Check for top comment column */}

@@ -15,13 +15,14 @@ export async function PATCH(
       threadsPlanted, 
       gotTopComment,
       commentsModerated,
-      notes
+      notes,
+      threadsJustModerated
     } = body;
 
     // Validate input
-    if (!action || !['mark_moderated', 'update_threads', 'update_star', 'add_moderation_session'].includes(action)) {
+    if (!action || !['mark_moderated', 'update_threads', 'update_star', 'add_moderation_session', 'update_threads_just_moderated'].includes(action)) {
       return NextResponse.json(
-        { error: 'Invalid action. Must be: mark_moderated, update_threads, update_star, or add_moderation_session' },
+        { error: 'Invalid action. Must be: mark_moderated, update_threads, update_star, add_moderation_session, or update_threads_just_moderated' },
         { status: 400 }
       );
     }
@@ -55,6 +56,21 @@ export async function PATCH(
           );
         }
         updateData = { gotTopComment };
+        break;
+
+      case 'update_threads_just_moderated':
+        if (typeof threadsJustModerated !== 'number' || threadsJustModerated < 0) {
+          return NextResponse.json(
+            { error: 'threadsJustModerated must be a non-negative number' },
+            { status: 400 }
+          );
+        }
+        updateData = { 
+          threadsJustModerated,
+          totalThreadsModerated: {
+            increment: threadsJustModerated
+          }
+        };
         break;
 
       case 'add_moderation_session':
@@ -93,6 +109,8 @@ export async function PATCH(
         moderatedBy: true,
         threadsPlanted: true,
         gotTopComment: true,
+        threadsJustModerated: true,
+        totalThreadsModerated: true,
         username: true,
         platform: true
       }
@@ -139,6 +157,8 @@ export async function GET(
         moderatedBy: true,
         threadsPlanted: true,
         gotTopComment: true,
+        threadsJustModerated: true,
+        totalThreadsModerated: true,
         username: true,
         platform: true,
         phase1Notified: true,

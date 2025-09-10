@@ -368,6 +368,8 @@ export async function GET(req: Request) {
                     threadsPlanted: video.threadsPlanted || 0,
                     gotTopComment: video.gotTopComment || false,
                     totalCommentsModerated: video.totalCommentsModerated || 0,
+                    threadsJustModerated: video.threadsJustModerated || 0,
+                    totalThreadsModerated: video.totalThreadsModerated || 0,
                     phase1Notified: video.phase1Notified || false,
                     phase2Notified: video.phase2Notified || false,
                     history: history.map((h) => ({

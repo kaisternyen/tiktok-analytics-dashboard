@@ -40,6 +40,8 @@ model Video {
   threadsPlanted    Int              @default(0)      // Number of comment threads started
   gotTopComment     Boolean          @default(false)  // Star checkbox for top comment achievement
   totalCommentsModerated Int         @default(0)      // Total comments moderated across all sessions
+  threadsJustModerated Int           @default(0)      // Number of threads moderated in current session
+  totalThreadsModerated Int          @default(0)      // Total threads moderated across all sessions
   
   metricsHistory    MetricsHistory[]
   moderationHistory ModerationHistory[]
