@@ -16,7 +16,7 @@ export async function PATCH(
       gotTopComment,
       commentsModerated,
       notes,
-      threadsJustModerated,
+      threadsJustPlanted,
       currentPhase
     } = body;
 
@@ -60,34 +60,38 @@ export async function PATCH(
         break;
 
       case 'update_threads_just_moderated':
-        if (typeof threadsJustModerated !== 'number' || threadsJustModerated < 0) {
+        if (typeof threadsJustPlanted !== 'number' || threadsJustPlanted < 0) {
           return NextResponse.json(
-            { error: 'threadsJustModerated must be a non-negative number' },
+            { error: 'threadsJustPlanted must be a non-negative number' },
             { status: 400 }
           );
         }
         updateData = { 
-          threadsJustModerated,
-          totalThreadsModerated: {
-            increment: threadsJustModerated
+          threadsJustPlanted,
+          totalThreadsPlanted: {
+            increment: threadsJustPlanted
           }
         };
         break;
 
       case 'mark_moderated_with_threads':
-        if (typeof threadsJustModerated !== 'number' || threadsJustModerated < 0) {
+        // Handle both number and text input - convert to number, default to 0 if invalid
+        const threadsValue = typeof threadsJustPlanted === 'number' ? threadsJustPlanted : 
+                            typeof threadsJustPlanted === 'string' ? parseInt(threadsJustPlanted) || 0 : 0;
+        
+        if (threadsValue < 0) {
           return NextResponse.json(
-            { error: 'threadsJustModerated must be a non-negative number' },
+            { error: 'threadsJustPlanted must be a non-negative number' },
             { status: 400 }
           );
         }
         updateData = {
           lastModeratedAt: new Date(),
           moderatedBy: moderatedBy || 'anonymous',
-          threadsJustModerated: 0, // Reset to 0 after adding to total
-          lastSessionThreads: threadsJustModerated, // Store the threads from this session
-          totalThreadsModerated: {
-            increment: threadsJustModerated
+          threadsJustPlanted: 0, // Reset to 0 after adding to total
+          lastSessionThreads: threadsValue, // Store the threads from this session
+          totalThreadsPlanted: {
+            increment: threadsValue
           }
         };
         break;
@@ -138,8 +142,8 @@ export async function PATCH(
         moderatedBy: true,
         threadsPlanted: true,
         gotTopComment: true,
-        threadsJustModerated: true,
-        totalThreadsModerated: true,
+        threadsJustPlanted: true,
+        totalThreadsPlanted: true,
         lastSessionThreads: true,
         currentPhase: true,
         username: true,
@@ -188,8 +192,8 @@ export async function GET(
         moderatedBy: true,
         threadsPlanted: true,
         gotTopComment: true,
-        threadsJustModerated: true,
-        totalThreadsModerated: true,
+        threadsJustPlanted: true,
+        totalThreadsPlanted: true,
         lastSessionThreads: true,
         currentPhase: true,
         username: true,

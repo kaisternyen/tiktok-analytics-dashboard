@@ -56,10 +56,10 @@ interface TrackedVideo {
     phase1Notified?: boolean;
     phase2Notified?: boolean;
     currentPhase?: string;
-    // Threads moderation fields
-    threadsJustModerated?: number;
-    totalThreadsModerated?: number;
-    lastSessionThreads?: number; // Threads moderated in the last session
+    // Threads planted fields
+    threadsJustPlanted?: string | number;
+    totalThreadsPlanted?: number;
+    lastSessionThreads?: number; // Threads planted in the last session
 }
 
 interface CronStatus {
@@ -641,7 +641,7 @@ export default function TikTokTracker() {
             const video = tracked.find(v => v.id === videoId);
             if (!video) return;
 
-            const threadsJustModerated = video.threadsJustModerated || 0;
+            const threadsJustPlanted = video.threadsJustPlanted || '';
 
             const response = await fetch(`/api/videos/${videoId}/moderation`, {
                 method: 'PATCH',
@@ -651,7 +651,7 @@ export default function TikTokTracker() {
                 body: JSON.stringify({
                     action: 'mark_moderated_with_threads',
                     moderatedBy: 'user',
-                    threadsJustModerated: threadsJustModerated
+                    threadsJustPlanted: threadsJustPlanted
                 }),
             });
 
@@ -661,7 +661,7 @@ export default function TikTokTracker() {
                 throw new Error(result.error || 'Failed to mark as moderated');
             }
 
-            console.log(`📝 Video ${videoId} marked as moderated with ${threadsJustModerated} threads`);
+            console.log(`📝 Video ${videoId} marked as moderated with ${threadsJustPlanted} threads`);
 
             // Update local state
             setTracked(prev => prev.map(video => 
@@ -670,9 +670,9 @@ export default function TikTokTracker() {
                         ...video,
                         lastModeratedAt: result.video.lastModeratedAt,
                         moderatedBy: result.video.moderatedBy,
-                        totalThreadsModerated: result.video.totalThreadsModerated,
-                        lastSessionThreads: threadsJustModerated, // Store the threads from this session
-                        threadsJustModerated: 0 // Reset input to 0
+                        totalThreadsPlanted: result.video.totalThreadsPlanted,
+                        lastSessionThreads: result.video.lastSessionThreads, // Store the threads from this session
+                        threadsJustPlanted: '' // Reset input to empty
                     }
                     : video
             ));
@@ -1791,8 +1791,8 @@ export default function TikTokTracker() {
                                                                 </th>
                                                                 {/* Moderation columns moved here for better visibility */}
                                                                 <th className="text-left p-4 font-medium text-gray-900">Just Moderated</th>
-                                                                <th className="text-left p-4 font-medium text-gray-900">Threads Just Moderated</th>
-                                                                <th className="text-left p-4 font-medium text-gray-900">Total Threads Moderated</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Threads Just Planted</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Total Threads Planted</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Check for top comment</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Phase</th>
                                                                 <th 
@@ -1970,23 +1970,21 @@ export default function TikTokTracker() {
                                                                             </Button>
                                                                             {video.lastModeratedAt && (
                                                                                 <div className="text-xs text-gray-500">
-                                                                                    Last moderated {video.lastSessionThreads || 0} threads, {video.totalThreadsModerated || 0} total at {new Date(video.lastModeratedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                                                    Last planted {video.lastSessionThreads || 0} threads, {video.totalThreadsPlanted || 0} total at {new Date(video.lastModeratedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                                                                 </div>
                                                                             )}
                                                                         </div>
                                                                     </td>
-                                                                    {/* Threads Just Moderated column */}
+                                                                    {/* Threads Just Planted column */}
                                                                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                                         <div className="flex items-center">
                                                                             <input
-                                                                                type="number"
-                                                                                min="0"
-                                                                                value={video.threadsJustModerated || 0}
+                                                                                type="text"
+                                                                                value={video.threadsJustPlanted || ''}
                                                                                 onChange={(e) => {
-                                                                                    const value = parseInt(e.target.value) || 0;
                                                                                     setTracked(prev => prev.map(v => 
                                                                                         v.id === video.id
-                                                                                            ? { ...v, threadsJustModerated: value }
+                                                                                            ? { ...v, threadsJustPlanted: e.target.value }
                                                                                             : v
                                                                                     ));
                                                                                 }}
@@ -1995,10 +1993,10 @@ export default function TikTokTracker() {
                                                                             />
                                                                         </div>
                                                                     </td>
-                                                                    {/* Total Threads Moderated column */}
+                                                                    {/* Total Threads Planted column */}
                                                                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                                         <div className="text-sm font-medium">
-                                                                            {video.totalThreadsModerated || 0}
+                                                                            {video.totalThreadsPlanted || 0}
                                                                         </div>
                                                                     </td>
                                                                     {/* Check for top comment column */}
