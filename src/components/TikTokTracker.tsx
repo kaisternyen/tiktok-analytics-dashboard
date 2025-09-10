@@ -55,6 +55,7 @@ interface TrackedVideo {
     totalCommentsModerated?: number;
     phase1Notified?: boolean;
     phase2Notified?: boolean;
+    currentPhase?: string;
     // Threads moderation fields
     threadsJustModerated?: number;
     totalThreadsModerated?: number;
@@ -1784,6 +1785,7 @@ export default function TikTokTracker() {
                                                                 <th className="text-left p-4 font-medium text-gray-900">Threads Just Moderated</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Total Threads Moderated</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Check for top comment</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Phase</th>
                                                                 <th 
                                                                     className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
                                                                     onClick={() => handleHeaderClick('Likes')}
@@ -1998,6 +2000,24 @@ export default function TikTokTracker() {
                                                                                 className="w-4 h-4"
                                                                             />
                                                                         </div>
+                                                                    </td>
+                                                                    {/* Phase column */}
+                                                                    <td className="p-4">
+                                                                        <span className={`text-xs font-medium px-2 py-1 rounded ${
+                                                                            video.currentPhase === 'PHS 0' 
+                                                                                ? 'bg-gray-100 text-gray-800'
+                                                                                : video.currentPhase === 'In PHS 1'
+                                                                                ? 'bg-blue-100 text-blue-800'
+                                                                                : video.currentPhase === 'PHS 1 Complete'
+                                                                                ? 'bg-green-100 text-green-800'
+                                                                                : video.currentPhase === 'In PHS 2'
+                                                                                ? 'bg-orange-100 text-orange-800'
+                                                                                : video.currentPhase === 'PHS 2 Complete'
+                                                                                ? 'bg-purple-100 text-purple-800'
+                                                                                : 'bg-gray-100 text-gray-800'
+                                                                        }`}>
+                                                                            {video.currentPhase || 'PHS 0'}
+                                                                        </span>
                                                                     </td>
                                                                     <td className="p-4 font-medium">{formatNumber(video.likes)}</td>
                                                                     <td className="p-4 font-medium">{formatNumber(video.comments)}</td>

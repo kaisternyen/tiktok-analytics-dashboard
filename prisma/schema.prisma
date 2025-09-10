@@ -33,6 +33,7 @@ model Video {
   trackingMode      String?
   phase1Notified    Boolean          @default(false)  // >5k views + >5 comments
   phase2Notified    Boolean          @default(false)  // >10k views in hour + exponential
+  currentPhase      String           @default("PHS 0") // PHS 0, In PHS 1, PHS 1 Complete, In PHS 2, PHS 2 Complete
   
   // Comment moderation tracking
   lastModeratedAt   DateTime?        // When "Just Moderated" was last clicked

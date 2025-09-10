@@ -372,6 +372,7 @@ export async function GET(req: Request) {
                     totalThreadsModerated: video.totalThreadsModerated || 0,
                     phase1Notified: video.phase1Notified || false,
                     phase2Notified: video.phase2Notified || false,
+                    currentPhase: video.currentPhase || 'PHS 0',
                     history: history.map((h) => ({
                         time: h.timestamp.toISOString(),
                         views: h.views,

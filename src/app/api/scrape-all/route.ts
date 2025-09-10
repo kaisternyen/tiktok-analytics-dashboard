@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import { getCurrentNormalizedTimestamp, normalizeTimestamp, TimestampInterval } from '@/lib/timestamp-utils';
-import { checkViralThresholds, notifyViralVideo, checkPhase1Criteria, checkPhase2Criteria, notifyPhase1, notifyPhase2 } from '@/lib/discord-notifications';
+import { checkViralThresholds, notifyViralVideo, sendDiscordNotification } from '@/lib/discord-notifications';
 import { sanitizeMetrics, logSanitizationWarnings } from '@/lib/metrics-validation';
+import { determineVideoPhase, shouldSendPhaseNotification, getPhaseNotificationMessage } from '@/lib/phase-tracking';
 
 // Force dynamic rendering for cron jobs
 export const dynamic = 'force-dynamic';
@@ -486,67 +487,38 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         // Don't fail the entire operation if Discord notification fails
                     }
 
-                    // Check for Phase notifications
+                    // Check for Phase transitions and send notifications
                     try {
-                        const phaseUpdates: Record<string, boolean> = {};
-
-                        // Phase 1: >5k views and >5 comments (only if not already notified)
-                        const phase1Notified = (video as unknown as Record<string, unknown>).phase1Notified as boolean || false;
-                        if (!phase1Notified && checkPhase1Criteria(views, mediaData.comments)) {
-                            console.log(`🎯 @${video.username} video hit Phase 1! ${views.toLocaleString()} views, ${mediaData.comments} comments`);
+                        const currentPhase = (video as unknown as Record<string, unknown>).currentPhase as string || 'PHS 0';
+                        const newPhase = determineVideoPhase(views, mediaData.comments, currentPhase);
+                        
+                        // Update phase if it changed
+                        if (newPhase !== currentPhase) {
+                            console.log(`🔄 @${video.username} phase transition: ${currentPhase} → ${newPhase}`);
                             
-                            await notifyPhase1(
-                                video.username,
-                                video.platform,
-                                video.url,
-                                mediaData.description || '',
-                                views,
-                                mediaData.comments
-                            );
-                            
-                            phaseUpdates.phase1Notified = true;
-                        }
-
-                        // Phase 2: >10k views in hour with exponential growth (only if not already notified)
-                        const phase2Notified = (video as unknown as Record<string, unknown>).phase2Notified as boolean || false;
-                        if (!phase2Notified && await checkPhase2Criteria(video.id, views)) {
-                            console.log(`🚀 @${video.username} video hit Phase 2! Exponential growth detected with ${views.toLocaleString()} views`);
-                            
-                            // Calculate hourly growth for notification
-                            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-                            const recentMetrics = await prisma.metricsHistory.findFirst({
-                                where: {
-                                    videoId: video.id,
-                                    timestamp: { gte: oneHourAgo }
-                                },
-                                orderBy: { timestamp: 'asc' }
-                            });
-                            
-                            const hourlyGrowth = recentMetrics ? views - recentMetrics.views : views;
-                            
-                            await notifyPhase2(
-                                video.username,
-                                video.platform,
-                                video.url,
-                                mediaData.description || '',
-                                views,
-                                hourlyGrowth
-                            );
-                            
-                            phaseUpdates.phase2Notified = true;
-                        }
-
-                        // Update phase notification flags if needed
-                        if (Object.keys(phaseUpdates).length > 0) {
                             await prisma.video.update({
                                 where: { id: video.id },
-                                data: phaseUpdates
+                                data: { currentPhase: newPhase }
                             });
+                            
+                            // Send phase notification if this is a new phase
+                            if (shouldSendPhaseNotification(currentPhase, newPhase)) {
+                                const notificationMessage = getPhaseNotificationMessage(
+                                    video.username,
+                                    video.platform,
+                                    video.url,
+                                    currentPhase,
+                                    newPhase,
+                                    views,
+                                    mediaData.comments
+                                );
+                                
+                                await sendDiscordNotification(notificationMessage, 'viral-alerts');
+                            }
                         }
 
-                    } catch (error) {
-                        console.error('⚠️ Failed to check/send phase notifications:', error);
-                        // Don't fail the entire operation if phase notifications fail
+                    } catch (phaseError) {
+                        console.error(`❌ Phase tracking error for @${video.username}:`, phaseError);
                     }
 
                     // Add new metrics history entry with consistent timestamp normalization
