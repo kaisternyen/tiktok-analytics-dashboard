@@ -57,9 +57,7 @@ interface TrackedVideo {
     phase2Notified?: boolean;
     currentPhase?: string;
     // Threads planted fields
-    threadsJustPlanted?: string | number;
-    totalThreadsPlanted?: number;
-    lastSessionThreads?: number; // Threads planted in the last session
+    threadsPlantedNote?: string; // Free-form note about threads planted
 }
 
 interface CronStatus {
@@ -635,23 +633,17 @@ export default function TikTokTracker() {
         }
     };
 
-    // Handle "Just Moderated" - marks last moderated date and adds threads to total
+    // Handle "Just Moderated" - marks last moderated date
     const handleJustModerated = async (videoId: string) => {
         try {
-            const video = tracked.find(v => v.id === videoId);
-            if (!video) return;
-
-            const threadsJustPlanted = video.threadsJustPlanted || '';
-
             const response = await fetch(`/api/videos/${videoId}/moderation`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    action: 'mark_moderated_with_threads',
-                    moderatedBy: 'user',
-                    threadsJustPlanted: threadsJustPlanted
+                    action: 'mark_moderated',
+                    moderatedBy: 'user'
                 }),
             });
 
@@ -661,7 +653,7 @@ export default function TikTokTracker() {
                 throw new Error(result.error || 'Failed to mark as moderated');
             }
 
-            console.log(`📝 Video ${videoId} marked as moderated with ${threadsJustPlanted} threads`);
+            console.log(`📝 Video ${videoId} marked as moderated`);
 
             // Update local state
             setTracked(prev => prev.map(video => 
@@ -669,10 +661,7 @@ export default function TikTokTracker() {
                     ? {
                         ...video,
                         lastModeratedAt: result.video.lastModeratedAt,
-                        moderatedBy: result.video.moderatedBy,
-                        totalThreadsPlanted: result.video.totalThreadsPlanted,
-                        lastSessionThreads: result.video.lastSessionThreads, // Store the threads from this session
-                        threadsJustPlanted: '' // Reset input to empty
+                        moderatedBy: result.video.moderatedBy
                     }
                     : video
             ));
@@ -684,39 +673,6 @@ export default function TikTokTracker() {
         }
     };
 
-    // Handle "Refresh Video" - calls TikHub API for single video
-    const handleRefreshVideo = async (videoId: string, username: string) => {
-        try {
-            console.log(`🔄 REFRESHING VIDEO: @${username} (ID: ${videoId})`);
-            
-            const response = await fetch('/api/refresh-video', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ videoId }),
-            });
-
-            const result = await response.json();
-            
-            if (result.success) {
-                console.log(`✅ REFRESH COMPLETED FOR @${username}:`, result);
-                console.log(`📊 Previous Stats:`, result.video.previousStats);
-                console.log(`📊 New Stats:`, result.video.newStats);
-                console.log(`📊 TikHub API Response:`, result.tikHubResult);
-                
-                // Refresh the video data
-                console.log(`🔄 REFRESHING VIDEO DATA AFTER UPDATE FOR @${username}`);
-                await fetchVideos();
-                console.log(`✅ VIDEO DATA REFRESHED FOR @${username}`);
-            } else {
-                console.error(`❌ REFRESH FAILED FOR @${username}:`, result.error);
-                console.error(`📊 TikHub Error Details:`, result.tikHubResult);
-            }
-        } catch (error) {
-            console.error(`💥 Error refreshing video @${username}:`, error);
-        }
-    };
 
     // Handle top comment checkbox toggle
     const handleTopCommentToggle = async (videoId: string, checked: boolean) => {
@@ -1791,8 +1747,7 @@ export default function TikTokTracker() {
                                                                 </th>
                                                                 {/* Moderation columns moved here for better visibility */}
                                                                 <th className="text-left p-4 font-medium text-gray-900">Just Moderated</th>
-                                                                <th className="text-left p-4 font-medium text-gray-900">Threads Just Planted</th>
-                                                                <th className="text-left p-4 font-medium text-gray-900">Total Threads Planted</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Threads Planted Note</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Check for top comment</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Phase</th>
                                                                 <th 
@@ -1953,50 +1908,58 @@ export default function TikTokTracker() {
                                                                                     e.stopPropagation();
                                                                                     handleJustModerated(video.id);
                                                                                 }}
-                                                                                className="text-xs py-1 px-2 h-6 bg-blue-50 hover:bg-blue-100"
+                                                                                className={`text-xs py-1 px-2 h-6 ${
+                                                                                    !video.lastModeratedAt ? 'bg-green-50 hover:bg-green-100 text-green-800' :
+                                                                                    (() => {
+                                                                                        const hoursSinceModeration = video.lastModeratedAt ? 
+                                                                                            (new Date().getTime() - new Date(video.lastModeratedAt).getTime()) / (1000 * 60 * 60) : 0;
+                                                                                        if (hoursSinceModeration < 1) return 'bg-green-50 hover:bg-green-100 text-green-800';
+                                                                                        if (hoursSinceModeration < 6) return 'bg-yellow-50 hover:bg-yellow-100 text-yellow-800';
+                                                                                        if (hoursSinceModeration < 12) return 'bg-orange-50 hover:bg-orange-100 text-orange-800';
+                                                                                        return 'bg-red-50 hover:bg-red-100 text-red-800';
+                                                                                    })()
+                                                                                }`}
                                                                             >
                                                                                 Just Moderated
                                                                             </Button>
-                                                                            <Button
-                                                                                variant="outline"
-                                                                                size="sm"
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    handleRefreshVideo(video.id, video.username);
-                                                                                }}
-                                                                                className="text-xs py-1 px-2 h-6 bg-green-50 hover:bg-green-100"
-                                                                            >
-                                                                                🔄 Refresh
-                                                                            </Button>
                                                                             {video.lastModeratedAt && (
                                                                                 <div className="text-xs text-gray-500">
-                                                                                    Last planted {video.lastSessionThreads || 0} threads, {video.totalThreadsPlanted || 0} total at {new Date(video.lastModeratedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                                                    Last moderated at {new Date(video.lastModeratedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                                                                 </div>
                                                                             )}
                                                                         </div>
                                                                     </td>
-                                                                    {/* Threads Just Planted column */}
+                                                                    {/* Threads Planted Note column */}
                                                                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                                         <div className="flex items-center">
                                                                             <input
                                                                                 type="text"
-                                                                                value={video.threadsJustPlanted || ''}
+                                                                                value={video.threadsPlantedNote || ''}
                                                                                 onChange={(e) => {
                                                                                     setTracked(prev => prev.map(v => 
                                                                                         v.id === video.id
-                                                                                            ? { ...v, threadsJustPlanted: e.target.value }
+                                                                                            ? { ...v, threadsPlantedNote: e.target.value }
                                                                                             : v
                                                                                     ));
                                                                                 }}
-                                                                                className="w-16 px-2 py-1 text-xs border rounded"
-                                                                                placeholder="0"
+                                                                                onBlur={async () => {
+                                                                                    try {
+                                                                                        const response = await fetch(`/api/videos/${video.id}/moderation`, {
+                                                                                            method: 'PATCH',
+                                                                                            headers: { 'Content-Type': 'application/json' },
+                                                                                            body: JSON.stringify({
+                                                                                                action: 'update_threads_note',
+                                                                                                threadsPlantedNote: video.threadsPlantedNote || ''
+                                                                                            }),
+                                                                                        });
+                                                                                        if (!response.ok) throw new Error('Failed to update note');
+                                                                                    } catch (err) {
+                                                                                        console.error('Error updating threads note:', err);
+                                                                                    }
+                                                                                }}
+                                                                                className="w-32 px-2 py-1 text-xs border rounded"
+                                                                                placeholder="Threads note..."
                                                                             />
-                                                                        </div>
-                                                                    </td>
-                                                                    {/* Total Threads Planted column */}
-                                                                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                                                                        <div className="text-sm font-medium">
-                                                                            {video.totalThreadsPlanted || 0}
                                                                         </div>
                                                                     </td>
                                                                     {/* Check for top comment column */}

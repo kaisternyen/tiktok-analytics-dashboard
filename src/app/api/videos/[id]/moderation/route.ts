@@ -16,14 +16,14 @@ export async function PATCH(
       gotTopComment,
       commentsModerated,
       notes,
-      threadsJustPlanted,
+      threadsPlantedNote,
       currentPhase
     } = body;
 
     // Validate input
-    if (!action || !['mark_moderated', 'update_threads', 'update_star', 'add_moderation_session', 'update_threads_just_moderated', 'mark_moderated_with_threads', 'update_phase'].includes(action)) {
+    if (!action || !['mark_moderated', 'update_threads', 'update_star', 'add_moderation_session', 'update_threads_note', 'update_phase'].includes(action)) {
       return NextResponse.json(
-        { error: 'Invalid action. Must be: mark_moderated, update_threads, update_star, add_moderation_session, update_threads_just_moderated, mark_moderated_with_threads, or update_phase' },
+        { error: 'Invalid action. Must be: mark_moderated, update_threads, update_star, add_moderation_session, update_threads_note, or update_phase' },
         { status: 400 }
       );
     }
@@ -59,40 +59,10 @@ export async function PATCH(
         updateData = { gotTopComment };
         break;
 
-      case 'update_threads_just_moderated':
-        if (typeof threadsJustPlanted !== 'number' || threadsJustPlanted < 0) {
-          return NextResponse.json(
-            { error: 'threadsJustPlanted must be a non-negative number' },
-            { status: 400 }
-          );
-        }
-        updateData = { 
-          threadsJustPlanted,
-          totalThreadsPlanted: {
-            increment: threadsJustPlanted
-          }
-        };
-        break;
 
-      case 'mark_moderated_with_threads':
-        // Handle both number and text input - convert to number, default to 0 if invalid
-        const threadsValue = typeof threadsJustPlanted === 'number' ? threadsJustPlanted : 
-                            typeof threadsJustPlanted === 'string' ? parseInt(threadsJustPlanted) || 0 : 0;
-        
-        if (threadsValue < 0) {
-          return NextResponse.json(
-            { error: 'threadsJustPlanted must be a non-negative number' },
-            { status: 400 }
-          );
-        }
+      case 'update_threads_note':
         updateData = {
-          lastModeratedAt: new Date(),
-          moderatedBy: moderatedBy || 'anonymous',
-          threadsJustPlanted: 0, // Reset to 0 after adding to total
-          lastSessionThreads: threadsValue, // Store the threads from this session
-          totalThreadsPlanted: {
-            increment: threadsValue
-          }
+          threadsPlantedNote: threadsPlantedNote || ''
         };
         break;
 
@@ -142,9 +112,7 @@ export async function PATCH(
         moderatedBy: true,
         threadsPlanted: true,
         gotTopComment: true,
-        threadsJustPlanted: true,
-        totalThreadsPlanted: true,
-        lastSessionThreads: true,
+        threadsPlantedNote: true,
         currentPhase: true,
         username: true,
         platform: true
@@ -192,9 +160,7 @@ export async function GET(
         moderatedBy: true,
         threadsPlanted: true,
         gotTopComment: true,
-        threadsJustPlanted: true,
-        totalThreadsPlanted: true,
-        lastSessionThreads: true,
+        threadsPlantedNote: true,
         currentPhase: true,
         username: true,
         platform: true,
