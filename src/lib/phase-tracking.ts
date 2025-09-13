@@ -63,15 +63,85 @@ export function determineVideoPhase(
 
 export function shouldSendPhaseNotification(
   oldPhase: string,
-  newPhase: VideoPhase
+  newPhase: VideoPhase,
+  phase1Notified: boolean = false,
+  phase2Notified: boolean = false
 ): boolean {
   // Only send notifications for phase transitions, not for staying in the same phase
   if (oldPhase === newPhase) {
     return false;
   }
 
-  // Send notification for any phase transition
-  return true;
+  // Check if we've already sent notification for this phase
+  if (newPhase === 'In PHS 1' || newPhase === 'PHS 1 Complete') {
+    return !phase1Notified;
+  }
+  
+  if (newPhase === 'In PHS 2' || newPhase === 'PHS 2 Complete') {
+    return !phase2Notified;
+  }
+
+  return false;
+}
+
+export function determineFinalPhaseAndNotifications(
+  views: number,
+  comments: number,
+  currentPhase: string,
+  phase1Notified: boolean = false,
+  phase2Notified: boolean = false,
+  thresholds: PhaseThresholds = DEFAULT_THRESHOLDS
+): {
+  finalPhase: VideoPhase;
+  shouldNotifyPhase1: boolean;
+  shouldNotifyPhase2: boolean;
+  newPhase1Notified: boolean;
+  newPhase2Notified: boolean;
+} {
+  // Determine the final phase by checking all possible transitions
+  let finalPhase: VideoPhase = currentPhase as VideoPhase;
+  let shouldNotifyPhase1 = false;
+  let shouldNotifyPhase2 = false;
+  let newPhase1Notified = phase1Notified;
+  let newPhase2Notified = phase2Notified;
+
+  // Check if we can jump directly to Phase 2 (edge case handling)
+  if (views >= thresholds.phase2Views && comments >= thresholds.phase2Comments) {
+    if (currentPhase === 'PHS 0' || currentPhase === 'In PHS 1' || currentPhase === 'PHS 1 Complete') {
+      finalPhase = 'In PHS 2';
+      if (!phase2Notified) {
+        shouldNotifyPhase2 = true;
+        newPhase2Notified = true;
+      }
+      // If we jumped directly to Phase 2, mark Phase 1 as notified too
+      if (!phase1Notified) {
+        newPhase1Notified = true;
+      }
+    }
+  } else if (views >= thresholds.phase1Views && comments >= thresholds.phase1Comments) {
+    // Check Phase 1 transitions
+    if (currentPhase === 'PHS 0') {
+      finalPhase = 'In PHS 1';
+      if (!phase1Notified) {
+        shouldNotifyPhase1 = true;
+        newPhase1Notified = true;
+      }
+    } else if (currentPhase === 'In PHS 1') {
+      finalPhase = 'PHS 1 Complete';
+      if (!phase1Notified) {
+        shouldNotifyPhase1 = true;
+        newPhase1Notified = true;
+      }
+    }
+  }
+
+  return {
+    finalPhase,
+    shouldNotifyPhase1,
+    shouldNotifyPhase2,
+    newPhase1Notified,
+    newPhase2Notified
+  };
 }
 
 export function getPhaseNotificationMessage(

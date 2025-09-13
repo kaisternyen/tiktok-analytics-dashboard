@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentNormalizedTimestamp, normalizeTimestamp, TimestampInterval } from '@/lib/timestamp-utils';
 import { checkViralThresholds, notifyViralVideo, sendDiscordNotification } from '@/lib/discord-notifications';
 import { sanitizeMetrics, logSanitizationWarnings } from '@/lib/metrics-validation';
-import { determineVideoPhase, shouldSendPhaseNotification, getPhaseNotificationMessage } from '@/lib/phase-tracking';
+import { getPhaseNotificationMessage, determineFinalPhaseAndNotifications } from '@/lib/phase-tracking';
 
 // Force dynamic rendering for cron jobs
 export const dynamic = 'force-dynamic';
@@ -53,6 +53,9 @@ interface VideoRecord {
     dailyViewsGrowth: number | null;
     needsCadenceCheck: boolean;
     trackingMode: string | null;
+    currentPhase: string;
+    phase1Notified: boolean;
+    phase2Notified: boolean;
 }
 
 // Determine if video should be scraped based on standardized timing and cadence
@@ -501,31 +504,63 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
 
                     // Check for Phase transitions and send notifications
                     try {
-                        const currentPhase = (video as unknown as Record<string, unknown>).currentPhase as string || 'PHS 0';
-                        const newPhase = determineVideoPhase(views, mediaData.comments, currentPhase);
+                        const currentPhase = video.currentPhase;
+                        const phase1Notified = video.phase1Notified;
+                        const phase2Notified = video.phase2Notified;
                         
-                        // Update phase if it changed
-                        if (newPhase !== currentPhase) {
-                            console.log(`🔄 @${video.username} phase transition: ${currentPhase} → ${newPhase}`);
+                        const phaseResult = determineFinalPhaseAndNotifications(
+                            views, 
+                            mediaData.comments, 
+                            currentPhase, 
+                            phase1Notified, 
+                            phase2Notified
+                        );
+                        
+                        // Update phase and notification flags if there's a change
+                        if (phaseResult.finalPhase !== currentPhase || 
+                            phaseResult.newPhase1Notified !== phase1Notified || 
+                            phaseResult.newPhase2Notified !== phase2Notified) {
+                            
+                            console.log(`🔄 @${video.username} phase transition: ${currentPhase} → ${phaseResult.finalPhase}`);
                             
                             await prisma.video.update({
                                 where: { id: video.id },
-                                data: { currentPhase: newPhase }
+                                data: { 
+                                    currentPhase: phaseResult.finalPhase,
+                                    phase1Notified: phaseResult.newPhase1Notified,
+                                    phase2Notified: phaseResult.newPhase2Notified
+                                }
                             });
                             
-                            // Send phase notification if this is a new phase
-                            if (shouldSendPhaseNotification(currentPhase, newPhase)) {
+                            // Send notifications for the appropriate phases
+                            if (phaseResult.shouldNotifyPhase1) {
                                 const notificationMessage = getPhaseNotificationMessage(
                                     video.username,
                                     video.platform,
                                     video.url,
                                     currentPhase,
-                                    newPhase,
+                                    phaseResult.finalPhase,
                                     views,
                                     mediaData.comments
                                 );
                                 
                                 await sendDiscordNotification(notificationMessage, 'viral-alerts');
+                                console.log(`📢 Phase 1 notification sent for @${video.username}`);
+                            }
+                            
+                            if (phaseResult.shouldNotifyPhase2) {
+                                const notificationMessage = getPhaseNotificationMessage(
+                                    video.username,
+                                    video.platform,
+                                    video.url,
+                                    currentPhase,
+                                    phaseResult.finalPhase,
+                                    views,
+                                    mediaData.comments
+                                );
+                                
+                                await sendDiscordNotification(notificationMessage, 'viral-alerts');
+                                console.log(`📢 Phase 2 notification sent for @${video.username}`);
                             }
                         }
 
@@ -755,6 +790,9 @@ export async function GET() {
                     dailyViewsGrowth: true,
                     needsCadenceCheck: true,
                     trackingMode: true,
+                    currentPhase: true,
+                    phase1Notified: true,
+                    phase2Notified: true,
                 }
             });
 
@@ -775,6 +813,9 @@ export async function GET() {
                 dailyViewsGrowth: number | null;
                 needsCadenceCheck: boolean | null;
                 trackingMode: string | null;
+                currentPhase: string | null;
+                phase1Notified: boolean | null;
+                phase2Notified: boolean | null;
             }) => {
                 // Determine proper cadence based on current setting
                 const cadence = video.scrapingCadence || 'hourly';
@@ -789,6 +830,9 @@ export async function GET() {
                     dailyViewsGrowth: video.dailyViewsGrowth || null,
                     needsCadenceCheck: video.needsCadenceCheck || false,
                     trackingMode: video.trackingMode || null,
+                    currentPhase: video.currentPhase || 'PHS 0',
+                    phase1Notified: video.phase1Notified || false,
+                    phase2Notified: video.phase2Notified || false,
                 };
             });
             
