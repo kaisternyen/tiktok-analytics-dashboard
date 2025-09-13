@@ -23,8 +23,23 @@ export async function GET() {
 
         const now = new Date();
         
+        // Define video info type
+        type VideoInfo = {
+            username: string;
+            platform: string;
+            cadence: string;
+            lastScraped: Date;
+            timeInfo: string;
+            views: string;
+            trackingMode: string | null;
+        };
+
         // Group videos by status
-        const statusGroups = {
+        const statusGroups: {
+            hourly: { overdue: VideoInfo[], up_to_date: VideoInfo[] };
+            daily: { overdue: VideoInfo[], up_to_date: VideoInfo[] };
+            other: { overdue: VideoInfo[], up_to_date: VideoInfo[] };
+        } = {
             hourly: { overdue: [], up_to_date: [] },
             daily: { overdue: [], up_to_date: [] },
             other: { overdue: [], up_to_date: [] }

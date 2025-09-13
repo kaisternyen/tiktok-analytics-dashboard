@@ -139,13 +139,39 @@ async function evaluateCadenceChange(video: VideoRecord, newViews: number): Prom
     
     console.log(`📊 @${video.username}: Age ${videoAgeInDays.toFixed(1)} days, Current cadence: ${video.scrapingCadence}, Views: ${newViews.toLocaleString()}`);
     
-    // RULE 1: Videos under 24 hours old - always stay hourly (high growth potential)
+    // RULE 1: Videos with 0 views - switch to daily immediately (regardless of age)
+    if (newViews === 0) {
+        if (video.scrapingCadence === 'hourly') {
+            return {
+                newCadence: 'daily',
+                reason: `Zero views → switching to daily (save API calls)`
+            };
+        }
+        return null; // Already daily
+    }
+    
+    // RULE 2: Videos under 24 hours old - stay hourly unless they have very low views
     if (videoAgeInDays < 1) {
+        // Even new videos should switch to daily if they have very low views
+        if (video.scrapingCadence === 'hourly' && newViews < 100) {
+            return {
+                newCadence: 'daily',
+                reason: `New video (${videoAgeInDays.toFixed(1)} days) with only ${newViews} views → switching to daily`
+            };
+        }
         return null; // Keep new videos on hourly
     }
     
-    // RULE 2: Videos 1-7 days old - switch to daily if under 1,000 total views
+    // RULE 3: Videos 1-7 days old - switch to daily if under 1,000 total views
     if (videoAgeInDays >= 1 && videoAgeInDays < 7) {
+        // Very aggressive switching for low-performing videos
+        if (video.scrapingCadence === 'hourly' && newViews < 50) {
+            return {
+                newCadence: 'daily',
+                reason: `Age ${videoAgeInDays.toFixed(1)} days, Views ${newViews.toLocaleString()} < 50 → switching to daily (very low performance)`
+            };
+        }
+        
         if (video.scrapingCadence === 'hourly' && newViews < 1000) {
             return {
                 newCadence: 'daily',
@@ -164,8 +190,16 @@ async function evaluateCadenceChange(video: VideoRecord, newViews: number): Prom
         return null; // No change needed
     }
     
-    // RULE 3: Videos 7+ days old - switch to daily if under 5,000 total views OR low daily growth
+    // RULE 4: Videos 7+ days old - switch to daily if under 5,000 total views OR low daily growth
     if (videoAgeInDays >= 7) {
+        // Very aggressive switching for old videos with low views
+        if (video.scrapingCadence === 'hourly' && newViews < 100) {
+            return {
+                newCadence: 'daily',
+                reason: `Age ${videoAgeInDays.toFixed(1)} days, Views ${newViews.toLocaleString()} < 100 → switching to daily (old + very low views)`
+            };
+        }
+        
         // Simple threshold: if total views are low, switch to daily
         if (video.scrapingCadence === 'hourly' && newViews < 5000) {
             return {
@@ -220,6 +254,66 @@ async function evaluateCadenceChange(video: VideoRecord, newViews: number): Prom
     }
     
     return null; // No cadence change needed
+}
+
+// Proactively identify videos that should be on daily cadence but aren't
+async function identifySlowVideos(): Promise<{ videoId: string; username: string; platform: string; views: number; reason: string }[]> {
+    const slowVideos = [];
+    
+    try {
+        // Find hourly videos with very low views
+        const hourlyVideos = await prisma.video.findMany({
+            where: {
+                isActive: true,
+                scrapingCadence: 'hourly',
+                currentViews: { lt: 100 } // Less than 100 views
+            },
+            select: {
+                id: true,
+                username: true,
+                platform: true,
+                currentViews: true,
+                createdAt: true
+            }
+        });
+        
+        for (const video of hourlyVideos) {
+            const ageInDays = (Date.now() - new Date(video.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+            
+            let reason = '';
+            if (video.currentViews === 0) {
+                reason = 'Zero views';
+            } else if (video.currentViews < 10) {
+                reason = `Very low views (${video.currentViews})`;
+            } else if (video.currentViews < 50 && ageInDays >= 1) {
+                reason = `Low views (${video.currentViews}) after ${ageInDays.toFixed(1)} days`;
+            } else if (video.currentViews < 100 && ageInDays >= 7) {
+                reason = `Low views (${video.currentViews}) after ${ageInDays.toFixed(1)} days`;
+            }
+            
+            if (reason) {
+                slowVideos.push({
+                    videoId: video.id,
+                    username: video.username,
+                    platform: video.platform,
+                    views: video.currentViews,
+                    reason
+                });
+            }
+        }
+        
+        if (slowVideos.length > 0) {
+            console.log(`🐌 Found ${slowVideos.length} slow videos that should be on daily cadence:`);
+            slowVideos.forEach((video, index) => {
+                console.log(`   ${index + 1}. @${video.username} (${video.platform}) - ${video.views} views - ${video.reason}`);
+            });
+        }
+        
+    } catch (error) {
+        console.error(`❌ Error identifying slow videos:`, error);
+    }
+    
+    return slowVideos;
 }
 
 // Smart processing with standardized timing and adaptive frequency
@@ -891,6 +985,97 @@ export async function GET() {
             minutesAgo: Math.floor((now.getTime() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60)),
             cadence: v.scrapingCadence
         })));
+        
+        // Identify slow videos that should be on daily cadence
+        console.log(`📊 Step 2.5: Identifying slow videos that should be on daily cadence...`);
+        const slowVideos = await identifySlowVideos();
+        
+        // Automatically fix slow videos by switching them to daily cadence
+        if (slowVideos.length > 0) {
+            console.log(`🔧 Step 2.6: Automatically switching ${slowVideos.length} slow videos to daily cadence...`);
+            let fixedCount = 0;
+            
+            for (const slowVideo of slowVideos) {
+                try {
+                    await prisma.video.update({
+                        where: { id: slowVideo.videoId },
+                        data: { 
+                            scrapingCadence: 'daily',
+                            lastModeChange: new Date()
+                        }
+                    });
+                    console.log(`✅ Fixed @${slowVideo.username} (${slowVideo.platform}) - switched to daily cadence (${slowVideo.reason})`);
+                    fixedCount++;
+                } catch (error) {
+                    console.error(`❌ Failed to fix @${slowVideo.username}:`, error);
+                }
+            }
+            
+            console.log(`🎯 Successfully fixed ${fixedCount}/${slowVideos.length} slow videos`);
+            
+            // Refresh the videos list to include the changes
+            const updatedVideos = await prisma.video.findMany({
+                where: { 
+                    isActive: true,
+                    OR: [
+                        { trackingMode: null },
+                        { trackingMode: { not: 'deleted' } }
+                    ]
+                },
+                select: {
+                    id: true,
+                    url: true,
+                    username: true,
+                    platform: true,
+                    currentViews: true,
+                    currentLikes: true,
+                    currentComments: true,
+                    currentShares: true,
+                    lastScrapedAt: true,
+                    createdAt: true,
+                    scrapingCadence: true,
+                    lastDailyViews: true,
+                    dailyViewsGrowth: true,
+                    needsCadenceCheck: true,
+                    trackingMode: true,
+                    currentPhase: true,
+                    phase1Notified: true,
+                    phase2Notified: true,
+                }
+            });
+            
+            // Map to VideoRecord format
+            videos = updatedVideos.map((video: {
+                id: string;
+                url: string;
+                username: string;
+                platform: string;
+                currentViews: number;
+                currentLikes: number;
+                currentComments: number;
+                currentShares: number;
+                lastScrapedAt: Date;
+                createdAt: Date;
+                scrapingCadence: string | null;
+                lastDailyViews: number | null;
+                dailyViewsGrowth: number | null;
+                needsCadenceCheck: boolean | null;
+                trackingMode: string | null;
+                currentPhase: string | null;
+                phase1Notified: boolean | null;
+                phase2Notified: boolean | null;
+            }) => ({
+                ...video,
+                scrapingCadence: video.scrapingCadence || 'hourly',
+                lastDailyViews: video.lastDailyViews || null,
+                dailyViewsGrowth: video.dailyViewsGrowth || null,
+                needsCadenceCheck: video.needsCadenceCheck || false,
+                trackingMode: video.trackingMode || null,
+                currentPhase: video.currentPhase || 'PHS 0',
+                phase1Notified: video.phase1Notified || false,
+                phase2Notified: video.phase2Notified || false,
+            }));
+        }
         
         if (videos.length === 0) {
             console.log('❌ CRITICAL: No videos found in database - this explains why nothing is being scraped!');
