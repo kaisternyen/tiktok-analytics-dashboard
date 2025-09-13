@@ -965,11 +965,21 @@ export default function TikTokTracker() {
             timeframeEnd = new Date(timeframe[1]);
         }
 
-        // Filter out videos on daily cadence that haven't been scraped today for live charts
+        // Filter videos based on timeframe and cadence
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         
+        // Check if this is a 1-day timeframe (24 hours)
+        const isOneDayTimeframe = timeframeStart && timeframeEnd && 
+            (timeframeEnd.getTime() - timeframeStart.getTime()) <= (25 * 60 * 60 * 1000); // 25 hours to account for slight variations
+        
         const eligibleVideos = tracked.filter(video => {
+            // For 1-day timeframe, only include hourly cadence videos
+            if (isOneDayTimeframe) {
+                return video.platform && video.scrapingCadence === 'hourly';
+            }
+            
+            // For longer timeframes, use the original logic
             // Always include hourly videos 
             if (video.platform && video.scrapingCadence === 'hourly') {
                 return true;
