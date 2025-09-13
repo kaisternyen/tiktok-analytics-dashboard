@@ -236,6 +236,15 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
     const dailyCount = videos.filter(v => v.scrapingCadence === 'daily').length;
     console.log(`   • Hourly: ${hourlyCount} videos`);
     console.log(`   • Daily: ${dailyCount} videos`);
+    
+    // DEBUG: Log hourly videos that are being processed
+    const hourlyVideos = videos.filter(v => v.scrapingCadence === 'hourly');
+    console.log(`🔍 DEBUG: Hourly videos being processed:`, hourlyVideos.map(v => ({
+        username: v.username,
+        platform: v.platform,
+        lastScrapedAt: v.lastScrapedAt,
+        minutesAgo: Math.floor((Date.now() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60))
+    })));
 
     // Filter videos that need scraping
     const videosToProcess = videos.filter(video => {
@@ -866,6 +875,16 @@ export async function GET() {
         // Log oldest videos
         const oldestVideos = videos.sort((a, b) => new Date(a.lastScrapedAt).getTime() - new Date(b.lastScrapedAt).getTime()).slice(0, 3);
         console.log(`📊 Oldest 3 videos by lastScrapedAt:`, oldestVideos.map(v => ({
+            username: v.username,
+            platform: v.platform,
+            lastScrapedAt: v.lastScrapedAt,
+            minutesAgo: Math.floor((now.getTime() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60)),
+            cadence: v.scrapingCadence
+        })));
+        
+        // DEBUG: Log all hourly videos to see what's happening
+        const hourlyVideos = videos.filter(v => v.scrapingCadence === 'hourly');
+        console.log(`🔍 DEBUG: Found ${hourlyVideos.length} hourly videos:`, hourlyVideos.map(v => ({
             username: v.username,
             platform: v.platform,
             lastScrapedAt: v.lastScrapedAt,
