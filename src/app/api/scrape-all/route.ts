@@ -725,6 +725,8 @@ export async function GET() {
     console.log(`🔧 Process info: PID ${process.pid}, Memory: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
     console.log(`🔧 Environment: NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL}`);
     console.log(`🔧 Headers: User-Agent=${process.env.HTTP_USER_AGENT || 'Not set'}`);
+    console.log(`🔧 Request URL: ${process.env.VERCEL_URL || 'localhost'}`);
+    console.log(`🔧 Cron Job Source: ${process.env.VERCEL_CRON_SECRET ? 'Vercel Cron' : 'Manual/Test'}`);
     console.log(`⚡ 100% RELIABILITY MODE: Every video processed every hour`);
     console.log(`⏰ Hourly videos: Scrape every 1h (65min safety net)`);
     console.log(`🌙 Daily videos: Scrape every 24h (1445min safety net)`);
