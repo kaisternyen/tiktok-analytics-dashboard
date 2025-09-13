@@ -1923,9 +1923,8 @@ export default function TikTokTracker() {
                                                                                     (() => {
                                                                                         const hoursSinceModeration = video.lastModeratedAt ? 
                                                                                             (new Date().getTime() - new Date(video.lastModeratedAt).getTime()) / (1000 * 60 * 60) : 0;
-                                                                                        if (hoursSinceModeration < 1) return 'bg-green-50 hover:bg-green-100 text-green-800';
+                                                                                        if (hoursSinceModeration < 2) return 'bg-green-50 hover:bg-green-100 text-green-800';
                                                                                         if (hoursSinceModeration < 6) return 'bg-yellow-50 hover:bg-yellow-100 text-yellow-800';
-                                                                                        if (hoursSinceModeration < 12) return 'bg-orange-50 hover:bg-orange-100 text-orange-800';
                                                                                         return 'bg-red-50 hover:bg-red-100 text-red-800';
                                                                                     })()
                                                                                 }`}
