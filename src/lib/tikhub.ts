@@ -261,13 +261,13 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         console.log('✅ Video ID length:', videoId.length);
         console.log('✅ Video ID type:', typeof videoId);
 
-        // Prepare TikHub API request - Updated to use correct V3 endpoint with aweme_id
-        const tikHubUrl = `https://tikapi.io/api/v3/video/info/?aweme_id=${videoId}`;
+        // Prepare TikHub API request - Updated to use correct TikHub API endpoint
+        const tikHubUrl = `https://api.tikhub.io/v1/tiktok/web/fetch_video?aweme_id=${videoId}`;
 
         console.log('📋 TikHub API request prepared for URL:', tikHubUrl);
         console.log('🌐 Making API request...');
         console.log('📋 Request headers:', {
-            'X-API-KEY': apiKey.substring(0, 10) + '...',
+            'Authorization': `Bearer ${apiKey.substring(0, 10)}...`,
             'Accept': 'application/json',
             'User-Agent': 'TikTok-Analytics-Dashboard/1.0'
         });
@@ -277,7 +277,7 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         const response = await fetch(tikHubUrl, {
             method: 'GET',
             headers: {
-                'X-API-KEY': apiKey,
+                'Authorization': `Bearer ${apiKey}`,
                 'Accept': 'application/json',
                 'User-Agent': 'TikTok-Analytics-Dashboard/1.0'
             }
@@ -308,7 +308,7 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
                 method: 'GET',
                 url: tikHubUrl,
                 headers: {
-                    'X-API-KEY': apiKey.substring(0, 10) + '...',
+                    'Authorization': `Bearer ${apiKey.substring(0, 10)}...`,
                     'Accept': 'application/json',
                     'User-Agent': 'TikTok-Analytics-Dashboard/1.0'
                 }
@@ -344,7 +344,7 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
                         method: 'GET',
                         url: tikHubUrl,
                         headers: {
-                            'X-API-KEY': apiKey.substring(0, 10) + '...',
+                            'Authorization': `Bearer ${apiKey.substring(0, 10)}...`,
                             'Accept': 'application/json',
                             'User-Agent': 'TikTok-Analytics-Dashboard/1.0'
                         }
