@@ -139,6 +139,7 @@ interface TikHubApiResponse {
     data?: {
         aweme_details?: TikHubVideoData[];
         aweme_list?: TikHubVideoData[];
+        aweme_status?: TikHubVideoData[];
     } & TikHubVideoData;
     message?: string;
 }
@@ -374,8 +375,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
 
         console.log('📦 Raw TikHub API response structure:', {
             hasData: !!apiResponse.data,
-            hasAwemeDetails: !!apiResponse.data?.aweme_details,
-            awemeDetailsLength: apiResponse.data?.aweme_details?.length || 0,
+            hasAwemeStatus: !!apiResponse.data?.aweme_status,
+            awemeStatusLength: apiResponse.data?.aweme_status?.length || 0,
             code: apiResponse.code,
             message: apiResponse.msg || apiResponse.message,
             dataKeys: apiResponse.data ? Object.keys(apiResponse.data) : []
@@ -398,8 +399,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             };
         }
 
-        // Check if we have data (TikHub returns nested structure: data.aweme_details[0])
-        const videoData = apiResponse.data?.aweme_details?.[0];
+        // Check if we have data (TikHub returns nested structure: data.aweme_status[0])
+        const videoData = apiResponse.data?.aweme_status?.[0];
 
         if (!videoData) {
             console.log('❌ No video data returned from TikHub API');
