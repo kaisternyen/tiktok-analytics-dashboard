@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { scrapeMediaPost } from '@/lib/tikhub';
+import { scrapeMediaPost, extractTikTokStatsFromTikHubData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import type { TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 
@@ -57,9 +57,10 @@ export async function POST(req: Request) {
             let shares = 0;
 
             if (video.platform === 'tiktok') {
-                const tikTokData = mediaData as TikTokVideoData;
-                views = tikTokData.views || 0;
-                shares = tikTokData.shares || 0;
+                // Use centralized TikHub data extraction
+                const extractedData = extractTikTokStatsFromTikHubData(mediaData);
+                views = extractedData.views;
+                shares = extractedData.shares;
             } else if (video.platform === 'instagram') {
                 const instagramData = mediaData as InstagramPostData;
                 views = instagramData.views || instagramData.plays || 0;

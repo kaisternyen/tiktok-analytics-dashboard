@@ -149,6 +149,109 @@ interface TikHubApiResponse {
     message?: string;
 }
 
+// Centralized TikHub data extraction function
+export function extractTikTokStatsFromTikHubData(videoData: unknown): {
+    views: number;
+    likes: number;
+    comments: number;
+    shares: number;
+    username: string;
+    description: string;
+    videoId: string;
+    timestamp: string;
+    hashtags: string[];
+    music?: { name: string; author: string };
+    thumbnailUrl?: string;
+} {
+    console.log('🔍 CENTRALIZED TIKHUB DATA EXTRACTION:');
+    console.log('📊 Input videoData keys:', Object.keys((videoData as Record<string, unknown>) || {}));
+    console.log('📊 videoData.statistics:', (videoData as Record<string, unknown>)?.statistics);
+    console.log('📊 videoData.stats:', (videoData as Record<string, unknown>)?.stats);
+    
+    const data = videoData as Record<string, unknown>;
+    
+    // Extract statistics with comprehensive fallback chain
+    const views = (data?.statistics as Record<string, unknown>)?.play_count as number || 
+                  data?.play_count as number || 
+                  (data?.stats as Record<string, unknown>)?.play_count as number || 
+                  data?.view_count as number || 0;
+                  
+    const likes = (data?.statistics as Record<string, unknown>)?.digg_count as number || 
+                  data?.digg_count as number || 
+                  (data?.stats as Record<string, unknown>)?.digg_count as number || 
+                  data?.like_count as number || 0;
+                  
+    const comments = (data?.statistics as Record<string, unknown>)?.comment_count as number || 
+                     data?.comment_count as number || 
+                     (data?.stats as Record<string, unknown>)?.comment_count as number || 0;
+                     
+    const shares = (data?.statistics as Record<string, unknown>)?.share_count as number || 
+                   data?.share_count as number || 
+                   (data?.stats as Record<string, unknown>)?.share_count as number || 0;
+    
+    // Extract other data
+    const username = (data?.author as Record<string, unknown>)?.unique_id as string || 
+                     (data?.author as Record<string, unknown>)?.nickname as string || 
+                     (data?.author as Record<string, unknown>)?.username as string || 
+                     'N/A';
+                     
+    const description = data?.desc as string || 
+                        data?.content as string || 
+                        data?.description as string || 
+                        'N/A';
+                        
+    const videoId = data?.aweme_id as string || 
+                    data?.group_id as string || 
+                    data?.id as string || 
+                    'unknown';
+                    
+    const timestamp = data?.create_time 
+        ? new Date((data.create_time as number) * 1000).toISOString()
+        : data?.created_at 
+        ? new Date((data.created_at as number) * 1000).toISOString()
+        : new Date().toISOString();
+        
+    const hashtags = Array.isArray(data?.text_extra)
+        ? (data.text_extra as Array<{ hashtag_name?: string }>)
+            .map((item: { hashtag_name?: string }) => item.hashtag_name || '')
+            .filter((tag: string) => tag && tag.trim() !== '')
+        : [];
+        
+    const music = data?.music ? {
+        name: ((data.music as Record<string, unknown>)?.title as string) || 
+              ((data.music as Record<string, unknown>)?.name as string) || 'Unknown',
+        author: ((data.music as Record<string, unknown>)?.author as string) || 
+                ((data.music as Record<string, unknown>)?.owner_nickname as string) || 'Unknown'
+    } : undefined;
+    
+    const videoInfo = data?.video as Record<string, unknown>;
+    const coverUrls = (videoInfo?.cover as Record<string, unknown>)?.url_list as string[];
+    const originCoverUrls = (videoInfo?.origin_cover as Record<string, unknown>)?.url_list as string[];
+    const dynamicCoverUrls = (videoInfo?.dynamic_cover as Record<string, unknown>)?.url_list as string[];
+    
+    const thumbnailUrl = coverUrls?.[0] ||
+                        originCoverUrls?.[0] ||
+                        dynamicCoverUrls?.[0] ||
+                        (data?.cover_url as string) ||
+                        undefined;
+    
+    console.log('📊 EXTRACTED VALUES:', { views, likes, comments, shares, username });
+    
+    return {
+        views,
+        likes,
+        comments,
+        shares,
+        username,
+        description,
+        videoId,
+        timestamp,
+        hashtags,
+        music,
+        thumbnailUrl
+    };
+}
+
 // Extract video ID from TikTok URL
 export function extractVideoId(url: string): string | null {
     console.log('🔍 Extracting video ID from URL:', url);
@@ -479,47 +582,20 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             console.log(`📊 data.${field}:`, dataValue);
         });
 
-        // Transform TikHub data to our standard format (using same pattern as working code)
-        const extractedViews = (videoData.statistics as Record<string, unknown>)?.play_count as number || 
-                              videoData.play_count as number || 
-                              videoData.stats?.play_count || 0;
-        const extractedLikes = (videoData.statistics as Record<string, unknown>)?.digg_count as number || 
-                              videoData.digg_count as number || 
-                              videoData.stats?.digg_count || 0;
-        const extractedComments = (videoData.statistics as Record<string, unknown>)?.comment_count as number || 
-                                 videoData.comment_count as number || 
-                                 videoData.stats?.comment_count || 0;
-        const extractedShares = (videoData.statistics as Record<string, unknown>)?.share_count as number || 
-                               videoData.share_count as number || 
-                               videoData.stats?.share_count || 0;
-        
-        console.log('🔍 EXTRACTED VALUES:');
-        console.log('📊 Extracted views:', extractedViews, '(type:', typeof extractedViews, ')');
-        console.log('📊 Extracted likes:', extractedLikes, '(type:', typeof extractedLikes, ')');
-        console.log('📊 Extracted comments:', extractedComments, '(type:', typeof extractedComments, ')');
-        console.log('📊 Extracted shares:', extractedShares, '(type:', typeof extractedShares, ')');
+        // Use centralized TikHub data extraction function
+        const extractedData = extractTikTokStatsFromTikHubData(videoData);
         
         const transformedData: TikTokVideoData = {
-            id: videoData.aweme_id || videoData.group_id || videoId,
-            username: videoData.author?.unique_id || videoData.author?.nickname || 'N/A',
-            description: videoData.desc || videoData.content || 'N/A',
-            views: extractedViews,
-            likes: extractedLikes,
-            comments: extractedComments,
-            shares: extractedShares,
-            timestamp: videoData.create_time ? new Date(videoData.create_time * 1000).toISOString() :
-                videoData.created_at ? new Date(videoData.created_at * 1000).toISOString() :
-                    new Date().toISOString(),
-            hashtags: Array.isArray(videoData.text_extra)
-                ? videoData.text_extra
-                    .filter((item: { type?: number; hashtag_name?: string }) => item.type === 1 && item.hashtag_name)
-                    .map((item: { hashtag_name?: string }) => item.hashtag_name || '')
-                    .filter(tag => tag.trim() !== '')
-                : [],
-            music: videoData.music ? {
-                name: videoData.music.title || videoData.music.owner_nickname || 'N/A',
-                author: videoData.music.author || videoData.music.owner_nickname || 'N/A'
-            } : undefined,
+            id: extractedData.videoId,
+            username: extractedData.username,
+            description: extractedData.description,
+            views: extractedData.views,
+            likes: extractedData.likes,
+            comments: extractedData.comments,
+            shares: extractedData.shares,
+            timestamp: extractedData.timestamp,
+            hashtags: extractedData.hashtags,
+            music: extractedData.music,
             thumbnailUrl: (() => {
                 // Collect all available thumbnail URLs from different sources
                 const allSources = [
@@ -722,29 +798,21 @@ async function scrapeTikTokVideosBatch(urls: string[]): Promise<ScrapedVideoResu
             const rawData = apiResponse.data[i];
 
             if (rawData && rawData.code === 0) {
-                // Transform the data similar to single video scraping
-                const videoId = extractVideoId(url);
+                // Use centralized TikHub data extraction function
+                const extractedData = extractTikTokStatsFromTikHubData(rawData.data);
+                
                 const transformedData: TikTokVideoData = {
-                    id: rawData.data?.id || rawData.data?.aweme_id || videoId || 'unknown',
+                    id: extractedData.videoId,
                     url: rawData.data?.url || rawData.data?.video_url || url,
-                    username: rawData.data?.author?.unique_id || rawData.data?.author?.nickname || 'unknown',
-                    description: rawData.data?.desc || rawData.data?.content || '',
-                    views: rawData.data?.statistics?.play_count || rawData.data?.stats?.play_count || 0,
-                    likes: rawData.data?.statistics?.digg_count || rawData.data?.stats?.digg_count || 0,
-                    comments: rawData.data?.statistics?.comment_count || rawData.data?.stats?.comment_count || 0,
-                    shares: rawData.data?.statistics?.share_count || rawData.data?.stats?.share_count || 0,
-                    timestamp: rawData.data?.create_time
-                        ? new Date(rawData.data.create_time * 1000).toISOString()
-                        : new Date().toISOString(),
-                    hashtags: Array.isArray(rawData.data?.text_extra)
-                        ? rawData.data.text_extra
-                            .map((item: { hashtag_name?: string }) => item.hashtag_name || '')
-                            .filter((tag: string) => tag && tag.trim() !== '')
-                        : [],
-                    music: rawData.data?.music ? {
-                        name: rawData.data.music.title || 'Unknown',
-                        author: rawData.data.music.author || 'Unknown'
-                    } : undefined,
+                    username: extractedData.username,
+                    description: extractedData.description,
+                    views: extractedData.views,
+                    likes: extractedData.likes,
+                    comments: extractedData.comments,
+                    shares: extractedData.shares,
+                    timestamp: extractedData.timestamp,
+                    hashtags: extractedData.hashtags,
+                    music: extractedData.music,
                     thumbnailUrl: (() => {
                         // Collect all available thumbnail URLs from different sources
                         const allSources = [

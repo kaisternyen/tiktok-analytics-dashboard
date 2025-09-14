@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
+import { scrapeMediaPost, InstagramPostData, YouTubeVideoData, extractTikTokStatsFromTikHubData } from '@/lib/tikhub';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,11 +60,12 @@ export async function POST(req: Request) {
         let views = 0, likes = 0, comments = 0, shares = 0;
         
         if (video.platform === 'tiktok' && tikHubResult.data) {
-            const tiktokData = tikHubResult.data as TikTokVideoData;
-            views = tiktokData.views || 0;
-            likes = tiktokData.likes || 0;
-            comments = tiktokData.comments || 0;
-            shares = tiktokData.shares || 0;
+            // Use centralized TikHub data extraction
+            const extractedData = extractTikTokStatsFromTikHubData(tikHubResult.data);
+            views = extractedData.views;
+            likes = extractedData.likes;
+            comments = extractedData.comments;
+            shares = extractedData.shares;
         } else if (video.platform === 'instagram' && tikHubResult.data) {
             const instaData = tikHubResult.data as InstagramPostData;
             views = instaData.plays || instaData.views || 0;

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { scrapeMediaPost } from '@/lib/tikhub';
+import { scrapeMediaPost, extractTikTokStatsFromTikHubData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import { sanitizeMetrics, logSanitizationWarnings } from '@/lib/metrics-validation';
 
@@ -103,11 +103,12 @@ export async function POST(req: Request) {
         let views = 0, likes = 0, comments = 0, shares = 0;
         
         if (video.platform === 'tiktok' && tikHubResult.data) {
-            const tikTokData = tikHubResult.data as unknown as Record<string, unknown>;
-            views = (tikTokData.statistics as Record<string, unknown>)?.play_count as number || tikTokData.play_count as number || 0;
-            likes = (tikTokData.statistics as Record<string, unknown>)?.digg_count as number || tikTokData.digg_count as number || 0;
-            comments = (tikTokData.statistics as Record<string, unknown>)?.comment_count as number || tikTokData.comment_count as number || 0;
-            shares = (tikTokData.statistics as Record<string, unknown>)?.share_count as number || tikTokData.share_count as number || 0;
+            // Use centralized TikHub data extraction
+            const extractedData = extractTikTokStatsFromTikHubData(tikHubResult.data);
+            views = extractedData.views;
+            likes = extractedData.likes;
+            comments = extractedData.comments;
+            shares = extractedData.shares;
         } else if (video.platform === 'instagram' && tikHubResult.data) {
             const instagramData = tikHubResult.data as unknown as Record<string, unknown>;
             views = instagramData.view_count as number || 0;
