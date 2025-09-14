@@ -17,8 +17,22 @@ export async function POST(request: NextRequest) {
 
     try {
         console.log('🔍 Parsing request body...');
-        const body = await request.json();
-        console.log('📦 Raw request body:', body);
+        let body;
+        try {
+            body = await request.json();
+            console.log('📦 Raw request body:', body);
+        } catch (jsonError) {
+            console.error('❌ JSON parsing failed:', jsonError);
+            return NextResponse.json({
+                success: false,
+                error: 'Invalid JSON in request body',
+                debugInfo: {
+                    jsonError: jsonError instanceof Error ? jsonError.message : 'Unknown JSON error',
+                    contentType: request.headers.get('content-type'),
+                    timestamp: new Date().toISOString()
+                }
+            }, { status: 400 });
+        }
         
         const { url } = body;
         console.log('📝 Extracted URL:', url);
@@ -110,6 +124,19 @@ export async function POST(request: NextRequest) {
                 url: url,
                 timestamp: new Date().toISOString()
             });
+            
+            // Log TikHub specific error details if available
+            if (result.debugInfo?.tikHubResponse) {
+                console.error('🔍 TikHub API Error Details:', {
+                    status: result.debugInfo.tikHubResponse.status,
+                    statusText: result.debugInfo.tikHubResponse.statusText,
+                    responseBody: result.debugInfo.tikHubResponse.body,
+                    requestUrl: result.debugInfo.tikHubResponse.url,
+                    videoId: result.debugInfo.tikHubResponse.videoId,
+                    apiKeyLength: result.debugInfo.tikHubResponse.apiKeyLength
+                });
+            }
+            
             return NextResponse.json({
                 success: false,
                 error: result.error,

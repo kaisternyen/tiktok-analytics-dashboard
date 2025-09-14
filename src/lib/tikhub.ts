@@ -317,20 +317,60 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             // Provide more specific error messages based on status codes
             let errorMessage = `TikHub API error: ${response.status} ${response.statusText}`;
             if (response.status === 401) {
-                errorMessage = 'TikHub API authentication failed. Please check your API key.';
+                errorMessage = `TikHub API authentication failed. API Key: ${apiKey.substring(0, 10)}... (length: ${apiKey.length})`;
             } else if (response.status === 404) {
-                errorMessage = 'Video not found or URL is invalid. Please check the TikTok URL.';
+                errorMessage = `Video not found. URL: ${tikHubUrl}, Video ID: ${videoId}`;
             } else if (response.status === 429) {
                 errorMessage = 'TikHub API rate limit exceeded. Please try again later.';
             } else if (response.status >= 500) {
-                errorMessage = 'TikHub API server error. Please try again later.';
+                errorMessage = `TikHub API server error. Response: ${errorText.substring(0, 200)}...`;
             }
 
-            throw new Error(errorMessage);
+            // Return detailed error information instead of throwing
+            return {
+                success: false,
+                error: errorMessage,
+                debugInfo: {
+                    tikHubResponse: {
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: Object.fromEntries(response.headers.entries()),
+                        body: errorText,
+                        url: tikHubUrl,
+                        videoId: videoId,
+                        apiKeyLength: apiKey.length
+                    },
+                    request: {
+                        method: 'GET',
+                        url: tikHubUrl,
+                        headers: {
+                            'X-API-KEY': apiKey.substring(0, 10) + '...',
+                            'Accept': 'application/json',
+                            'User-Agent': 'TikTok-Analytics-Dashboard/1.0'
+                        }
+                    }
+                }
+            };
         }
 
         console.log('🎉 API response successful, parsing JSON...');
-        const apiResponse: TikHubApiResponse = await response.json();
+        let apiResponse: TikHubApiResponse;
+        try {
+            apiResponse = await response.json();
+        } catch (jsonError) {
+            console.error('❌ TikHub API JSON parsing failed:', jsonError);
+            return {
+                success: false,
+                error: 'TikHub API returned invalid JSON response',
+                debugInfo: {
+                    jsonError: jsonError instanceof Error ? jsonError.message : 'Unknown JSON error',
+                    responseStatus: response.status,
+                    responseHeaders: Object.fromEntries(response.headers.entries()),
+                    tikHubUrl: tikHubUrl,
+                    videoId: videoId
+                }
+            };
+        }
 
         console.log('📦 Raw TikHub API response structure:', {
             hasData: !!apiResponse.data,
