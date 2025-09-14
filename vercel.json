@@ -32,7 +32,7 @@
         },
         {
             "path": "/api/backup-scraper",
-            "schedule": "*/15 * * * *"
+            "schedule": "*/10 * * * *"
         }
     ]
 }

@@ -87,22 +87,27 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     const hoursSinceLastScrape = (Date.now() - lastScraped.getTime()) / (1000 * 60 * 60);
     const minutesSinceLastScrape = (Date.now() - lastScraped.getTime()) / (1000 * 60);
     
-    // Videos with hourly cadence: scrape every hour (MAXIMUM AGGRESSIVENESS - catch up on missed runs)
+    // Videos with hourly cadence: ensure data for every hour (ULTRA LENIENT - prioritize completeness)
     if (video.scrapingCadence === 'hourly') {
-        // CRITICAL: If it's been more than 60 minutes, ALWAYS scrape (no exceptions)
-        if (minutesSinceLastScrape >= 60) {
-            console.log(`🚨 CRON DEBUG: @${video.username} (${video.platform}) - SCRAPE: Hourly video OVERDUE - ${Math.floor(minutesSinceLastScrape)}min since last scrape`);
-            return { shouldScrape: true, reason: `Hourly video OVERDUE - ${Math.floor(minutesSinceLastScrape)}min since last scrape` };
+        const currentHour = new Date().getHours();
+        const lastScrapedHour = lastScraped.getHours();
+        
+        // CRITICAL: If we don't have data for the current hour, ALWAYS scrape
+        if (currentHour !== lastScrapedHour) {
+            console.log(`🚨 CRON DEBUG: @${video.username} (${video.platform}) - SCRAPE: Missing data for hour ${currentHour} (last scraped hour ${lastScrapedHour})`);
+            return { shouldScrape: true, reason: `Missing data for hour ${currentHour} (last scraped hour ${lastScrapedHour})` };
         }
-        // If it's been 45+ minutes, scrape it (very aggressive to catch missed runs)
-        else if (minutesSinceLastScrape >= 45) {
-            console.log(`✅ CRON DEBUG: @${video.username} (${video.platform}) - SCRAPE: Hourly video - ${Math.floor(minutesSinceLastScrape)}min since last scrape`);
-            return { shouldScrape: true, reason: `Hourly video - ${Math.floor(minutesSinceLastScrape)}min since last scrape` };
-        } else {
-            const minutesRemaining = Math.ceil(45 - minutesSinceLastScrape);
-            console.log(`⏭️ CRON DEBUG: @${video.username} (${video.platform}) - SKIP: Hourly video - scraped ${Math.floor(minutesSinceLastScrape)}min ago, wait ${minutesRemaining}min more`);
-            return { shouldScrape: false, reason: `Hourly video - scraped ${Math.floor(minutesSinceLastScrape)}min ago, wait ${minutesRemaining}min more` };
+        
+        // If we have data for current hour but it's been more than 30 minutes, scrape again (catch delayed runs)
+        if (minutesSinceLastScrape >= 30) {
+            console.log(`✅ CRON DEBUG: @${video.username} (${video.platform}) - SCRAPE: Hourly video - ${Math.floor(minutesSinceLastScrape)}min since last scrape (catch delayed runs)`);
+            return { shouldScrape: true, reason: `Hourly video - ${Math.floor(minutesSinceLastScrape)}min since last scrape (catch delayed runs)` };
         }
+        
+        // Only skip if we have recent data for the current hour
+        const minutesRemaining = Math.ceil(30 - minutesSinceLastScrape);
+        console.log(`⏭️ CRON DEBUG: @${video.username} (${video.platform}) - SKIP: Hourly video - scraped ${Math.floor(minutesSinceLastScrape)}min ago, wait ${minutesRemaining}min more`);
+        return { shouldScrape: false, reason: `Hourly video - scraped ${Math.floor(minutesSinceLastScrape)}min ago, wait ${minutesRemaining}min more` };
     }
     
     // Videos with daily cadence: scrape once per day (with 5-minute safety net)
@@ -894,10 +899,11 @@ export async function GET() {
     console.log(`🔧 Request URL: ${process.env.VERCEL_URL || 'localhost'}`);
     console.log(`🔧 Cron Job Source: ${process.env.VERCEL_CRON_SECRET ? 'Vercel Cron' : 'Manual/Test'}`);
     console.log(`⚡ 100% RELIABILITY MODE: Every video processed every hour`);
-    console.log(`🚨 Hourly videos: MAXIMUM AGGRESSIVENESS - 45min normal, 60min+ OVERDUE (catch missed runs)`);
+    console.log(`🚨 Hourly videos: ULTRA LENIENT - ensure data for every hour (30min catch-up)`);
     console.log(`🌙 Daily videos: Scrape every 24h (1445min safety net)`);
-    console.log(`📋 Strategy: ZERO pending videos - compensate for unreliable cron scheduling`);
+    console.log(`📋 Strategy: Complete hourly data - prioritize data completeness over timing`);
     console.log(`🔍 CRON DEBUG: This execution will be logged with detailed scraping decisions`);
+    console.log(`🎯 PRIORITY: Videos missing data for hour ${currentHour} will be scraped immediately`);
     
     // CRITICAL: Check if this is running at the expected hour
     if (currentMinute !== 0) {
