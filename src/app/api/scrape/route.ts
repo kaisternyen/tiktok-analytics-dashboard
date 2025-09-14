@@ -6,13 +6,24 @@ import { uploadToS3 } from '../../../lib/s3';
 import fetch from 'node-fetch';
 
 export async function POST(request: NextRequest) {
-    console.log('🎬 /api/scrape endpoint hit');
+    console.log('🎬 ===== /api/scrape endpoint hit =====');
+    console.log('🕐 Timestamp:', new Date().toISOString());
+    console.log('🌍 Environment:', {
+        NODE_ENV: process.env.NODE_ENV,
+        VERCEL: process.env.VERCEL,
+        hasTikHubKey: !!process.env.TIKHUB_API_KEY,
+        tikHubKeyLength: process.env.TIKHUB_API_KEY?.length || 0
+    });
 
     try {
         console.log('🔍 Parsing request body...');
-        const { url } = await request.json();
+        const body = await request.json();
+        console.log('📦 Raw request body:', body);
+        
+        const { url } = body;
+        console.log('📝 Extracted URL:', url);
 
-        console.log('📝 Request details:', {
+        console.log('📋 Request details:', {
             url: url,
             hasUrl: !!url,
             urlType: typeof url,
@@ -23,9 +34,14 @@ export async function POST(request: NextRequest) {
 
         if (!url) {
             console.error('❌ No URL provided in request');
+            console.error('📦 Full request body was:', body);
             return NextResponse.json({
                 success: false,
-                error: 'URL is required'
+                error: 'URL is required',
+                debugInfo: {
+                    receivedBody: body,
+                    timestamp: new Date().toISOString()
+                }
             }, { status: 400 });
         }
 
@@ -33,6 +49,7 @@ export async function POST(request: NextRequest) {
 
         // Detect platform and scrape accordingly
         const cleanUrl = url.trim().toLowerCase();
+        console.log('🧹 Cleaned URL:', cleanUrl);
         let platform: string;
         
         if (cleanUrl.includes('instagram.com')) {
@@ -46,13 +63,28 @@ export async function POST(request: NextRequest) {
             platform = 'youtube';
         } else {
             console.error('❌ Unsupported platform URL:', url);
+            console.error('🔍 URL analysis:', {
+                originalUrl: url,
+                cleanedUrl: cleanUrl,
+                containsInstagram: cleanUrl.includes('instagram.com'),
+                containsTikTok: cleanUrl.includes('tiktok.com'),
+                containsYouTube: cleanUrl.includes('youtube.com') || cleanUrl.includes('youtu.be')
+            });
             return NextResponse.json({
                 success: false,
-                error: 'URL must be from TikTok, Instagram, or YouTube'
+                error: 'URL must be from TikTok, Instagram, or YouTube',
+                debugInfo: {
+                    originalUrl: url,
+                    cleanedUrl: cleanUrl,
+                    timestamp: new Date().toISOString()
+                }
             }, { status: 400 });
         }
 
         // Use unified scraper
+        console.log('🔧 Calling scrapeMediaPost with URL:', url);
+        console.log('🔧 Platform detected:', platform);
+        
         const result = await scrapeMediaPost(url);
 
         console.log('📦 Media scraping result:', {
@@ -71,10 +103,20 @@ export async function POST(request: NextRequest) {
 
         if (!result.success) {
             console.error('❌ Media scraping failed:', result.error);
+            console.error('🔍 Full error details:', {
+                error: result.error,
+                debugInfo: result.debugInfo,
+                platform: platform,
+                url: url,
+                timestamp: new Date().toISOString()
+            });
             return NextResponse.json({
                 success: false,
                 error: result.error,
-                debugInfo: result.debugInfo
+                debugInfo: result.debugInfo,
+                platform: platform,
+                url: url,
+                timestamp: new Date().toISOString()
             }, { status: 400 });
         }
 
@@ -350,12 +392,28 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (error) {
-        console.error('💥 Scraping endpoint crashed:', error);
+        console.error('💥 ===== SCRAPING ENDPOINT CRASHED =====');
+        console.error('🕐 Timestamp:', new Date().toISOString());
+        console.error('💥 Error type:', typeof error);
+        console.error('💥 Error message:', error instanceof Error ? error.message : 'Unknown error');
+        console.error('💥 Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+        console.error('💥 Full error object:', error);
+        
         return NextResponse.json(
             {
-            success: false,
+                success: false,
                 error: 'Internal server error',
-                details: error instanceof Error ? error.message : 'Unknown error'
+                details: error instanceof Error ? error.message : 'Unknown error',
+                errorType: typeof error,
+                timestamp: new Date().toISOString(),
+                debugInfo: {
+                    error: error instanceof Error ? {
+                        name: error.name,
+                        message: error.message,
+                        stack: error.stack
+                    } : error,
+                    timestamp: new Date().toISOString()
+                }
             },
             { status: 500 }
         );

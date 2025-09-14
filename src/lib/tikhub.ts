@@ -239,6 +239,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         }
 
         console.log('🔑 API Key found:', apiKey.substring(0, 10) + '...');
+        console.log('🔑 API Key length:', apiKey.length);
+        console.log('🔑 API Key starts with:', apiKey.substring(0, 20));
 
         // Extract video ID for validation
         console.log('🔍 Starting video ID extraction...');
@@ -246,16 +248,29 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         if (!videoId) {
             console.error('❌ VIDEO ID EXTRACTION FAILED');
             console.error('URL patterns tested against:', cleanUrl);
+            console.error('🔍 URL analysis:', {
+                originalUrl: url,
+                cleanUrl: cleanUrl,
+                urlLength: cleanUrl.length,
+                containsTikTok: cleanUrl.includes('tiktok.com')
+            });
             throw new Error('Could not extract video ID from URL');
         }
 
         console.log('✅ Video ID extracted:', videoId);
+        console.log('✅ Video ID length:', videoId.length);
+        console.log('✅ Video ID type:', typeof videoId);
 
         // Prepare TikHub API request - Updated to use correct V3 endpoint with aweme_id
         const tikHubUrl = `https://tikapi.io/api/v3/video/info/?aweme_id=${videoId}`;
 
         console.log('📋 TikHub API request prepared for URL:', tikHubUrl);
         console.log('🌐 Making API request...');
+        console.log('📋 Request headers:', {
+            'X-API-KEY': apiKey.substring(0, 10) + '...',
+            'Accept': 'application/json',
+            'User-Agent': 'TikTok-Analytics-Dashboard/1.0'
+        });
 
         // Make request to TikHub API
         console.log('🎬 Calling TikHub API...');
@@ -277,12 +292,26 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('❌ TikHub API error:', {
+            console.error('❌ ===== TIKHUB API ERROR =====');
+            console.error('📊 Response details:', {
                 status: response.status,
                 statusText: response.statusText,
-                body: errorText,
+                ok: response.ok,
                 url: tikHubUrl,
-                headers: Object.fromEntries(response.headers.entries())
+                videoId: videoId,
+                apiKeyLength: apiKey.length,
+                apiKeyStart: apiKey.substring(0, 10)
+            });
+            console.error('📋 Response headers:', Object.fromEntries(response.headers.entries()));
+            console.error('📄 Response body:', errorText);
+            console.error('🔍 Request details:', {
+                method: 'GET',
+                url: tikHubUrl,
+                headers: {
+                    'X-API-KEY': apiKey.substring(0, 10) + '...',
+                    'Accept': 'application/json',
+                    'User-Agent': 'TikTok-Analytics-Dashboard/1.0'
+                }
             });
 
             // Provide more specific error messages based on status codes
