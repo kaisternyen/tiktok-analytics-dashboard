@@ -106,6 +106,11 @@ interface TikHubVideoData {
         comment_count?: number;
         share_count?: number;
     };
+    // Direct field access (for cases where stats are at root level)
+    play_count?: number;
+    digg_count?: number;
+    comment_count?: number;
+    share_count?: number;
     create_time?: number;
     created_at?: number;
     text_extra?: Array<{
@@ -383,6 +388,26 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         });
 
         console.log('🔍 Full API response preview:', JSON.stringify(apiResponse, null, 2).substring(0, 1000) + '...');
+        
+        // COMPREHENSIVE LOGGING FOR DEBUGGING
+        console.log('🔍 COMPREHENSIVE API RESPONSE ANALYSIS:');
+        console.log('📊 Top level keys:', Object.keys(apiResponse));
+        console.log('📊 apiResponse.data keys:', apiResponse.data ? Object.keys(apiResponse.data) : 'No data');
+        
+        if (apiResponse.data?.aweme_status) {
+            console.log('📊 aweme_status length:', apiResponse.data.aweme_status.length);
+            if (apiResponse.data.aweme_status[0]) {
+                console.log('📊 aweme_status[0] keys:', Object.keys(apiResponse.data.aweme_status[0]));
+                console.log('📊 aweme_status[0] statistics:', apiResponse.data.aweme_status[0].statistics);
+            }
+        }
+        
+        // Check if data is directly in apiResponse.data (not in aweme_status)
+        if (apiResponse.data && !apiResponse.data.aweme_status) {
+            console.log('📊 Data is directly in apiResponse.data, checking for statistics...');
+            console.log('📊 Direct data statistics:', apiResponse.data.statistics);
+            console.log('📊 Direct data keys:', Object.keys(apiResponse.data));
+        }
 
         // Check API response status (TikHub returns 200 for success)
         if (apiResponse.code && apiResponse.code !== 200) {
@@ -399,8 +424,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             };
         }
 
-        // Check if we have data (TikHub returns nested structure: data.aweme_status[0])
-        const videoData = apiResponse.data?.aweme_status?.[0];
+        // Check if we have data (TikHub can return data in aweme_status[0] or directly in data)
+        const videoData = apiResponse.data?.aweme_status?.[0] || apiResponse.data;
 
         if (!videoData) {
             console.log('❌ No video data returned from TikHub API');
@@ -454,11 +479,19 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             console.log(`📊 data.${field}:`, dataValue);
         });
 
-        // Transform TikHub data to our standard format
-        const extractedViews = videoData.statistics?.play_count || videoData.stats?.play_count || 0;
-        const extractedLikes = videoData.statistics?.digg_count || videoData.stats?.digg_count || 0;
-        const extractedComments = videoData.statistics?.comment_count || videoData.stats?.comment_count || 0;
-        const extractedShares = videoData.statistics?.share_count || videoData.stats?.share_count || 0;
+        // Transform TikHub data to our standard format (using same pattern as working code)
+        const extractedViews = (videoData.statistics as Record<string, unknown>)?.play_count as number || 
+                              videoData.play_count as number || 
+                              videoData.stats?.play_count || 0;
+        const extractedLikes = (videoData.statistics as Record<string, unknown>)?.digg_count as number || 
+                              videoData.digg_count as number || 
+                              videoData.stats?.digg_count || 0;
+        const extractedComments = (videoData.statistics as Record<string, unknown>)?.comment_count as number || 
+                                 videoData.comment_count as number || 
+                                 videoData.stats?.comment_count || 0;
+        const extractedShares = (videoData.statistics as Record<string, unknown>)?.share_count as number || 
+                               videoData.share_count as number || 
+                               videoData.stats?.share_count || 0;
         
         console.log('🔍 EXTRACTED VALUES:');
         console.log('📊 Extracted views:', extractedViews, '(type:', typeof extractedViews, ')');
