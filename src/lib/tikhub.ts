@@ -494,10 +494,19 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         console.log('🔍 FULL TIKHUB API RESPONSE:');
         console.log(JSON.stringify(apiResponse, null, 2));
         
+        // Also return the raw response in debug info for frontend visibility
+        debugInfo.tikHubRawResponse = apiResponse;
+        
         // COMPREHENSIVE LOGGING FOR DEBUGGING
         console.log('🔍 COMPREHENSIVE API RESPONSE ANALYSIS:');
         console.log('📊 Top level keys:', Object.keys(apiResponse));
         console.log('📊 apiResponse.data keys:', apiResponse.data ? Object.keys(apiResponse.data) : 'No data');
+        
+        if (apiResponse.data?.aweme_detail) {
+            console.log('📊 aweme_detail keys:', Object.keys(apiResponse.data.aweme_detail));
+            console.log('📊 aweme_detail statistics:', apiResponse.data.aweme_detail.statistics);
+            console.log('📊 aweme_detail author:', apiResponse.data.aweme_detail.author?.unique_id);
+        }
         
         if (apiResponse.data?.aweme_status) {
             console.log('📊 aweme_status length:', apiResponse.data.aweme_status.length);
@@ -534,7 +543,7 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         }
 
         // Check if we have data (TikHub can return data in aweme_status[0] or directly in data)
-        const videoData = apiResponse.data?.aweme_status?.[0] || apiResponse.data;
+        const videoData = apiResponse.data?.aweme_detail || apiResponse.data?.aweme_status?.[0] || apiResponse.data;
 
         if (!videoData) {
             console.log('❌ No video data returned from TikHub API');
@@ -694,6 +703,7 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             data: transformedData,
             debugInfo: {
                 rawData: videoData,
+                tikHubRawResponse: apiResponse,
                 urlValidation: {
                     originalUrl: cleanUrl,
                     extractedVideoId: videoId,
