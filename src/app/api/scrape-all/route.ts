@@ -87,10 +87,15 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     const hoursSinceLastScrape = (Date.now() - lastScraped.getTime()) / (1000 * 60 * 60);
     const minutesSinceLastScrape = (Date.now() - lastScraped.getTime()) / (1000 * 60);
     
-    // Videos with hourly cadence: scrape every hour (AGGRESSIVE - no delays)
+    // Videos with hourly cadence: scrape every hour (ULTRA AGGRESSIVE - process any pending)
     if (video.scrapingCadence === 'hourly') {
-        // CRITICAL: Always scrape hourly videos if it's been 50+ minutes (allows for 10min buffer)
-        if (minutesSinceLastScrape >= 50) {
+        // CRITICAL: If it's been more than 60 minutes, ALWAYS scrape (no exceptions)
+        if (minutesSinceLastScrape >= 60) {
+            console.log(`🚨 CRON DEBUG: @${video.username} (${video.platform}) - SCRAPE: Hourly video OVERDUE - ${Math.floor(minutesSinceLastScrape)}min since last scrape`);
+            return { shouldScrape: true, reason: `Hourly video OVERDUE - ${Math.floor(minutesSinceLastScrape)}min since last scrape` };
+        }
+        // If it's been 50+ minutes, scrape it (normal aggressive behavior)
+        else if (minutesSinceLastScrape >= 50) {
             console.log(`✅ CRON DEBUG: @${video.username} (${video.platform}) - SCRAPE: Hourly video - ${Math.floor(minutesSinceLastScrape)}min since last scrape`);
             return { shouldScrape: true, reason: `Hourly video - ${Math.floor(minutesSinceLastScrape)}min since last scrape` };
         } else {
@@ -348,7 +353,24 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
         console.log(`\n📋 ===== COMPREHENSIVE VIDEO STATUS REPORT =====`);
         console.log(`🕐 Cron Run Time: ${new Date().toISOString()}`);
         console.log(`📊 Total Videos: ${videos.length} (Hourly: ${hourlyCount}, Daily: ${dailyCount})`);
-        console.log(`\n📝 DETAILED VIDEO STATUS:`);
+        
+        // CRITICAL: Identify overdue videos first
+        const overdueVideos = videos.filter(video => {
+            const minutesSinceLastScrape = Math.floor((Date.now() - new Date(video.lastScrapedAt).getTime()) / (1000 * 60));
+            return video.scrapingCadence === 'hourly' && minutesSinceLastScrape >= 60;
+        });
+        
+        if (overdueVideos.length > 0) {
+            console.log(`🚨 OVERDUE VIDEOS (${overdueVideos.length}):`);
+            overdueVideos.forEach(video => {
+                const minutesSinceLastScrape = Math.floor((Date.now() - new Date(video.lastScrapedAt).getTime()) / (1000 * 60));
+                console.log(`   🚨 @${video.username} (${video.platform}) - ${minutesSinceLastScrape}min overdue - WILL BE PROCESSED IMMEDIATELY`);
+            });
+            console.log(`\n📝 DETAILED VIDEO STATUS:`);
+        } else {
+            console.log(`✅ No overdue videos found`);
+            console.log(`\n📝 DETAILED VIDEO STATUS:`);
+        }
         
         videos.forEach((video, index) => {
             const { shouldScrape, reason } = shouldScrapeVideo(video);
@@ -872,9 +894,9 @@ export async function GET() {
     console.log(`🔧 Request URL: ${process.env.VERCEL_URL || 'localhost'}`);
     console.log(`🔧 Cron Job Source: ${process.env.VERCEL_CRON_SECRET ? 'Vercel Cron' : 'Manual/Test'}`);
     console.log(`⚡ 100% RELIABILITY MODE: Every video processed every hour`);
-    console.log(`⏰ Hourly videos: Scrape every 50min (AGGRESSIVE - no delays)`);
+    console.log(`🚨 Hourly videos: ULTRA AGGRESSIVE - 50min normal, 60min+ OVERDUE (always scrape)`);
     console.log(`🌙 Daily videos: Scrape every 24h (1445min safety net)`);
-    console.log(`📋 Strategy: Zero pending videos - hourly videos scraped every 50min`);
+    console.log(`📋 Strategy: ZERO pending videos - overdue videos processed immediately`);
     console.log(`🔍 CRON DEBUG: This execution will be logged with detailed scraping decisions`);
     
     // CRITICAL: Check if this is running at the expected hour
