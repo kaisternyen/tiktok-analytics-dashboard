@@ -29,6 +29,10 @@
         {
             "path": "/api/tracked-accounts/check",
             "schedule": "0 * * * *"
+        },
+        {
+            "path": "/api/backup-scraper",
+            "schedule": "*/15 * * * *"
         }
     ]
 }
