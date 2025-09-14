@@ -916,15 +916,25 @@ export async function GET() {
     // Test database connection immediately
     try {
         console.log(`📊 Step 1: Testing database connection...`);
+        console.log(`🔧 DATABASE_URL exists: ${!!process.env.DATABASE_URL}`);
+        console.log(`🔧 DATABASE_URL starts with postgres: ${process.env.DATABASE_URL?.startsWith('postgres')}`);
+        
         const dbTest = await prisma.$queryRaw`SELECT 1 as test`;
         console.log(`✅ Database connection successful:`, dbTest);
     } catch (error) {
         console.error(`❌ CRITICAL: Database connection failed:`, error);
-        return NextResponse.json({ 
-            error: 'Database connection failed', 
-            details: error instanceof Error ? error.message : 'Unknown',
-            timestamp: new Date().toISOString()
-        }, { status: 500 });
+        console.error(`❌ DATABASE_URL: ${process.env.DATABASE_URL ? 'Set but invalid' : 'NOT SET'}`);
+        console.error(`❌ Environment variables:`, Object.keys(process.env).filter(key => key.includes('DATABASE')));
+        
+        // CRITICAL: Don't fail the entire cron job - try to continue with a warning
+        console.log(`⚠️ CONTINUING DESPITE DATABASE ERROR - This may cause issues`);
+        
+        // Try to continue anyway - maybe the connection will work later
+        // return NextResponse.json({ 
+        //     error: 'Database connection failed', 
+        //     details: error instanceof Error ? error.message : 'Unknown',
+        //     timestamp: new Date().toISOString()
+        // }, { status: 500 });
     }
     
     // Get current EST time for logging
@@ -947,6 +957,8 @@ export async function GET() {
         
         try {
             console.log(`🔍 Query conditions: isActive=true AND (trackingMode=null OR trackingMode!='deleted')`);
+            console.log(`🔧 Attempting database query...`);
+            
             // Try to fetch with new cadence fields
             const rawVideos = await prisma.video.findMany({
                 where: { 
@@ -1017,10 +1029,42 @@ export async function GET() {
             
         } catch (error) {
             console.error('💥 Error fetching videos:', error);
-            throw error;
+            console.error('💥 Database query failed - this explains why no videos are being processed!');
+            console.error('💥 Error details:', {
+                message: error instanceof Error ? error.message : 'Unknown error',
+                stack: error instanceof Error ? error.stack : 'No stack trace'
+            });
+            
+            // CRITICAL: Don't throw error - return empty array and continue
+            console.log('⚠️ CONTINUING WITH EMPTY VIDEO LIST - This will result in no processing');
+            videos = [];
         }
 
         console.log(`📊 Found ${videos.length} active videos to evaluate`);
+        
+        // CRITICAL: Check if we have any videos to process
+        if (videos.length === 0) {
+            console.log('❌ CRITICAL: No videos found in database - this explains why nothing is being scraped!');
+            console.log('❌ This could be due to:');
+            console.log('   1. Database connection issues');
+            console.log('   2. No active videos in database');
+            console.log('   3. All videos marked as deleted');
+            console.log('   4. Database query failing silently');
+            
+            return NextResponse.json({
+                success: false,
+                error: 'No videos found to process',
+                details: 'Database query returned 0 videos',
+                timestamp: new Date().toISOString(),
+                debugInfo: {
+                    totalVideos: 0,
+                    successful: 0,
+                    failed: 0,
+                    skipped: 0,
+                    cadenceChanges: 0
+                }
+            });
+        }
         
         // Log age distribution and strategy
         const newVideos = videos.filter(v => (new Date().getTime() - v.createdAt.getTime()) / (1000 * 60 * 60 * 24) < 7);
