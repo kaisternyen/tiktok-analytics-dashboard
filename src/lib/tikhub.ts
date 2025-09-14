@@ -167,6 +167,7 @@ export function extractTikTokStatsFromTikHubData(videoData: unknown): {
     console.log('📊 Input videoData keys:', Object.keys((videoData as Record<string, unknown>) || {}));
     console.log('📊 videoData.statistics:', (videoData as Record<string, unknown>)?.statistics);
     console.log('📊 videoData.stats:', (videoData as Record<string, unknown>)?.stats);
+    console.log('📊 FULL INPUT DATA:', JSON.stringify(videoData, null, 2));
     
     const data = videoData as Record<string, unknown>;
     
@@ -490,7 +491,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             dataKeys: apiResponse.data ? Object.keys(apiResponse.data) : []
         });
 
-        console.log('🔍 Full API response preview:', JSON.stringify(apiResponse, null, 2).substring(0, 1000) + '...');
+        console.log('🔍 FULL TIKHUB API RESPONSE:');
+        console.log(JSON.stringify(apiResponse, null, 2));
         
         // COMPREHENSIVE LOGGING FOR DEBUGGING
         console.log('🔍 COMPREHENSIVE API RESPONSE ANALYSIS:');
@@ -502,6 +504,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             if (apiResponse.data.aweme_status[0]) {
                 console.log('📊 aweme_status[0] keys:', Object.keys(apiResponse.data.aweme_status[0]));
                 console.log('📊 aweme_status[0] statistics:', apiResponse.data.aweme_status[0].statistics);
+                console.log('📊 aweme_status[0] FULL DATA:');
+                console.log(JSON.stringify(apiResponse.data.aweme_status[0], null, 2));
             }
         }
         
@@ -510,6 +514,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
             console.log('📊 Data is directly in apiResponse.data, checking for statistics...');
             console.log('📊 Direct data statistics:', apiResponse.data.statistics);
             console.log('📊 Direct data keys:', Object.keys(apiResponse.data));
+            console.log('📊 Direct data FULL:');
+            console.log(JSON.stringify(apiResponse.data, null, 2));
         }
 
         // Check API response status (TikHub returns 200 for success)

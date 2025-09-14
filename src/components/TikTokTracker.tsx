@@ -765,17 +765,6 @@ export default function TikTokTracker() {
         window.open(url, '_blank', 'noopener,noreferrer');
     };
 
-    const totalMetrics = {
-        videos: tracked.length,
-        totalViews: tracked.reduce((sum, v) => sum + v.views, 0),
-        totalLikes: tracked.reduce((sum, v) => sum + v.likes, 0),
-        totalComments: tracked.reduce((sum, v) => sum + v.comments, 0),
-        totalShares: tracked.reduce((sum, v) => sum + v.shares, 0),
-        avgGrowth: tracked.length > 0 ? tracked.reduce((sum, v) => sum + v.growth.views, 0) / tracked.length : 0,
-        totalThreads: tracked.reduce((sum, v) => sum + (v.threadsPlanted || 0), 0),
-        totalCommentsModerated: tracked.reduce((sum, v) => sum + (v.totalCommentsModerated || 0), 0),
-        moderatedVideos: tracked.filter(v => v.lastModeratedAt).length,
-    };
 
     const formatNumber = (num: number) => {
         if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
@@ -960,8 +949,8 @@ export default function TikTokTracker() {
     };
 
     // Enhanced chart data processing with proper aggregate data across ALL videos
-    const getChartData = (): ChartDataPoint[] => {
-        if (tracked.length === 0) return [];
+    const getChartData = (): { chartData: ChartDataPoint[], filteredVideoCount: number } => {
+        if (tracked.length === 0) return { chartData: [], filteredVideoCount: 0 };
 
         let timeframeStart: Date | null = null;
         let timeframeEnd: Date | null = null;
@@ -1148,10 +1137,10 @@ export default function TikTokTracker() {
             return point; // Absolute mode - show actual views
         });
 
-        return finalChartData;
+        return { chartData: finalChartData, filteredVideoCount: videosWithSufficientData.length };
     };
 
-    const chartData = getChartData();
+    const { chartData, filteredVideoCount: oldFilteredVideoCount } = getChartData();
     const yAxisDomain = getYAxisDomain(chartData);
 
     // Enhanced chart data processing for individual video metrics
@@ -1221,6 +1210,20 @@ export default function TikTokTracker() {
     const likesChartData = getVideoChartData('likes', showLikesDelta);
     const commentsChartData = getVideoChartData('comments', showCommentsDelta);
     const sharesChartData = getVideoChartData('shares', showSharesDelta);
+    
+    // Use the filtered video count from the chart data
+    
+    const totalMetrics = {
+        videos: selectedTimePeriod === 'D' ? oldFilteredVideoCount : tracked.length,
+        totalViews: tracked.reduce((sum, v) => sum + v.views, 0),
+        totalLikes: tracked.reduce((sum, v) => sum + v.likes, 0),
+        totalComments: tracked.reduce((sum, v) => sum + v.comments, 0),
+        totalShares: tracked.reduce((sum, v) => sum + v.shares, 0),
+        avgGrowth: tracked.length > 0 ? tracked.reduce((sum, v) => sum + v.growth.views, 0) / tracked.length : 0,
+        totalThreads: tracked.reduce((sum, v) => sum + (v.threadsPlanted || 0), 0),
+        totalCommentsModerated: tracked.reduce((sum, v) => sum + (v.totalCommentsModerated || 0), 0),
+        moderatedVideos: tracked.filter(v => v.lastModeratedAt).length,
+    };
 
     return (
         <div className="min-h-screen bg-gray-50">
