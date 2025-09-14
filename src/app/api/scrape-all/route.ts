@@ -65,7 +65,6 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
         return { shouldScrape: false, reason: 'Video marked as deleted/unavailable' };
     }
     
-    const now = new Date();
     const lastScraped = new Date(video.lastScrapedAt);
     
     console.log(`🔍 CRON DEBUG: @${video.username} (${video.platform}) - Cadence: ${video.scrapingCadence}, Last scraped: ${lastScraped.toISOString()}`);

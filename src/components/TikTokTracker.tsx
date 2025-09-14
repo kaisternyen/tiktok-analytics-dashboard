@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
-import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, RefreshCw, LogOut } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, LogOut } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
 import { TrackedAccountsTab } from '../components/TrackedAccountsTab';
@@ -1241,75 +1241,6 @@ export default function TikTokTracker() {
                             >
                                 <LogOut className="w-4 h-4" />
                                 Logout
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="flex items-center gap-2"
-                                onClick={async () => {
-                                    setIsLoading(true);
-                                    try {
-                                        console.log('🚀 MANUAL REFRESH ALL TRIGGERED - Starting video scraping...');
-                                        const response = await fetch('/api/manual-cron', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ job: 'scrape-all' })
-                                        });
-                                        const result = await response.json();
-                                        console.log('✅ Manual refresh all completed:', result);
-                                        
-                                        // Log detailed debug information
-                                        if (result.debugInfo) {
-                                            console.log('🔍 SCRAPING DEBUG INFO:');
-                                            console.log(`📊 Total videos processed: ${result.debugInfo.totalVideos}`);
-                                            console.log(`✅ Successful scrapes: ${result.debugInfo.successful}`);
-                                            console.log(`❌ Failed scrapes: ${result.debugInfo.failed}`);
-                                            console.log(`⏭️ Skipped videos: ${result.debugInfo.skipped}`);
-                                            console.log(`🔢 Videos with 0 stats: ${result.debugInfo.zeroStatsCount}`);
-                                            
-                                            if (result.debugInfo.failedVideos && result.debugInfo.failedVideos.length > 0) {
-                                                console.log('❌ FAILED VIDEOS (first 10):');
-                                                result.debugInfo.failedVideos.forEach((video: {
-                                                    username: string;
-                                                    platform: string;
-                                                    error: string;
-                                                }, index: number) => {
-                                                    console.log(`  ${index + 1}. @${video.username} (${video.platform}): ${video.error}`);
-                                                });
-                                            }
-                                            
-                                            if (result.debugInfo.zeroStatsVideos && result.debugInfo.zeroStatsVideos.length > 0) {
-                                                console.log('🔢 VIDEOS WITH 0 STATS (first 10):');
-                                                result.debugInfo.zeroStatsVideos.forEach((video: {
-                                                    username: string;
-                                                    platform: string;
-                                                    changes?: {
-                                                        views?: number;
-                                                        likes?: number;
-                                                        comments?: number;
-                                                    };
-                                                }, index: number) => {
-                                                    console.log(`  ${index + 1}. @${video.username} (${video.platform}): views=${video.changes?.views || 0}, likes=${video.changes?.likes || 0}, comments=${video.changes?.comments || 0}`);
-                                                });
-                                            }
-                                        }
-                                        
-                                        if (result.success) {
-                                            console.log('🔄 Refreshing video data after scraping...');
-                                            await fetchVideos();
-                                            console.log('✅ Video data refreshed successfully');
-                                        } else {
-                                            console.error('❌ Manual refresh failed:', result.error);
-                                        }
-                                    } catch (error) {
-                                        console.error('💥 Manual refresh error:', error);
-                                    } finally {
-                                        setIsLoading(false);
-                                    }
-                                }}
-                                disabled={isLoading}
-                            >
-                                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                                {isLoading ? 'Scraping All Videos...' : 'Refresh All'}
                             </Button>
                             <Button
                                 variant="outline"
