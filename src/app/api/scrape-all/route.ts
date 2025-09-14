@@ -53,7 +53,6 @@ interface VideoRecord {
     dailyViewsGrowth: number | null;
     needsCadenceCheck: boolean;
     trackingMode: string | null;
-    currentPhase: string;
     phase1Notified: boolean;
     phase2Notified: boolean;
 }
@@ -86,8 +85,8 @@ function shouldScrapeVideo(video: VideoRecord): { shouldScrape: boolean; reason?
     // Remove conflicting "under 7 days" rule - let cadence-based logic handle all videos
     
     // PROPER CADENCE LOGIC: Respect cadence but eliminate pending confusion
-    const hoursSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60);
-    const minutesSinceLastScrape = (now.getTime() - lastScraped.getTime()) / (1000 * 60);
+    const hoursSinceLastScrape = (Date.now() - lastScraped.getTime()) / (1000 * 60 * 60);
+    const minutesSinceLastScrape = (Date.now() - lastScraped.getTime()) / (1000 * 60);
     
     // Videos with hourly cadence: scrape every hour (AGGRESSIVE - no delays)
     if (video.scrapingCadence === 'hourly') {
@@ -345,6 +344,31 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
             const { shouldScrape, reason } = shouldScrapeVideo(video);
             console.log(`   @${video.username} (${video.platform}): ${shouldScrape ? '✅ SCRAPE' : '❌ SKIP'} - ${reason}`);
         });
+
+        // COMPREHENSIVE LOGGING: Every video, cadence, and run status
+        console.log(`\n📋 ===== COMPREHENSIVE VIDEO STATUS REPORT =====`);
+        console.log(`🕐 Cron Run Time: ${new Date().toISOString()}`);
+        console.log(`📊 Total Videos: ${videos.length} (Hourly: ${hourlyCount}, Daily: ${dailyCount})`);
+        console.log(`\n📝 DETAILED VIDEO STATUS:`);
+        
+        videos.forEach((video, index) => {
+            const { shouldScrape, reason } = shouldScrapeVideo(video);
+            const minutesSinceLastScrape = Math.floor((Date.now() - new Date(video.lastScrapedAt).getTime()) / (1000 * 60));
+            const hoursSinceLastScrape = Math.floor(minutesSinceLastScrape / 60);
+            
+            console.log(`${index + 1}. @${video.username} (${video.platform})`);
+            console.log(`   📊 Cadence: ${video.scrapingCadence}`);
+            console.log(`   ⏰ Last scraped: ${hoursSinceLastScrape}h ${minutesSinceLastScrape % 60}m ago`);
+            console.log(`   🎯 Status: ${shouldScrape ? '✅ WILL SCRAPE' : '❌ SKIPPED'}`);
+            console.log(`   📝 Reason: ${reason}`);
+            console.log(`   📈 Views: ${video.currentViews.toLocaleString()}`);
+            console.log(`   💬 Comments: ${video.currentComments}`);
+            console.log(`   🔄 Tracking: ${video.trackingMode || 'active'}`);
+            console.log(`   📅 Created: ${video.createdAt.toISOString().split('T')[0]}`);
+            console.log(`   ---`);
+        });
+        
+        console.log(`📋 ===== END COMPREHENSIVE REPORT =====\n`);
 
     // Filter videos that need scraping
     const videosToProcess = videos.filter(video => {
@@ -611,11 +635,14 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         // Don't fail the entire operation if Discord notification fails
                     }
 
+                    // Calculate changes for phase tracking
+                    const commentsChange = mediaData.comments - video.currentComments;
+
                     // Check for Phase transitions and send notifications
                     try {
-                        const currentPhase = video.currentPhase;
-                        const phase1Notified = video.phase1Notified;
-                        const phase2Notified = video.phase2Notified;
+                        const currentPhase = 'PHS 0'; // Default phase since currentPhase field doesn't exist in DB
+                        const phase1Notified = video.phase1Notified || false;
+                        const phase2Notified = video.phase2Notified || false;
                         
                         const phaseResult = determineFinalPhaseAndNotifications(
                             views, 
@@ -637,7 +664,6 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                             await prisma.video.update({
                                 where: { id: video.id },
                                 data: { 
-                                    currentPhase: phaseResult.finalPhase,
                                     phase1Notified: phaseResult.newPhase1Notified,
                                     phase2Notified: phaseResult.newPhase2Notified
                                 }
@@ -729,7 +755,6 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
 
                     const viewsChange = views - video.currentViews;
                     const likesChange = mediaData.likes - video.currentLikes;
-                    const commentsChange = mediaData.comments - video.currentComments;
                     console.log(`✅ [${i + index + 1}] @${video.username} (${video.platform}, ${newCadence}): ${views.toLocaleString()} views (+${viewsChange.toLocaleString()}), ${mediaData.likes.toLocaleString()} likes (+${likesChange.toLocaleString()}), ${mediaData.comments} comments (+${commentsChange})${dailyViews !== null ? `, daily: +${dailyViews.toLocaleString()}` : ''}`);
 
                     return {
@@ -835,12 +860,12 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
 
 export async function GET() {
     const startTime = Date.now();
-    const now = new Date();
-    const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const cronStartTime = new Date();
+    const estTime = new Date(cronStartTime.toLocaleString("en-US", {timeZone: "America/New_York"}));
     const currentHour = estTime.getHours();
     const currentMinute = estTime.getMinutes();
     
-    console.log(`🚀 ===== CRON JOB STARTED (${now.toISOString()}) =====`);
+    console.log(`🚀 ===== CRON JOB STARTED (${cronStartTime.toISOString()}) =====`);
     console.log(`🕐 CRON TIMING: EST ${estTime.toLocaleString()} (Hour ${currentHour}, Minute ${currentMinute})`);
     console.log(`🔧 Process info: PID ${process.pid}, Memory: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
     console.log(`🔧 Environment: NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL}`);
@@ -882,12 +907,12 @@ export async function GET() {
     }
     
     // Get current EST time for logging
-    const now = new Date();
-    const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-    const currentHour = estTime.getHours();
-    console.log(`🕐 Current EST time: ${estTime.toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} (Hour ${currentHour})`);
+    const currentTime = new Date();
+    const estTimeForLogging = new Date(currentTime.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const currentHourForLogging = estTimeForLogging.getHours();
+    console.log(`🕐 Current EST time: ${estTimeForLogging.toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} (Hour ${currentHourForLogging})`);
     
-    if (currentHour === 0) {
+    if (currentHourForLogging === 0) {
         console.log(`🌙 MIDNIGHT EST: Cadence evaluation window active - performance-based switching enabled`);
     } else {
         console.log(`⏰ Non-midnight hour: Hourly videos + performance-based switching`);
@@ -926,7 +951,6 @@ export async function GET() {
                     dailyViewsGrowth: true,
                     needsCadenceCheck: true,
                     trackingMode: true,
-                    currentPhase: true,
                     phase1Notified: true,
                     phase2Notified: true,
                 }
@@ -949,7 +973,6 @@ export async function GET() {
                 dailyViewsGrowth: number | null;
                 needsCadenceCheck: boolean | null;
                 trackingMode: string | null;
-                currentPhase: string | null;
                 phase1Notified: boolean | null;
                 phase2Notified: boolean | null;
             }) => {
@@ -966,7 +989,6 @@ export async function GET() {
                     dailyViewsGrowth: video.dailyViewsGrowth || null,
                     needsCadenceCheck: video.needsCadenceCheck || false,
                     trackingMode: video.trackingMode || null,
-                    currentPhase: video.currentPhase || 'PHS 0',
                     phase1Notified: video.phase1Notified || false,
                     phase2Notified: video.phase2Notified || false,
                 };
@@ -1003,7 +1025,7 @@ export async function GET() {
             username: v.username,
             platform: v.platform,
             lastScrapedAt: v.lastScrapedAt,
-            minutesAgo: Math.floor((now.getTime() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60)),
+            minutesAgo: Math.floor((Date.now() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60)),
             cadence: v.scrapingCadence
         })));
         
@@ -1013,7 +1035,7 @@ export async function GET() {
             username: v.username,
             platform: v.platform,
             lastScrapedAt: v.lastScrapedAt,
-            minutesAgo: Math.floor((now.getTime() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60)),
+            minutesAgo: Math.floor((Date.now() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60)),
             cadence: v.scrapingCadence
         })));
         
@@ -1069,7 +1091,6 @@ export async function GET() {
                     dailyViewsGrowth: true,
                     needsCadenceCheck: true,
                     trackingMode: true,
-                    currentPhase: true,
                     phase1Notified: true,
                     phase2Notified: true,
                 }
@@ -1092,7 +1113,6 @@ export async function GET() {
                 dailyViewsGrowth: number | null;
                 needsCadenceCheck: boolean | null;
                 trackingMode: string | null;
-                currentPhase: string | null;
                 phase1Notified: boolean | null;
                 phase2Notified: boolean | null;
             }) => ({
@@ -1102,7 +1122,6 @@ export async function GET() {
                 dailyViewsGrowth: video.dailyViewsGrowth || null,
                 needsCadenceCheck: video.needsCadenceCheck || false,
                 trackingMode: video.trackingMode || null,
-                currentPhase: video.currentPhase || 'PHS 0',
                 phase1Notified: video.phase1Notified || false,
                 phase2Notified: video.phase2Notified || false,
             }));
