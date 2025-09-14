@@ -261,8 +261,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         console.log('✅ Video ID length:', videoId.length);
         console.log('✅ Video ID type:', typeof videoId);
 
-        // Prepare TikHub API request - Updated to use correct TikHub API endpoint
-        const tikHubUrl = `https://api.tikhub.io/v1/tiktok/web/fetch_video?aweme_id=${videoId}`;
+        // Prepare TikHub API request - Using original working endpoint
+        const tikHubUrl = `https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_one_video?aweme_id=${videoId}`;
 
         console.log('📋 TikHub API request prepared for URL:', tikHubUrl);
         console.log('🌐 Making API request...');
