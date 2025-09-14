@@ -455,7 +455,7 @@ export default function TikTokTracker() {
         const autoRefreshVideos = async () => {
             try {
                 await fetchVideos();
-                console.log('🔄 Auto-refreshed video data');
+                // Removed console log to prevent spam every 30 seconds
             } catch (error) {
                 console.error('Failed to auto-refresh videos:', error);
             }
@@ -528,6 +528,23 @@ export default function TikTokTracker() {
                     status: response.status,
                     statusText: response.statusText
                 });
+                
+                // Try to get error details from response body
+                try {
+                    const errorData = await response.json();
+                    console.error('📄 Error response body:', errorData);
+                    console.error('🔍 Error details:', {
+                        success: errorData.success,
+                        error: errorData.error,
+                        debugInfo: errorData.debugInfo,
+                        platform: errorData.platform,
+                        url: errorData.url,
+                        timestamp: errorData.timestamp
+                    });
+                } catch (parseError) {
+                    console.error('❌ Could not parse error response:', parseError);
+                }
+                
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 

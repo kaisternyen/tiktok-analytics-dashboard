@@ -225,11 +225,7 @@ export async function GET(req: Request) {
 
         console.log(`✅ Found ${videos.length} videos in database`);
         
-        // DEBUG: Log ALL videos from database
-        console.log(`🔍 DATABASE VALUES FOR ALL ${videos.length} VIDEOS:`);
-        videos.forEach((video, index) => {
-            console.log(`Video ${index + 1}/${videos.length}: @${video.username} (${video.platform}) - views: ${video.currentViews}, likes: ${video.currentLikes}, comments: ${video.currentComments}, shares: ${video.currentShares}`);
-        });
+        // Removed verbose logging to prevent console spam every 30 seconds
 
         // If timeframe filter is present, filter metricsHistory and videos accordingly
         let filteredVideos = videos;
