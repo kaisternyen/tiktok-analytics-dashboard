@@ -331,14 +331,22 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
     console.log(`   • Hourly: ${hourlyCount} videos`);
     console.log(`   • Daily: ${dailyCount} videos`);
     
-    // DEBUG: Log hourly videos that are being processed
-    const hourlyVideos = videos.filter(v => v.scrapingCadence === 'hourly');
-    console.log(`🔍 DEBUG: Hourly videos being processed:`, hourlyVideos.map(v => ({
-        username: v.username,
-        platform: v.platform,
-        lastScrapedAt: v.lastScrapedAt,
-        minutesAgo: Math.floor((Date.now() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60))
-    })));
+        // DEBUG: Log hourly videos that are being processed
+        const hourlyVideos = videos.filter(v => v.scrapingCadence === 'hourly');
+        console.log(`🔍 DEBUG: Hourly videos being processed:`, hourlyVideos.map(v => ({
+            username: v.username,
+            platform: v.platform,
+            lastScrapedAt: v.lastScrapedAt,
+            minutesAgo: Math.floor((Date.now() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60)),
+            hoursAgo: Math.floor((Date.now() - new Date(v.lastScrapedAt).getTime()) / (1000 * 60 * 60))
+        })));
+        
+        // CRITICAL: Test shouldScrapeVideo logic for each hourly video
+        console.log(`🧪 TESTING: shouldScrapeVideo logic for each hourly video:`);
+        hourlyVideos.forEach(video => {
+            const { shouldScrape, reason } = shouldScrapeVideo(video);
+            console.log(`   @${video.username} (${video.platform}): ${shouldScrape ? '✅ SCRAPE' : '❌ SKIP'} - ${reason}`);
+        });
 
     // Filter videos that need scraping
     const videosToProcess = videos.filter(video => {
@@ -824,7 +832,13 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
 
 export async function GET() {
     const startTime = Date.now();
-    console.log(`🚀 ===== CRON JOB STARTED (${new Date().toISOString()}) =====`);
+    const now = new Date();
+    const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const currentHour = estTime.getHours();
+    const currentMinute = estTime.getMinutes();
+    
+    console.log(`🚀 ===== CRON JOB STARTED (${now.toISOString()}) =====`);
+    console.log(`🕐 CRON TIMING: EST ${estTime.toLocaleString()} (Hour ${currentHour}, Minute ${currentMinute})`);
     console.log(`🔧 Process info: PID ${process.pid}, Memory: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
     console.log(`🔧 Environment: NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL}`);
     console.log(`🔧 Headers: User-Agent=${process.env.HTTP_USER_AGENT || 'Not set'}`);
@@ -835,6 +849,20 @@ export async function GET() {
     console.log(`🌙 Daily videos: Scrape every 24h (1445min safety net)`);
     console.log(`📋 Strategy: Zero pending videos - maximum 2 cron runs to process any video`);
     console.log(`🔍 CRON DEBUG: This execution will be logged with detailed scraping decisions`);
+    
+    // CRITICAL: Check if this is running at the expected hour
+    if (currentMinute !== 0) {
+        console.log(`⚠️ WARNING: Cron job running at minute ${currentMinute}, expected minute 0!`);
+    }
+    console.log(`✅ CRON SCHEDULE: Running at hour ${currentHour} minute ${currentMinute} (expected: minute 0)`);
+    
+    // CRITICAL: Check if this is actually a Vercel cron job
+    if (!process.env.VERCEL_CRON_SECRET) {
+        console.log(`⚠️ WARNING: This is NOT a Vercel cron job! VERCEL_CRON_SECRET is not set.`);
+        console.log(`⚠️ This means the cron job might not be running automatically.`);
+    } else {
+        console.log(`✅ VERIFIED: This IS a Vercel cron job (VERCEL_CRON_SECRET is set).`);
+    }
     
     // Test database connection immediately
     try {
