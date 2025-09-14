@@ -252,7 +252,7 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         console.log('✅ Video ID extracted:', videoId);
 
         // Prepare TikHub API request - Updated to use correct V3 endpoint with aweme_id
-        const tikHubUrl = `https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_one_video?aweme_id=${videoId}`;
+        const tikHubUrl = `https://tikapi.io/api/v3/video/info/?aweme_id=${videoId}`;
 
         console.log('📋 TikHub API request prepared for URL:', tikHubUrl);
         console.log('🌐 Making API request...');
@@ -262,7 +262,8 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         const response = await fetch(tikHubUrl, {
             method: 'GET',
             headers: {
-                'Authorization': `Bearer ${apiKey}`,
+                'X-API-KEY': apiKey,
+                'Accept': 'application/json',
                 'User-Agent': 'TikTok-Analytics-Dashboard/1.0'
             }
         });
