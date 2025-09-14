@@ -317,19 +317,7 @@ export default function TikTokTracker() {
                     } : null
                 });
                 
-                // Log stats for each video to identify 0 stats issues
-                console.log('📊 VIDEO STATS SUMMARY:');
-                result.videos.forEach((video: {
-                    username: string;
-                    platform?: string;
-                    views: number;
-                    likes: number;
-                    comments: number;
-                    shares: number;
-                }, index: number) => {
-                    const hasStats = video.views > 0 || video.likes > 0 || video.comments > 0;
-                    console.log(`Video ${index + 1}/${result.videos.length}: @${video.username} (${video.platform || 'unknown'}) - views: ${video.views}, likes: ${video.likes}, comments: ${video.comments}, shares: ${video.shares} ${hasStats ? '✅' : '❌ ZERO STATS'}`);
-                });
+                // Removed verbose video stats logging to prevent console spam
                 
                 const transformedVideos = result.videos.map((video: {
                     id: string;
