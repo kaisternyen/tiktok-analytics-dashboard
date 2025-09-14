@@ -90,7 +90,8 @@ export function determineFinalPhaseAndNotifications(
   currentPhase: string,
   phase1Notified: boolean = false,
   phase2Notified: boolean = false,
-  thresholds: PhaseThresholds = DEFAULT_THRESHOLDS
+  thresholds: PhaseThresholds = DEFAULT_THRESHOLDS,
+  hourlyCommentChange: number = 0
 ): {
   finalPhase: VideoPhase;
   shouldNotifyPhase1: boolean;
@@ -105,8 +106,22 @@ export function determineFinalPhaseAndNotifications(
   let newPhase1Notified = phase1Notified;
   let newPhase2Notified = phase2Notified;
 
+  // CRITICAL: Check for 10+ comments in the last hour (Phase 2 trigger)
+  if (hourlyCommentChange >= 10) {
+    if (currentPhase === 'PHS 0' || currentPhase === 'In PHS 1' || currentPhase === 'PHS 1 Complete') {
+      finalPhase = 'In PHS 2';
+      if (!phase2Notified) {
+        shouldNotifyPhase2 = true;
+        newPhase2Notified = true;
+      }
+      // If we jumped directly to Phase 2, mark Phase 1 as notified too
+      if (!phase1Notified) {
+        newPhase1Notified = true;
+      }
+    }
+  }
   // Check if we can jump directly to Phase 2 (edge case handling)
-  if (views >= thresholds.phase2Views && comments >= thresholds.phase2Comments) {
+  else if (views >= thresholds.phase2Views && comments >= thresholds.phase2Comments) {
     if (currentPhase === 'PHS 0' || currentPhase === 'In PHS 1' || currentPhase === 'PHS 1 Complete') {
       finalPhase = 'In PHS 2';
       if (!phase2Notified) {
@@ -151,7 +166,8 @@ export function getPhaseNotificationMessage(
   oldPhase: string,
   newPhase: VideoPhase,
   views: number,
-  comments: number
+  comments: number,
+  hourlyCommentChange: number = 0
 ): string {
   const platformEmoji = platform === 'tiktok' ? '🎵' : platform === 'instagram' ? '📸' : '🎬';
   
@@ -163,7 +179,8 @@ export function getPhaseNotificationMessage(
       return `✅ **PHASE 1 COMPLETE** ${platformEmoji}\n@${username} has completed Phase 1!\n📊 ${views.toLocaleString()} views, ${comments} comments\n🔗 ${url}`;
     
     case 'In PHS 2':
-      return `🔥 **PHASE 2 ALERT** ${platformEmoji}\n@${username} is now **IN PHASE 2**!\n📊 ${views.toLocaleString()} views, ${comments} comments\n🔗 ${url}`;
+      const commentTrigger = hourlyCommentChange >= 10 ? `\n🔥 **TRIGGERED BY ${hourlyCommentChange} COMMENTS IN 1 HOUR!**` : '';
+      return `🔥 **PHASE 2 ALERT** ${platformEmoji}\n@${username} is now **IN PHASE 2**!${commentTrigger}\n📊 ${views.toLocaleString()} views, ${comments} comments\n🔗 ${url}`;
     
     case 'PHS 2 Complete':
       return `🎉 **PHASE 2 COMPLETE** ${platformEmoji}\n@${username} has completed Phase 2!\n📊 ${views.toLocaleString()} views, ${comments} comments\n🔗 ${url}`;

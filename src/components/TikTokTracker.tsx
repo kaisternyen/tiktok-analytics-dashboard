@@ -995,9 +995,27 @@ export default function TikTokTracker() {
             return true;
         });
 
-        // Collect all unique timestamps from eligible videos
+        // CRITICAL: Filter out videos with insufficient data points for meaningful charts
+        const videosWithSufficientData = eligibleVideos.filter(video => {
+            if (!video.history || video.history.length < 2) {
+                return false; // Need at least 2 data points for a meaningful chart
+            }
+            
+            // For daily view, ensure we have at least 2 data points in the timeframe
+            if (timeframeStart && timeframeEnd) {
+                const dataPointsInTimeframe = video.history.filter(point => {
+                    const pointTime = new Date(point.time).getTime();
+                    return pointTime >= timeframeStart.getTime() && pointTime <= timeframeEnd.getTime();
+                });
+                return dataPointsInTimeframe.length >= 2;
+            }
+            
+            return true; // No timeframe filter, use all data
+        });
+
+        // Collect all unique timestamps from videos with sufficient data
         const allTimestamps = new Set<string>();
-        eligibleVideos.forEach(video => {
+        videosWithSufficientData.forEach(video => {
             if (video.history?.length) {
                 video.history.forEach(point => {
                     allTimestamps.add(point.time);
@@ -1058,8 +1076,8 @@ export default function TikTokTracker() {
         const aggregateData: ChartDataPoint[] = [];
         const lastKnownValues: { [videoId: string]: VideoHistory } = {};
 
-        // Initialize with first known values for each eligible video
-        eligibleVideos.forEach(video => {
+        // Initialize with first known values for each video with sufficient data
+        videosWithSufficientData.forEach(video => {
             if (video.history?.length) {
                 const firstPoint = video.history
                     .filter(h => filteredTimestamps.includes(h.time))
@@ -1074,7 +1092,7 @@ export default function TikTokTracker() {
         // Process each timestamp and build aggregate
         filteredTimestamps.forEach(timestamp => {
             // Update last known values for videos that have data at this timestamp
-            eligibleVideos.forEach(video => {
+            videosWithSufficientData.forEach(video => {
                 const pointAtTime = video.history?.find(h => h.time === timestamp);
                 if (pointAtTime) {
                     lastKnownValues[video.id] = pointAtTime;

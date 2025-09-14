@@ -622,7 +622,9 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                             mediaData.comments, 
                             currentPhase, 
                             phase1Notified, 
-                            phase2Notified
+                            phase2Notified,
+                            undefined, // thresholds (use default)
+                            commentsChange // hourly comment change
                         );
                         
                         // Update phase and notification flags if there's a change
@@ -650,7 +652,8 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                                     currentPhase,
                                     phaseResult.finalPhase,
                                     views,
-                                    mediaData.comments
+                                    mediaData.comments,
+                                    commentsChange
                                 );
                                 
                                 await sendDiscordNotification(notificationMessage, 'viral-alerts');
@@ -665,7 +668,8 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                                     currentPhase,
                                     phaseResult.finalPhase,
                                     views,
-                                    mediaData.comments
+                                    mediaData.comments,
+                                    commentsChange
                                 );
                                 
                                 await sendDiscordNotification(notificationMessage, 'viral-alerts');
@@ -725,7 +729,8 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
 
                     const viewsChange = views - video.currentViews;
                     const likesChange = mediaData.likes - video.currentLikes;
-                    console.log(`✅ [${i + index + 1}] @${video.username} (${video.platform}, ${newCadence}): ${views.toLocaleString()} views (+${viewsChange.toLocaleString()}), ${mediaData.likes.toLocaleString()} likes (+${likesChange.toLocaleString()})${dailyViews !== null ? `, daily: +${dailyViews.toLocaleString()}` : ''}`);
+                    const commentsChange = mediaData.comments - video.currentComments;
+                    console.log(`✅ [${i + index + 1}] @${video.username} (${video.platform}, ${newCadence}): ${views.toLocaleString()} views (+${viewsChange.toLocaleString()}), ${mediaData.likes.toLocaleString()} likes (+${likesChange.toLocaleString()}), ${mediaData.comments} comments (+${commentsChange})${dailyViews !== null ? `, daily: +${dailyViews.toLocaleString()}` : ''}`);
 
                     return {
                         status: 'success' as const,
