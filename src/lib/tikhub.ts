@@ -145,6 +145,7 @@ interface TikHubApiResponse {
         aweme_details?: TikHubVideoData[];
         aweme_list?: TikHubVideoData[];
         aweme_status?: TikHubVideoData[];
+        aweme_detail?: TikHubVideoData;
     } & TikHubVideoData;
     message?: string;
 }
@@ -493,9 +494,6 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
 
         console.log('🔍 FULL TIKHUB API RESPONSE:');
         console.log(JSON.stringify(apiResponse, null, 2));
-        
-        // Also return the raw response in debug info for frontend visibility
-        debugInfo.tikHubRawResponse = apiResponse;
         
         // COMPREHENSIVE LOGGING FOR DEBUGGING
         console.log('🔍 COMPREHENSIVE API RESPONSE ANALYSIS:');
