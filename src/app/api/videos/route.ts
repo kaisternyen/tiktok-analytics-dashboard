@@ -36,7 +36,7 @@ async function runMigrationIfNeeded() {
 }
 
 const ALLOWED_FIELDS = [
-  'username', 'description', 'status', 'platform', 'currentViews', 'currentLikes', 'currentComments', 'currentShares', 'createdAt', 'lastScrapedAt', 'scrapingCadence'
+  'username', 'description', 'status', 'platform', 'currentViews', 'currentLikes', 'currentComments', 'currentShares', 'createdAt', 'lastScrapedAt', 'scrapingCadence', 'currentPhase'
 ];
 
 function parseFilters(filterParam: string | null): Record<string, unknown> | undefined {

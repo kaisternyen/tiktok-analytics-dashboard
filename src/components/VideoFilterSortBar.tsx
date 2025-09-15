@@ -16,6 +16,7 @@ const FIELD_DEFS = [
   { name: 'createdAt', label: 'Posted', type: 'date' },
   { name: 'lastUpdate', label: 'Last Updated', type: 'date' },
   { name: 'scrapingCadence', label: 'Cadence', type: 'text' },
+  { name: 'currentPhase', label: 'Phase', type: 'text' },
   { name: 'lastModeratedAt', label: 'Last Moderated', type: 'date' },
   { name: 'threadsPlanted', label: 'Threads Planted', type: 'number' },
   { name: 'gotTopComment', label: 'Got Top Comment', type: 'boolean' },
@@ -197,6 +198,7 @@ export default function VideoFilterSortBar({ filters, sorts, timeframe, onChange
           // Single-choice value options
           const isStatus = filter.field === 'status';
           const isCadence = filter.field === 'scrapingCadence';
+          const isPhase = filter.field === 'currentPhase';
           const statusOptions = [
             { value: 'Active', label: 'Active' },
             { value: 'Paused', label: 'Paused' },
@@ -205,6 +207,13 @@ export default function VideoFilterSortBar({ filters, sorts, timeframe, onChange
             { value: 'hourly', label: 'Hourly' },
             { value: 'daily', label: 'Daily' },
             { value: 'testing', label: 'Testing' },
+          ];
+          const phaseOptions = [
+            { value: 'PHS 0', label: 'PHS 0' },
+            { value: 'In PHS 1', label: 'In PHS 1' },
+            { value: 'PHS 1 Complete', label: 'PHS 1 Complete' },
+            { value: 'In PHS 2', label: 'In PHS 2' },
+            { value: 'PHS 2 Complete', label: 'PHS 2 Complete' },
           ];
           const isPlatform = filter.field === 'platform';
           const isTimeframe = filter.field === 'timeframe';
@@ -269,6 +278,17 @@ export default function VideoFilterSortBar({ filters, sorts, timeframe, onChange
                   >
                     <option value="">Select platform</option>
                     {platformOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                ) : isPhase ? (
+                  <select
+                    className="text-xs px-1 py-0.5 rounded border border-gray-200 bg-white"
+                    value={typeof filter.value === 'string' ? filter.value : ''}
+                    onChange={e => handleFilterChange(idx, 'value', e.target.value)}
+                  >
+                    <option value="">Select phase</option>
+                    {phaseOptions.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
