@@ -963,13 +963,12 @@ export default function TikTokTracker() {
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         
-        // Check if this is a 1-day timeframe (24 hours)
-        const isOneDayTimeframe = timeframeStart && timeframeEnd && 
-            (timeframeEnd.getTime() - timeframeStart.getTime()) <= (25 * 60 * 60 * 1000); // 25 hours to account for slight variations
+        // Check if this is the daily view (D preset) - only show hourly cadence videos
+        const isDailyView = selectedTimePeriod === 'D';
         
         const eligibleVideos = tracked.filter(video => {
-            // For 1-day timeframe, only include hourly cadence videos
-            if (isOneDayTimeframe) {
+            // For daily view (D preset), ONLY include hourly cadence videos
+            if (isDailyView) {
                 return video.platform && video.scrapingCadence === 'hourly';
             }
             
