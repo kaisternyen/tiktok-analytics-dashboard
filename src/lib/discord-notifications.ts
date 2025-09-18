@@ -101,7 +101,7 @@ export async function notifyNewVideo(
   await sendDiscordNotification(message, 'new-posts');
 }
 
-// Notification for viral videos (when views cross certain thresholds)
+// Notification for viral videos (when hourly view changes cross certain thresholds)
 export async function notifyViralVideo(
   username: string,
   platform: string,
@@ -109,20 +109,21 @@ export async function notifyViralVideo(
   description: string,
   currentViews: number,
   currentLikes: number,
+  hourlyViewChange: number,
   threshold: number
 ): Promise<void> {
   const platformEmoji = getPlatformEmoji(platform);
-  const message = `🔥 **VIRAL ALERT** ${platformEmoji}\n@${username} video is going viral!\n📝 "${description.length > 100 ? description.substring(0, 100) + '...' : description}"\n📊 ${formatNumber(currentViews)} views, ${formatNumber(currentLikes)} likes\n🚀 Crossed ${formatNumber(threshold)} views threshold!\n🔗 ${url}`;
+  const message = `🔥 **VIRAL ALERT** ${platformEmoji}\n@${username} video is going viral!\n📝 "${description.length > 100 ? description.substring(0, 100) + '...' : description}"\n📊 ${formatNumber(currentViews)} total views, ${formatNumber(currentLikes)} likes\n🚀 Gained ${formatNumber(hourlyViewChange)} views in the last hour (crossed ${formatNumber(threshold)} threshold!)\n🔗 ${url}`;
 
   await sendDiscordNotification(message, 'viral-alerts');
 }
 
-// Check if a video has crossed viral thresholds
-export function checkViralThresholds(previousViews: number, currentViews: number): number | null {
+// Check if a video has crossed viral thresholds based on hourly view changes
+export function checkViralThresholds(hourlyViewChange: number): number | null {
   const thresholds = [10000, 50000, 100000, 500000, 1000000, 5000000, 10000000];
   
   for (const threshold of thresholds) {
-    if (previousViews < threshold && currentViews >= threshold) {
+    if (hourlyViewChange >= threshold) {
       return threshold;
     }
   }

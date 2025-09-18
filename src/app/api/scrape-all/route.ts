@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import { getCurrentNormalizedTimestamp, normalizeTimestamp, TimestampInterval } from '@/lib/timestamp-utils';
-import { sendDiscordNotification } from '@/lib/discord-notifications';
+import { sendDiscordNotification, checkViralThresholds, notifyViralVideo } from '@/lib/discord-notifications';
 import { sanitizeMetrics, logSanitizationWarnings } from '@/lib/metrics-validation';
 import { getPhaseNotificationMessage, determineFinalPhaseAndNotifications } from '@/lib/phase-tracking';
 
@@ -643,6 +643,7 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
 
                     // Calculate changes for phase tracking
                     const commentsChange = mediaData.comments - video.currentComments;
+                    const hourlyViewsChange = views - video.currentViews;
 
                     // Check for Phase transitions and send notifications
                     try {
@@ -657,7 +658,8 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                             phase1Notified, 
                             phase2Notified,
                             undefined, // thresholds (use default)
-                            commentsChange // hourly comment change
+                            commentsChange, // hourly comment change
+                            hourlyViewsChange // hourly view change
                         );
                         
                         // Update phase and notification flags if there's a change
@@ -685,7 +687,8 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                                     phaseResult.finalPhase,
                                     views,
                                     mediaData.comments,
-                                    commentsChange
+                                    commentsChange,
+                                    hourlyViewsChange
                                 );
                                 
                                 await sendDiscordNotification(notificationMessage, 'viral-alerts');
@@ -701,12 +704,33 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                                     phaseResult.finalPhase,
                                     views,
                                     mediaData.comments,
-                                    commentsChange
+                                    commentsChange,
+                                    hourlyViewsChange
                                 );
                                 
                                 await sendDiscordNotification(notificationMessage, 'viral-alerts');
                                 console.log(`📢 Phase 2 notification sent for @${video.username}`);
                             }
+                        }
+
+                        // Check for viral threshold notifications (based on hourly view changes)
+                        try {
+                            const viralThreshold = checkViralThresholds(hourlyViewsChange);
+                            if (viralThreshold) {
+                                await notifyViralVideo(
+                                    video.username,
+                                    video.platform,
+                                    video.url,
+                                    mediaData.description || 'No description',
+                                    views,
+                                    mediaData.likes,
+                                    hourlyViewsChange,
+                                    viralThreshold
+                                );
+                                console.log(`🔥 Viral threshold notification sent for @${video.username} - gained ${hourlyViewsChange} views in last hour (threshold: ${viralThreshold})`);
+                            }
+                        } catch (viralError) {
+                            console.error(`❌ Viral notification error for @${video.username}:`, viralError);
                         }
 
                     } catch (phaseError) {

@@ -91,7 +91,8 @@ export function determineFinalPhaseAndNotifications(
   phase1Notified: boolean = false,
   phase2Notified: boolean = false,
   thresholds: PhaseThresholds = DEFAULT_THRESHOLDS,
-  hourlyCommentChange: number = 0
+  hourlyCommentChange: number = 0,
+  hourlyViewChange: number = 0
 ): {
   finalPhase: VideoPhase;
   shouldNotifyPhase1: boolean;
@@ -120,8 +121,8 @@ export function determineFinalPhaseAndNotifications(
       }
     }
   }
-  // Check if we can jump directly to Phase 2 (edge case handling)
-  else if (views >= thresholds.phase2Views && comments >= thresholds.phase2Comments) {
+  // Check if we can jump directly to Phase 2 (hourly view threshold)
+  else if (hourlyViewChange >= thresholds.phase2Views && comments >= thresholds.phase2Comments) {
     if (currentPhase === 'PHS 0' || currentPhase === 'In PHS 1' || currentPhase === 'PHS 1 Complete') {
       finalPhase = 'In PHS 2';
       if (!phase2Notified) {
@@ -133,7 +134,7 @@ export function determineFinalPhaseAndNotifications(
         newPhase1Notified = true;
       }
     }
-  } else if (views >= thresholds.phase1Views && comments >= thresholds.phase1Comments) {
+  } else if (hourlyViewChange >= thresholds.phase1Views && comments >= thresholds.phase1Comments) {
     // Check Phase 1 transitions
     if (currentPhase === 'PHS 0') {
       finalPhase = 'In PHS 1';
@@ -167,26 +168,28 @@ export function getPhaseNotificationMessage(
   newPhase: VideoPhase,
   views: number,
   comments: number,
-  hourlyCommentChange: number = 0
+  hourlyCommentChange: number = 0,
+  hourlyViewChange: number = 0
 ): string {
   const platformEmoji = platform === 'tiktok' ? '🎵' : platform === 'instagram' ? '📸' : '🎬';
   
   switch (newPhase) {
     case 'In PHS 1':
-      return `🚀 **PHASE 1 ALERT** ${platformEmoji}\n@${username} is now **IN PHASE 1**!\n📊 ${views.toLocaleString()} views, ${comments} comments\n🔗 ${url}`;
+      return `🚀 **PHASE 1 ALERT** ${platformEmoji}\n@${username} is now **IN PHASE 1**!\n📊 ${views.toLocaleString()} views, ${comments} comments\n⚡ **${hourlyViewChange.toLocaleString()} views in last hour!**\n🔗 ${url}`;
     
     case 'PHS 1 Complete':
-      return `✅ **PHASE 1 COMPLETE** ${platformEmoji}\n@${username} has completed Phase 1!\n📊 ${views.toLocaleString()} views, ${comments} comments\n🔗 ${url}`;
+      return `✅ **PHASE 1 COMPLETE** ${platformEmoji}\n@${username} has completed Phase 1!\n📊 ${views.toLocaleString()} views, ${comments} comments\n⚡ **${hourlyViewChange.toLocaleString()} views in last hour!**\n🔗 ${url}`;
     
     case 'In PHS 2':
       const commentTrigger = hourlyCommentChange >= 10 ? `\n🔥 **TRIGGERED BY ${hourlyCommentChange} COMMENTS IN 1 HOUR!**` : '';
-      return `🔥 **PHASE 2 ALERT** ${platformEmoji}\n@${username} is now **IN PHASE 2**!${commentTrigger}\n📊 ${views.toLocaleString()} views, ${comments} comments\n🔗 ${url}`;
+      const viewTrigger = hourlyViewChange >= 10000 ? `\n⚡ **TRIGGERED BY ${hourlyViewChange.toLocaleString()} VIEWS IN 1 HOUR!**` : '';
+      return `🔥 **PHASE 2 ALERT** ${platformEmoji}\n@${username} is now **IN PHASE 2**!${commentTrigger}${viewTrigger}\n📊 ${views.toLocaleString()} views, ${comments} comments\n🔗 ${url}`;
     
     case 'PHS 2 Complete':
-      return `🎉 **PHASE 2 COMPLETE** ${platformEmoji}\n@${username} has completed Phase 2!\n📊 ${views.toLocaleString()} views, ${comments} comments\n🔗 ${url}`;
+      return `🎉 **PHASE 2 COMPLETE** ${platformEmoji}\n@${username} has completed Phase 2!\n📊 ${views.toLocaleString()} views, ${comments} comments\n⚡ **${hourlyViewChange.toLocaleString()} views in last hour!**\n🔗 ${url}`;
     
     default:
-      return `📈 **Phase Update** ${platformEmoji}\n@${username} phase: ${oldPhase} → ${newPhase}\n📊 ${views.toLocaleString()} views, ${comments} comments\n🔗 ${url}`;
+      return `📈 **Phase Update** ${platformEmoji}\n@${username} phase: ${oldPhase} → ${newPhase}\n📊 ${views.toLocaleString()} views, ${comments} comments\n⚡ **${hourlyViewChange.toLocaleString()} views in last hour!**\n🔗 ${url}`;
   }
 }
 
