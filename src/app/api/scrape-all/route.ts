@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import { getCurrentNormalizedTimestamp, normalizeTimestamp, TimestampInterval } from '@/lib/timestamp-utils';
-import { checkViralThresholds, notifyViralVideo, sendDiscordNotification } from '@/lib/discord-notifications';
+import { sendDiscordNotification } from '@/lib/discord-notifications';
 import { sanitizeMetrics, logSanitizationWarnings } from '@/lib/metrics-validation';
 import { getPhaseNotificationMessage, determineFinalPhaseAndNotifications } from '@/lib/phase-tracking';
 
@@ -640,26 +640,6 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         shares: updatedVideo?.currentShares
                     });
 
-                    // Check for viral thresholds and send Discord notifications
-                    try {
-                        const viralThreshold = checkViralThresholds(video.currentViews, views);
-                        if (viralThreshold) {
-                            console.log(`🔥 @${video.username} video went viral! Crossed ${viralThreshold.toLocaleString()} views threshold`);
-                            
-                            await notifyViralVideo(
-                                video.username,
-                                video.platform,
-                                video.url,
-                                mediaData.description || '',
-                                views,
-                                mediaData.likes,
-                                viralThreshold
-                            );
-                        }
-                    } catch (error) {
-                        console.error('⚠️ Failed to send viral video Discord notification:', error);
-                        // Don't fail the entire operation if Discord notification fails
-                    }
 
                     // Calculate changes for phase tracking
                     const commentsChange = mediaData.comments - video.currentComments;
