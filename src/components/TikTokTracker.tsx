@@ -1139,6 +1139,67 @@ export default function TikTokTracker() {
         return { chartData: finalChartData, filteredVideoCount: videosWithSufficientData.length };
     };
 
+    // Get videos with sufficient data points for totals calculation (same filtering as chart)
+    const getFilteredVideosForTotals = (): TrackedVideo[] => {
+        if (tracked.length === 0) return [];
+
+        let timeframeStart: Date | null = null;
+        let timeframeEnd: Date | null = null;
+        if (timeframe && timeframe[0] && timeframe[1]) {
+            timeframeStart = new Date(timeframe[0]);
+            timeframeEnd = new Date(timeframe[1]);
+        }
+
+        // Filter videos based on timeframe and cadence (same logic as getChartData)
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        // Check if this is the daily view (D preset) - only show hourly cadence videos
+        const isDailyView = selectedTimePeriod === 'D';
+        
+        const eligibleVideos = tracked.filter(video => {
+            // For daily view (D preset), ONLY include hourly cadence videos
+            if (isDailyView) {
+                return video.platform && video.scrapingCadence === 'hourly';
+            }
+            
+            // For longer timeframes, use the original logic
+            // Always include hourly videos 
+            if (video.platform && video.scrapingCadence === 'hourly') {
+                return true;
+            }
+            
+            // For daily videos, only include if they've been scraped today
+            if (video.platform && video.scrapingCadence === 'daily') {
+                const lastScraped = new Date(video.lastUpdate);
+                return lastScraped >= todayStart;
+            }
+            
+            // Default: include video if cadence is unknown (backward compatibility)
+            return true;
+        });
+
+        // CRITICAL: Filter out videos with insufficient data points for meaningful totals
+        const videosWithSufficientData = eligibleVideos.filter(video => {
+            if (!video.history || video.history.length < 2) {
+                return false; // Need at least 2 data points for meaningful totals
+            }
+            
+            // For daily view, ensure we have at least 2 data points in the timeframe
+            if (timeframeStart && timeframeEnd) {
+                const dataPointsInTimeframe = video.history.filter(point => {
+                    const pointTime = new Date(point.time).getTime();
+                    return pointTime >= timeframeStart.getTime() && pointTime <= timeframeEnd.getTime();
+                });
+                return dataPointsInTimeframe.length >= 2;
+            }
+            
+            return true; // No timeframe filter, use all data
+        });
+
+        return videosWithSufficientData;
+    };
+
     const { chartData, filteredVideoCount: oldFilteredVideoCount } = getChartData();
     const yAxisDomain = getYAxisDomain(chartData);
 
@@ -1211,17 +1272,18 @@ export default function TikTokTracker() {
     const sharesChartData = getVideoChartData('shares', showSharesDelta);
     
     // Use the filtered video count from the chart data
+    const filteredVideosForTotals = getFilteredVideosForTotals();
     
     const totalMetrics = {
-        videos: selectedTimePeriod === 'D' ? oldFilteredVideoCount : tracked.length,
-        totalViews: tracked.reduce((sum, v) => sum + v.views, 0),
-        totalLikes: tracked.reduce((sum, v) => sum + v.likes, 0),
-        totalComments: tracked.reduce((sum, v) => sum + v.comments, 0),
-        totalShares: tracked.reduce((sum, v) => sum + v.shares, 0),
-        avgGrowth: tracked.length > 0 ? tracked.reduce((sum, v) => sum + v.growth.views, 0) / tracked.length : 0,
-        totalThreads: tracked.reduce((sum, v) => sum + (v.threadsPlanted || 0), 0),
-        totalCommentsModerated: tracked.reduce((sum, v) => sum + (v.totalCommentsModerated || 0), 0),
-        moderatedVideos: tracked.filter(v => v.lastModeratedAt).length,
+        videos: selectedTimePeriod === 'D' ? oldFilteredVideoCount : filteredVideosForTotals.length,
+        totalViews: filteredVideosForTotals.reduce((sum, v) => sum + v.views, 0),
+        totalLikes: filteredVideosForTotals.reduce((sum, v) => sum + v.likes, 0),
+        totalComments: filteredVideosForTotals.reduce((sum, v) => sum + v.comments, 0),
+        totalShares: filteredVideosForTotals.reduce((sum, v) => sum + v.shares, 0),
+        avgGrowth: filteredVideosForTotals.length > 0 ? filteredVideosForTotals.reduce((sum, v) => sum + v.growth.views, 0) / filteredVideosForTotals.length : 0,
+        totalThreads: filteredVideosForTotals.reduce((sum, v) => sum + (v.threadsPlanted || 0), 0),
+        totalCommentsModerated: filteredVideosForTotals.reduce((sum, v) => sum + (v.totalCommentsModerated || 0), 0),
+        moderatedVideos: filteredVideosForTotals.filter(v => v.lastModeratedAt).length,
     };
 
     return (
