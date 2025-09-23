@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
+import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData, extractTikTokStatsFromTikHubData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import { getCurrentNormalizedTimestamp, getIntervalForCadence } from '@/lib/timestamp-utils';
 import { uploadToS3 } from '../../../lib/s3';
@@ -190,14 +190,15 @@ export async function POST(request: NextRequest) {
             description = ytData.description;
             thumbnailUrl = ytData.thumbnails?.medium?.url || ytData.thumbnails?.high?.url;
         } else { // tiktok
-            const tikData = mediaData as TikTokVideoData;
-            views = tikData.views;
-            likes = tikData.likes;
-            comments = tikData.comments;
-            shares = tikData.shares || 0;
-            username = tikData.username;
-            description = tikData.description;
-            thumbnailUrl = tikData.thumbnailUrl;
+            // Use centralized TikHub data extraction for TikTok videos
+            const extractedData = extractTikTokStatsFromTikHubData(mediaData);
+            views = extractedData.views;
+            likes = extractedData.likes;
+            comments = extractedData.comments;
+            shares = extractedData.shares;
+            username = extractedData.username;
+            description = extractedData.description;
+            thumbnailUrl = extractedData.thumbnailUrl;
         }
 
         // Always upload thumbnail to S3 if present
