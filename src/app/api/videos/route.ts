@@ -18,6 +18,16 @@ async function runMigrationIfNeeded() {
             ADD COLUMN IF NOT EXISTS "dailyViewsGrowth" INTEGER,
             ADD COLUMN IF NOT EXISTS "needsCadenceCheck" BOOLEAN DEFAULT false
         `;
+        
+        // Add performance indexes
+        await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_videos_isActive ON videos("isActive")`;
+        await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_videos_platform ON videos("platform")`;
+        await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_videos_username ON videos("username")`;
+        await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_videos_currentViews ON videos("currentViews")`;
+        await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_videos_createdAt ON videos("createdAt")`;
+        await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_videos_lastScrapedAt ON videos("lastScrapedAt")`;
+        await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON "MetricsHistory"("timestamp")`;
+        await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS idx_metrics_videoId_timestamp ON "MetricsHistory"("videoId", "timestamp")`;;
 
         // Update existing videos to have default cadence
         await prisma.$executeRaw`
@@ -216,8 +226,17 @@ export async function GET(req: Request) {
         const videos = await prisma.video.findMany({
             where,
             include: {
-                metricsHistory: {
+                metricsHistory: timeframe ? {
+                    where: {
+                        timestamp: {
+                            gte: new Date(timeframe[0]),
+                            lte: new Date(timeframe[1])
+                        }
+                    },
                     orderBy: { timestamp: 'desc' }
+                } : {
+                    orderBy: { timestamp: 'desc' },
+                    take: 10 // Limit history to last 10 entries when no timeframe
                 }
             },
             orderBy
@@ -291,18 +310,7 @@ export async function GET(req: Request) {
                         comments = end.comments - start.comments;
                         shares = end.shares - start.shares;
                         
-                        // DEBUG: Log timeframe calculation for @antoine.lockedin
-                        if (video.username === 'antoine.lockedin') {
-                            console.log(`🔍 TIMEFRAME CALCULATION FOR @${video.username}:`, {
-                                historyLength: history.length,
-                                startViews: start.views,
-                                endViews: end.views,
-                                deltaViews: views,
-                                startLikes: start.likes,
-                                endLikes: end.likes,
-                                deltaLikes: likes
-                            });
-                        }
+                // Removed debug logging for performance
                     } else {
                         // Not enough data points in timeframe, use current values instead of 0
                         views = video.currentViews;
@@ -310,16 +318,7 @@ export async function GET(req: Request) {
                         comments = video.currentComments;
                         shares = video.currentShares;
                         
-                        // DEBUG: Log insufficient data points for @antoine.lockedin
-                        if (video.username === 'antoine.lockedin') {
-                            console.log(`⚠️ INSUFFICIENT DATA POINTS - USING CURRENT VALUES FOR @${video.username}:`, {
-                                historyLength: history.length,
-                                timeframe: timeframe,
-                                currentViews: video.currentViews,
-                                currentLikes: video.currentLikes,
-                                usingCurrentValues: true
-                            });
-                        }
+                        // Removed debug logging for performance
                     }
                 } else {
                     // No timeframe, use current values
@@ -328,16 +327,7 @@ export async function GET(req: Request) {
                     comments = video.currentComments;
                     shares = video.currentShares;
                     
-                    // DEBUG: Log the values being returned for this video
-                    if (video.username === 'antoine.lockedin') {
-                        console.log(`🔍 API/Videos returning for @${video.username}:`, {
-                            currentViews: video.currentViews,
-                            currentLikes: video.currentLikes,
-                            currentComments: video.currentComments,
-                            currentShares: video.currentShares,
-                            lastScrapedAt: video.lastScrapedAt
-                        });
-                    }
+                // Removed debug logging for performance
                 }
 
                 const transformedVideo = {
@@ -377,24 +367,13 @@ export async function GET(req: Request) {
                     })).reverse() // Oldest first for charts
                 };
                 
-                // DEBUG: Log the final transformed data for this video
-                if (video.username === 'antoine.lockedin') {
-                    console.log(`🔍 API/Videos final transformed data for @${video.username}:`, {
-                        views: transformedVideo.views,
-                        likes: transformedVideo.likes,
-                        comments: transformedVideo.comments,
-                        shares: transformedVideo.shares
-                    });
-                }
+                // Removed debug logging for performance
                 
                 return transformedVideo;
             });
             
-            // DEBUG: Log ALL transformed videos being sent to frontend
-            console.log(`🔍 TRANSFORMED VALUES BEING SENT TO FRONTEND FOR ALL ${transformedVideos.length} VIDEOS:`);
-            transformedVideos.forEach((video, index) => {
-                console.log(`Frontend Video ${index + 1}/${transformedVideos.length}: @${video.username} (${video.platform}) - views: ${video.views}, likes: ${video.likes}, comments: ${video.comments}, shares: ${video.shares}`);
-            });
+            // Simplified logging to prevent performance issues
+            console.log(`✅ Transformed ${transformedVideos.length} videos for frontend`);
             
             console.log('Videos after delta transformation:', transformedVideos.length, transformedVideos.map(v => ({ username: v.username, views: v.views })));
         } catch (err) {
