@@ -336,6 +336,29 @@ export async function GET(req: Request) {
                 // Removed debug logging for performance
                 }
 
+                // Calculate new comments since last moderation
+                let newCommentsCount = 0;
+                let commentsAtLastModeration = 0;
+                
+                if (video.lastModeratedAt) {
+                    // Find the comment count closest to when it was last moderated
+                    const moderatedTime = new Date(video.lastModeratedAt).getTime();
+                    const historicalPoint = history.find(h => 
+                        new Date(h.timestamp).getTime() <= moderatedTime
+                    );
+                    
+                    if (historicalPoint) {
+                        commentsAtLastModeration = historicalPoint.comments;
+                        newCommentsCount = Math.max(0, totalComments - commentsAtLastModeration);
+                    } else {
+                        // If no historical data at moderation time, assume all current comments are new
+                        newCommentsCount = totalComments;
+                    }
+                } else {
+                    // Never moderated - all comments are "new"
+                    newCommentsCount = totalComments;
+                }
+
                 const transformedVideo = {
                     id: video.id,
                     url: video.url,
@@ -366,6 +389,8 @@ export async function GET(req: Request) {
                     threadsPlanted: video.threadsPlanted || 0,
                     gotTopComment: video.gotTopComment || false,
                     totalCommentsModerated: video.totalCommentsModerated || 0,
+                    newCommentsCount,
+                    commentsAtLastModeration,
                     threadsPlantedNote: video.threadsPlantedNote || '',
                     phase1Notified: video.phase1Notified || false,
                     phase2Notified: video.phase2Notified || false,

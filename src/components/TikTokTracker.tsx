@@ -57,6 +57,8 @@ interface TrackedVideo {
     threadsPlanted?: number;
     gotTopComment?: boolean;
     totalCommentsModerated?: number;
+    newCommentsCount?: number; // New comments since last moderation
+    commentsAtLastModeration?: number; // Comment count when last moderated
     phase1Notified?: boolean;
     phase2Notified?: boolean;
     currentPhase?: string;
@@ -738,7 +740,9 @@ export default function TikTokTracker() {
                     ? {
                         ...video,
                         lastModeratedAt: result.video.lastModeratedAt,
-                        moderatedBy: result.video.moderatedBy
+                        moderatedBy: result.video.moderatedBy,
+                        newCommentsCount: 0, // Reset new comments count
+                        commentsAtLastModeration: video.totalComments // Store current comment count as baseline
                     }
                     : video
             ));
@@ -1881,7 +1885,7 @@ export default function TikTokTracker() {
                                                                     </div>
                                                                 </th>
                                                                 {/* Moderation columns moved here for better visibility */}
-                                                                <th className="text-left p-4 font-medium text-gray-900">Just Moderated</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">New Comments</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Threads Planted Note</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Check for top comment</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Phase</th>
@@ -2040,22 +2044,34 @@ export default function TikTokTracker() {
                                                                             <Button
                                                                                 variant="outline"
                                                                                 size="sm"
+                                                                                title={video.newCommentsCount && video.newCommentsCount > 0 ? 
+                                                                                    `Click to mark ${video.newCommentsCount} new comment${video.newCommentsCount !== 1 ? 's' : ''} as moderated` : 
+                                                                                    'Mark as just moderated'}
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
                                                                                     handleJustModerated(video.id);
                                                                                 }}
-                                                                                className={`text-xs py-1 px-2 h-6 ${
-                                                                                    !video.lastModeratedAt ? 'bg-green-50 hover:bg-green-100 text-green-800' :
-                                                                                    (() => {
-                                                                                        const hoursSinceModeration = video.lastModeratedAt ? 
-                                                                                            (new Date().getTime() - new Date(video.lastModeratedAt).getTime()) / (1000 * 60 * 60) : 0;
-                                                                                        if (hoursSinceModeration < 2) return 'bg-green-50 hover:bg-green-100 text-green-800';
-                                                                                        if (hoursSinceModeration < 6) return 'bg-yellow-50 hover:bg-yellow-100 text-yellow-800';
-                                                                                        return 'bg-red-50 hover:bg-red-100 text-red-800';
-                                                                                    })()
+                                                                                className={`text-xs py-1 px-2 h-6 relative transition-all duration-200 ${
+                                                                                    video.newCommentsCount && video.newCommentsCount > 0 ? 
+                                                                                        'bg-red-50 hover:bg-red-100 text-red-800 border-red-200 shadow-sm' :
+                                                                                        !video.lastModeratedAt ? 'bg-green-50 hover:bg-green-100 text-green-800' :
+                                                                                        (() => {
+                                                                                            const hoursSinceModeration = video.lastModeratedAt ? 
+                                                                                                (new Date().getTime() - new Date(video.lastModeratedAt).getTime()) / (1000 * 60 * 60) : 0;
+                                                                                            if (hoursSinceModeration < 2) return 'bg-green-50 hover:bg-green-100 text-green-800';
+                                                                                            if (hoursSinceModeration < 6) return 'bg-yellow-50 hover:bg-yellow-100 text-yellow-800';
+                                                                                            return 'bg-red-50 hover:bg-red-100 text-red-800';
+                                                                                        })()
                                                                                 }`}
                                                                             >
-                                                                                Just Moderated
+                                                                                {video.newCommentsCount && video.newCommentsCount > 0 ? (
+                                                                                    <div className="flex items-center gap-1.5">
+                                                                                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-sm"></div>
+                                                                                        <span className="font-medium">{video.newCommentsCount} new comment{video.newCommentsCount !== 1 ? 's' : ''}</span>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <span className="font-medium">Just Moderated</span>
+                                                                                )}
                                                                             </Button>
                                                                             {video.lastModeratedAt && (
                                                                                 <div className="text-xs text-gray-500">
