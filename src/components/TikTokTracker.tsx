@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -212,8 +212,8 @@ export default function TikTokTracker() {
         setShowDatePicker(false);
     };
 
-    // Define the mapping between display field names and database field names
-    const fieldMapping: Record<string, string> = {
+    // Define the mapping between display field names and database field names (memoized)
+    const fieldMapping = useMemo(() => ({
         'Creator': 'username',
         'Platform': 'platform',
         'Views': 'currentViews',
@@ -225,7 +225,7 @@ export default function TikTokTracker() {
         'Posted': 'createdAt',
         'Cadence': 'scrapingCadence',
         'Status': 'status'
-    };
+    }), []);
 
     // Local sorting function - no API calls needed (memoized for performance)
     const sortVideosLocally = useCallback((videosToSort: TrackedVideo[], sortField: string, sortOrder: 'asc' | 'desc', displayField?: string): TrackedVideo[] => {
@@ -277,8 +277,8 @@ export default function TikTokTracker() {
                     bValue = b.status.toLowerCase();
                     break;
                 default:
-                    aValue = (a as any)[sortField] || '';
-                    bValue = (b as any)[sortField] || '';
+                    aValue = (a as unknown as Record<string, unknown>)[sortField] as string | number || '';
+                    bValue = (b as unknown as Record<string, unknown>)[sortField] as string | number || '';
             }
             
             if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
@@ -289,7 +289,7 @@ export default function TikTokTracker() {
 
     // Handle header click for sorting - now uses local sorting
     const handleHeaderClick = (field: string) => {
-        const dbField = fieldMapping[field] || field;
+        const dbField = fieldMapping[field as keyof typeof fieldMapping] || field;
         const currentSort = sorts.find(sort => sort.field === dbField);
         
         let newSortOrder: 'asc' | 'desc';
@@ -313,7 +313,7 @@ export default function TikTokTracker() {
 
     // Get current sort state for a field
     const getSortState = (field: string): 'asc' | 'desc' | null => {
-        const dbField = fieldMapping[field] || field;
+        const dbField = fieldMapping[field as keyof typeof fieldMapping] || field;
         const currentSort = sorts.find(sort => sort.field === dbField);
         return currentSort ? currentSort.order : null;
     };
@@ -491,7 +491,7 @@ export default function TikTokTracker() {
         } catch (err) {
             console.error('💥 Error fetching videos:', err);
         }
-    }, [filters, sorts, timeframe]);
+    }, [filters, sorts, timeframe, fieldMapping, sortVideosLocally]);
 
     // Fetch videos from database on component mount
     useEffect(() => {
@@ -536,8 +536,10 @@ export default function TikTokTracker() {
 
     useEffect(() => {
         // Only fetch from API when filters or timeframe change, not sorts
+        // We intentionally don't include 'sorts' in dependencies to prevent API calls on sort changes
         fetchVideos(filters, sorts, timeframe);
-    }, [filters, timeframe, fetchVideos]); // Removed 'sorts' from dependencies
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filters, timeframe, fetchVideos]);
 
     useEffect(() => {
         console.log('[TikTokTracker] sorts state changed:', sorts);
