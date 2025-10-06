@@ -409,7 +409,10 @@ export default function TikTokTracker() {
                         
                         // If insufficient history data, fall back to current values instead of null
                         if (!start || !end || start === end) {
-                            console.log(`⚠️ Insufficient history data for @${video.username} - using current values instead of delta`);
+                            // Only log this occasionally to avoid console spam
+                            if (Math.random() < 0.1) { // Log 10% of the time
+                                console.log(`⚠️ Insufficient history data for @${video.username} - using current values instead of delta`);
+                            }
                             return {
                                 ...video,
                                 views: video.views, // Use current values from API

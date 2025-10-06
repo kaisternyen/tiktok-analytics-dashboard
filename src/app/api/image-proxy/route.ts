@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
                         Instagram Image
                     </text>
                     <text x="75" y="90" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#999">
-                        (Blocked by CDN)
+                        (Unavailable)
                     </text>
                 </svg>`;
                 
@@ -131,21 +131,47 @@ export async function GET(request: NextRequest) {
                     status: 200,
                     headers: {
                         'Content-Type': 'image/svg+xml',
-                        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+                        'Cache-Control': 'public, max-age=300', // Cache for 5 minutes only
                         'Access-Control-Allow-Origin': '*',
                     },
                 });
             }
             
             return NextResponse.json({ 
-                error: 'Failed to fetch image - all strategies failed',
+                error: 'Image unavailable',
                 details: lastError instanceof Error ? lastError.message : 'Unknown error',
                 isInstagram: isInstagramImage
-            }, { status: 403 });
+            }, { status: 404 }); // Changed from 403 to 404
         }
 
         if (!response.ok) {
             console.error('❌ Failed to fetch image:', response.status, response.statusText);
+            
+            // For Instagram images, return placeholder instead of error
+            if (isInstagramImage) {
+                console.log('📸 Returning Instagram placeholder for HTTP error:', response.status);
+                
+                const placeholderSvg = `
+                <svg width="150" height="150" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="150" height="150" fill="#f0f0f0" stroke="#ddd" stroke-width="1"/>
+                    <text x="75" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#666">
+                        Instagram Image
+                    </text>
+                    <text x="75" y="90" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#999">
+                        (${response.status})
+                    </text>
+                </svg>`;
+                
+                return new NextResponse(placeholderSvg, {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'image/svg+xml',
+                        'Cache-Control': 'public, max-age=300',
+                        'Access-Control-Allow-Origin': '*',
+                    },
+                });
+            }
+            
             return NextResponse.json({ 
                 error: 'Failed to fetch image',
                 status: response.status,
