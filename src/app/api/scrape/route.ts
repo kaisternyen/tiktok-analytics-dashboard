@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
             thumbnailUrl = ytData.thumbnails?.medium?.url || ytData.thumbnails?.high?.url;
         } else { // tiktok
             // Use centralized TikHub data extraction for TikTok videos
-            const extractedData = extractTikTokStatsFromTikHubData(mediaData);
+            const extractedData = extractTikTokStatsFromTikHubData(mediaData, url);
             views = extractedData.views;
             likes = extractedData.likes;
             comments = extractedData.comments;

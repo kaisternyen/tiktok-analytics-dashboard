@@ -58,7 +58,7 @@ export async function POST(req: Request) {
 
             if (video.platform === 'tiktok') {
                 // Use centralized TikHub data extraction
-                const extractedData = extractTikTokStatsFromTikHubData(mediaData);
+                const extractedData = extractTikTokStatsFromTikHubData(mediaData, video.url);
                 views = extractedData.views;
                 shares = extractedData.shares;
             } else if (video.platform === 'instagram') {

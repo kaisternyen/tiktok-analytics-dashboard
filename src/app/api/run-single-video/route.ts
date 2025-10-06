@@ -104,7 +104,7 @@ export async function POST(req: Request) {
         
         if (video.platform === 'tiktok' && tikHubResult.data) {
             // Use centralized TikHub data extraction
-            const extractedData = extractTikTokStatsFromTikHubData(tikHubResult.data);
+            const extractedData = extractTikTokStatsFromTikHubData(tikHubResult.data, video.url);
             views = extractedData.views;
             likes = extractedData.likes;
             comments = extractedData.comments;

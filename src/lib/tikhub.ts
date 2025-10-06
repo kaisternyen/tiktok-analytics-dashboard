@@ -828,7 +828,7 @@ async function scrapeTikTokVideosBatch(urls: string[]): Promise<ScrapedVideoResu
 
             if (rawData && rawData.code === 0) {
                 // Use centralized TikHub data extraction function
-                const extractedData = extractTikTokStatsFromTikHubData(rawData.data);
+                const extractedData = extractTikTokStatsFromTikHubData(rawData.data, url);
                 
                 const transformedData: TikTokVideoData = {
                     id: extractedData.videoId,
