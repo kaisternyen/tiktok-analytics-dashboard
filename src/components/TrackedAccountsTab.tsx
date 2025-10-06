@@ -180,19 +180,20 @@ export function TrackedAccountsTab() {
     const clearPending = async () => {
         try {
             setClearingPending(true);
-            const response = await fetch('/api/clear-pending', { method: 'POST' });
+            const response = await fetch('/api/clear-pending-status', { method: 'POST' });
             if (response.ok) {
+                const result = await response.json();
                 // Immediately refresh the status to show cleared pending list
                 await fetchCronStatus();
-                setManualTriggerStatus('✅ Pending list cleared successfully');
+                setManualTriggerStatus(`✅ Cleared pending status for ${result.status.videosUpdated} videos`);
                 setTimeout(() => setManualTriggerStatus(''), 3000);
             } else {
-                setManualTriggerStatus('❌ Failed to clear pending list');
+                setManualTriggerStatus('❌ Failed to clear pending status');
                 setTimeout(() => setManualTriggerStatus(''), 3000);
             }
         } catch (err) {
             console.error('Failed to clear pending:', err);
-            setManualTriggerStatus('❌ Error clearing pending list');
+            setManualTriggerStatus('❌ Error clearing pending status');
             setTimeout(() => setManualTriggerStatus(''), 3000);
         } finally {
             setClearingPending(false);
@@ -644,7 +645,7 @@ export function TrackedAccountsTab() {
                                                     disabled={clearingPending || manualTriggerStatus.includes('🔄')}
                                                     className="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 disabled:opacity-50"
                                                 >
-                                                    {clearingPending ? 'Clearing...' : 'Clear Pending'}
+                                                    {clearingPending ? 'Clearing...' : 'Reset Pending'}
                                                 </button>
                                                 <button
                                                     onClick={() => {
