@@ -45,6 +45,7 @@ model Video {
   
   metricsHistory    MetricsHistory[]
   moderationHistory ModerationHistory[]
+  videoTags         VideoTag[]
 
   @@unique([videoId, platform])
   @@map("videos")
@@ -91,4 +92,26 @@ model TrackedAccount {
 
   @@unique([username, platform])
   @@map("tracked_accounts")
+}
+
+model Tag {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  color       String?    // Optional hex color for UI display
+  description String?    // Optional description of what this tag represents
+  createdAt   DateTime   @default(now())
+  videoTags   VideoTag[]
+
+  @@map("tags")
+}
+
+model VideoTag {
+  id      String @id @default(cuid())
+  videoId String
+  tagId   String
+  video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, tagId])
+  @@map("video_tags")
 }

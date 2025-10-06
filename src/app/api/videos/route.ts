@@ -1,6 +1,63 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Type definitions for video with includes
+type VideoWithIncludes = {
+    id: string;
+    url: string;
+    videoId: string | null;
+    username: string;
+    description: string;
+    thumbnailUrl: string | null;
+    currentViews: number;
+    currentLikes: number;
+    currentComments: number;
+    currentShares: number;
+    hashtags: string | null;
+    music: string | null;
+    isActive: boolean;
+    createdAt: Date;
+    lastScrapedAt: Date;
+    postedAt: Date | null;
+    platform: string;
+    lastDailyViews: number | null;
+    scrapingCadence: string;
+    dailyViewsGrowth: number | null;
+    needsCadenceCheck: boolean;
+    lastModeChange: Date | null;
+    trackingMode: string | null;
+    phase1Notified: boolean;
+    phase2Notified: boolean;
+    currentPhase: string;
+    lastModeratedAt: Date | null;
+    moderatedBy: string | null;
+    threadsPlanted: number;
+    gotTopComment: boolean;
+    totalCommentsModerated: number;
+    threadsPlantedNote: string | null;
+    metricsHistory: Array<{
+        id: string;
+        videoId: string;
+        views: number;
+        likes: number;
+        comments: number;
+        shares: number;
+        timestamp: Date;
+    }>;
+    videoTags: Array<{
+        id: string;
+        videoId: string;
+        tagId: string;
+        tag: {
+            id: string;
+            name: string;
+            color: string | null;
+            description: string | null;
+            createdAt: Date;
+        };
+    }>;
+};
+
 // Migration flag to run only once
 let migrationRun = false;
 
@@ -46,7 +103,7 @@ async function runMigrationIfNeeded() {
 }
 
 const ALLOWED_FIELDS = [
-  'username', 'description', 'status', 'platform', 'currentViews', 'currentLikes', 'currentComments', 'currentShares', 'createdAt', 'lastScrapedAt', 'scrapingCadence', 'currentPhase'
+  'username', 'description', 'status', 'platform', 'currentViews', 'currentLikes', 'currentComments', 'currentShares', 'createdAt', 'lastScrapedAt', 'scrapingCadence', 'currentPhase', 'tags'
 ];
 
 function parseFilters(filterParam: string | null): Record<string, unknown> | undefined {
@@ -74,6 +131,39 @@ function parseFilters(filterParam: string | null): Record<string, unknown> | und
                 console.warn(`[API] Filter field '${field}' is not a valid DB field.`);
                 continue;
             }
+            
+            // Special handling for tag filtering
+            if (field === 'tags') {
+                let tagCondition: Record<string, unknown> = {};
+                if (op === 'contains' || op === 'is') {
+                    // Filter videos that have a specific tag
+                    tagCondition = {
+                        videoTags: {
+                            some: {
+                                tag: {
+                                    name: { equals: value, mode: 'insensitive' }
+                                }
+                            }
+                        }
+                    };
+                } else if (op === 'does not contain' || op === 'is not') {
+                    // Filter videos that don't have a specific tag
+                    tagCondition = {
+                        NOT: {
+                            videoTags: {
+                                some: {
+                                    tag: {
+                                        name: { equals: value, mode: 'insensitive' }
+                                    }
+                                }
+                            }
+                        }
+                    };
+                }
+                (where[operator] as Array<Record<string, unknown>>).push(tagCondition);
+                continue;
+            }
+            
             // Normalize platform/status/cadence values
             if (['platform', 'status', 'scrapingCadence'].includes(field) && typeof value === 'string') {
                 value = value.toLowerCase();
@@ -237,10 +327,15 @@ export async function GET(req: Request) {
                 } : {
                     orderBy: { timestamp: 'desc' },
                     take: 10 // Limit history to last 10 entries when no timeframe
-                }
+                },
+                videoTags: {
+                    include: {
+                        tag: true
+                    }
+                } as any // eslint-disable-line @typescript-eslint/no-explicit-any
             },
             orderBy
-        });
+        }) as VideoWithIncludes[];
 
         console.log(`✅ Found ${videos.length} videos in database`);
         
@@ -251,17 +346,11 @@ export async function GET(req: Request) {
         if (timeframe) {
             const [start, end] = timeframe;
             filteredVideos = videos.map((video) => {
-                const filteredHistory = video.metricsHistory.map((h) => ({
-                  timestamp: h.timestamp,
-                  views: h.views,
-                  likes: h.likes,
-                  comments: h.comments,
-                  shares: h.shares
-                })).filter((h) => {
+                const filteredHistory = video.metricsHistory.filter((h) => {
                     const t = new Date(h.timestamp).getTime();
                     return t >= new Date(start).getTime() && t <= new Date(end).getTime();
                 });
-                return { ...video, metricsHistory: filteredHistory } as typeof video;
+                return { ...video, metricsHistory: filteredHistory };
             }).filter((video) => video.metricsHistory.length > 0);
         }
 
@@ -343,7 +432,7 @@ export async function GET(req: Request) {
                 if (video.lastModeratedAt) {
                     // Find the comment count closest to when it was last moderated
                     const moderatedTime = new Date(video.lastModeratedAt).getTime();
-                    const historicalPoint = history.find(h => 
+                    const historicalPoint = history.find((h) => 
                         new Date(h.timestamp).getTime() <= moderatedTime
                     );
                     
@@ -383,6 +472,13 @@ export async function GET(req: Request) {
                     platform: video.platform || 'tiktok',
                     scrapingCadence: video.scrapingCadence || 'hourly',
                     growth,
+                    // Tags
+                    tags: video.videoTags.map((vt) => ({
+                        id: vt.tag.id,
+                        name: vt.tag.name,
+                        color: vt.tag.color,
+                        description: vt.tag.description
+                    })),
                     // Moderation fields
                     lastModeratedAt: video.lastModeratedAt ? video.lastModeratedAt.toISOString() : null,
                     moderatedBy: video.moderatedBy || null,
@@ -462,6 +558,20 @@ export async function GET(req: Request) {
                                     case 'scrapingCadence':
                                         videoValue = video.scrapingCadence.toLowerCase();
                                         break;
+                                    case 'tags':
+                                        // Special handling for tags in post-transformation filtering
+                                        const tagNames = (video as { tags: { name: string }[] }).tags.map(t => t.name.toLowerCase());
+                                        const searchTag = String(value || '').toLowerCase();
+                                        switch (operator) {
+                                            case 'contains':
+                                            case 'is':
+                                                return tagNames.includes(searchTag);
+                                            case 'does not contain':
+                                            case 'is not':
+                                                return !tagNames.includes(searchTag);
+                                            default:
+                                                return true;
+                                        }
                                     default:
                                         videoValue = (video as Record<string, unknown>)[field] as string | number;
                                 }

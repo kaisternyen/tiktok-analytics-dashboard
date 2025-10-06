@@ -22,6 +22,7 @@ const FIELD_DEFS = [
   { name: 'gotTopComment', label: 'Got Top Comment', type: 'boolean' },
   { name: 'phase1Notified', label: 'Phase 1 Notified', type: 'boolean' },
   { name: 'phase2Notified', label: 'Phase 2 Notified', type: 'boolean' },
+  { name: 'tags', label: 'Tags', type: 'text' },
   { name: 'timeframe', label: 'Timeframe', type: 'datetime' },
 ];
 

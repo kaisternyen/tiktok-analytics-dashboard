@@ -20,6 +20,13 @@ interface VideoHistory {
     shares: number;
 }
 
+interface Tag {
+    id: string;
+    name: string;
+    color?: string | null;
+    description?: string | null;
+}
+
 interface TrackedVideo {
     id: string;
     url: string;
@@ -38,6 +45,7 @@ interface TrackedVideo {
     totalShares: number; // Always total current shares
     history: VideoHistory[];
     hashtags: string[];
+    tags: Tag[]; // Video tags
     thumbnailUrl?: string;
     music?: {
         name: string;
@@ -130,6 +138,13 @@ export default function TikTokTracker() {
     const [filters, setFilters] = useState<FilterGroup>({ operator: 'AND', conditions: [] });
     const [sorts, setSorts] = useState<SortCondition[]>([]);
     
+    // Tags state
+    const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+    const [isLoadingTags, setIsLoadingTags] = useState(false);
+    const [newTagName, setNewTagName] = useState("");
+    const [newTagColor, setNewTagColor] = useState("#3b82f6");
+    const [showAddTagForm, setShowAddTagForm] = useState(false);
+    
     // Derive timeframe from selectedTimePeriod or custom date range for unified control
     const timeframe = React.useMemo<[string, string] | null>(() => {
         // Use custom date range if available
@@ -198,6 +213,107 @@ export default function TikTokTracker() {
             console.error('Logout failed:', error);
             // Still redirect even if logout API fails
             window.location.href = '/login';
+        }
+    };
+
+    // Tag management functions
+    const fetchTags = async () => {
+        setIsLoadingTags(true);
+        try {
+            const response = await fetch('/api/tags');
+            const data = await response.json();
+            if (data.success) {
+                setAvailableTags(data.data);
+            } else {
+                console.error('Failed to fetch tags:', data.error);
+            }
+        } catch (error) {
+            console.error('Error fetching tags:', error);
+        } finally {
+            setIsLoadingTags(false);
+        }
+    };
+
+    const createTag = async () => {
+        if (!newTagName.trim()) return;
+        
+        try {
+            const response = await fetch('/api/tags', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: newTagName.trim(),
+                    color: newTagColor,
+                }),
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                setAvailableTags(prev => [...prev, data.data]);
+                setNewTagName("");
+                setNewTagColor("#3b82f6");
+                setShowAddTagForm(false);
+                setSuccess(`Tag "${data.data.name}" created successfully`);
+            } else {
+                setError(data.error || 'Failed to create tag');
+            }
+        } catch (error) {
+            console.error('Error creating tag:', error);
+            setError('Failed to create tag');
+        }
+    };
+
+    const addTagToVideo = async (videoId: string, tagId: string) => {
+        try {
+            const response = await fetch(`/api/videos/${videoId}/tags`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ tagId }),
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                // Update local state
+                setTracked(prev => prev.map(video => 
+                    video.id === videoId 
+                        ? { ...video, tags: [...video.tags, data.data] }
+                        : video
+                ));
+                setSuccess(`Tag added to video`);
+            } else {
+                setError(data.error || 'Failed to add tag to video');
+            }
+        } catch (error) {
+            console.error('Error adding tag to video:', error);
+            setError('Failed to add tag to video');
+        }
+    };
+
+    const removeTagFromVideo = async (videoId: string, tagId: string) => {
+        try {
+            const response = await fetch(`/api/videos/${videoId}/tags?tagId=${tagId}`, {
+                method: 'DELETE',
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                // Update local state
+                setTracked(prev => prev.map(video => 
+                    video.id === videoId 
+                        ? { ...video, tags: video.tags.filter(tag => tag.id !== tagId) }
+                        : video
+                ));
+                setSuccess(`Tag removed from video`);
+            } else {
+                setError(data.error || 'Failed to remove tag from video');
+            }
+        } catch (error) {
+            console.error('Error removing tag from video:', error);
+            setError('Failed to remove tag from video');
         }
     };
 
@@ -500,6 +616,11 @@ export default function TikTokTracker() {
     useEffect(() => {
         fetchVideos();
     }, [fetchVideos]);
+
+    // Fetch tags on component mount
+    useEffect(() => {
+        fetchTags();
+    }, []);
 
     // Auto-refresh status every 30 seconds AND auto-refresh video data
     useEffect(() => {
@@ -1478,6 +1599,73 @@ export default function TikTokTracker() {
                         )}
                     </div>
 
+                    {/* Tags Management Section */}
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-medium text-gray-900">Tags Management</h3>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowAddTagForm(!showAddTagForm)}
+                            >
+                                {showAddTagForm ? 'Cancel' : '+ New Tag'}
+                            </Button>
+                        </div>
+                        
+                        {showAddTagForm && (
+                            <div className="mb-4 p-3 bg-white rounded border">
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        placeholder="Tag name"
+                                        value={newTagName}
+                                        onChange={(e) => setNewTagName(e.target.value)}
+                                        className="flex-1"
+                                    />
+                                    <input
+                                        type="color"
+                                        value={newTagColor}
+                                        onChange={(e) => setNewTagColor(e.target.value)}
+                                        className="w-10 h-8 rounded border cursor-pointer"
+                                        title="Choose tag color"
+                                    />
+                                    <Button
+                                        size="sm"
+                                        onClick={createTag}
+                                        disabled={!newTagName.trim()}
+                                    >
+                                        Create
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div className="flex flex-wrap gap-2">
+                            {isLoadingTags ? (
+                                <span className="text-sm text-gray-500">Loading tags...</span>
+                            ) : availableTags.length === 0 ? (
+                                <span className="text-sm text-gray-500">No tags created yet. Create your first tag above!</span>
+                            ) : (
+                                availableTags.map((tag) => (
+                                    <span
+                                        key={tag.id}
+                                        className="inline-flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-full border"
+                                        style={{
+                                            backgroundColor: tag.color ? `${tag.color}20` : '#f3f4f6',
+                                            borderColor: tag.color || '#d1d5db',
+                                            color: tag.color || '#374151'
+                                        }}
+                                        title={tag.description || tag.name}
+                                    >
+                                        {tag.name}
+                                        <span className="text-xs text-gray-500 ml-1">
+                                            ({tracked.filter(video => video.tags.some(vTag => vTag.id === tag.id)).length})
+                                        </span>
+                                    </span>
+                                ))
+                            )}
+                        </div>
+                    </div>
+
                     {/* Status Messages */}
                     {error && (
                         <div className="mt-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md text-red-700">
@@ -1957,6 +2145,7 @@ export default function TikTokTracker() {
                                                                         {renderSortIcon('Status')}
                                                                     </div>
                                                                 </th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Tags</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Actions</th>
                                                             </tr>
                                                         </thead>
@@ -2187,6 +2376,55 @@ export default function TikTokTracker() {
                                                                         }`}>
                                                                             {video.status}
                                                                         </span>
+                                                                    </td>
+                                                                    <td className="p-4">
+                                                                        <div className="flex flex-wrap gap-1 max-w-32">
+                                                                            {video.tags.map((tag) => (
+                                                                                <span
+                                                                                    key={tag.id}
+                                                                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full border"
+                                                                                    style={{
+                                                                                        backgroundColor: tag.color ? `${tag.color}20` : '#f3f4f6',
+                                                                                        borderColor: tag.color || '#d1d5db',
+                                                                                        color: tag.color || '#374151'
+                                                                                    }}
+                                                                                    title={tag.description || tag.name}
+                                                                                >
+                                                                                    {tag.name}
+                                                                                    <button
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            removeTagFromVideo(video.id, tag.id);
+                                                                                        }}
+                                                                                        className="ml-1 hover:bg-red-100 rounded-full p-0.5"
+                                                                                        title="Remove tag"
+                                                                                    >
+                                                                                        <X className="w-3 h-3" />
+                                                                                    </button>
+                                                                                </span>
+                                                                            ))}
+                                                                            <select
+                                                                                className="text-xs border rounded px-2 py-1 bg-white"
+                                                                                value=""
+                                                                                onChange={(e) => {
+                                                                                    if (e.target.value) {
+                                                                                        addTagToVideo(video.id, e.target.value);
+                                                                                        e.target.value = "";
+                                                                                    }
+                                                                                }}
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                            >
+                                                                                <option value="">+ Add tag</option>
+                                                                                {availableTags
+                                                                                    .filter(tag => !video.tags.some(vTag => vTag.id === tag.id))
+                                                                                    .map(tag => (
+                                                                                        <option key={tag.id} value={tag.id}>
+                                                                                            {tag.name}
+                                                                                        </option>
+                                                                                    ))
+                                                                                }
+                                                                            </select>
+                                                                        </div>
                                                                     </td>
                                                                     <td className="p-4">
                                                                         <Button
