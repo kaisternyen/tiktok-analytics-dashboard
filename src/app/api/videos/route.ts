@@ -290,11 +290,17 @@ export async function GET(req: Request) {
                     };
                 }
 
-                // If timeframe filter is present, calculate delta values
-                let views = 0;
-                let likes = 0;
-                let comments = 0;
-                let shares = 0;
+                // Calculate period-specific deltas and total views
+                let periodViews = 0;
+                let periodLikes = 0;
+                let periodComments = 0;
+                let periodShares = 0;
+
+                // Total views are always the current values
+                const totalViews = video.currentViews;
+                const totalLikes = video.currentLikes;
+                const totalComments = video.currentComments;
+                const totalShares = video.currentShares;
 
                 if (timeframe) {
                     if (history.length >= 2) {
@@ -304,28 +310,28 @@ export async function GET(req: Request) {
                         );
                         const start = sortedHistory[0];
                         const end = sortedHistory[sortedHistory.length - 1];
-                        // Calculate deltas
-                        views = end.views - start.views;
-                        likes = end.likes - start.likes;
-                        comments = end.comments - start.comments;
-                        shares = end.shares - start.shares;
+                        // Calculate deltas for the specified timeframe
+                        periodViews = end.views - start.views;
+                        periodLikes = end.likes - start.likes;
+                        periodComments = end.comments - start.comments;
+                        periodShares = end.shares - start.shares;
                         
                 // Removed debug logging for performance
                     } else {
-                        // Not enough data points in timeframe, use current values instead of 0
-                        views = video.currentViews;
-                        likes = video.currentLikes;
-                        comments = video.currentComments;
-                        shares = video.currentShares;
+                        // Not enough data points in timeframe, use 0 for period deltas
+                        periodViews = 0;
+                        periodLikes = 0;
+                        periodComments = 0;
+                        periodShares = 0;
                         
                         // Removed debug logging for performance
                     }
                 } else {
-                    // No timeframe, use current values
-                    views = video.currentViews;
-                    likes = video.currentLikes;
-                    comments = video.currentComments;
-                    shares = video.currentShares;
+                    // No timeframe, period values same as totals for backward compatibility
+                    periodViews = totalViews;
+                    periodLikes = totalLikes;
+                    periodComments = totalComments;
+                    periodShares = totalShares;
                     
                 // Removed debug logging for performance
                 }
@@ -339,10 +345,16 @@ export async function GET(req: Request) {
                     posted: video.createdAt.toISOString(),
                     lastUpdate: video.lastScrapedAt.toISOString(),
                     status: video.isActive ? 'Active' : 'Paused',
-                    views,
-                    likes,
-                    comments,
-                    shares,
+                    // Period-specific values (for filtered timeframes)
+                    views: periodViews,
+                    likes: periodLikes,
+                    comments: periodComments,
+                    shares: periodShares,
+                    // Total values (always current totals)
+                    totalViews,
+                    totalLikes,
+                    totalComments,
+                    totalShares,
                     hashtags,
                     music,
                     platform: video.platform || 'tiktok',
@@ -399,16 +411,16 @@ export async function GET(req: Request) {
                                 // Map database fields to transformed fields
                                 switch (field) {
                                     case 'currentViews':
-                                        videoValue = video.views;
+                                        videoValue = video.views; // Period views for filtering
                                         break;
                                     case 'currentLikes':
-                                        videoValue = video.likes;
+                                        videoValue = video.likes; // Period likes for filtering
                                         break;
                                     case 'currentComments':
-                                        videoValue = video.comments;
+                                        videoValue = video.comments; // Period comments for filtering
                                         break;
                                     case 'currentShares':
-                                        videoValue = video.shares;
+                                        videoValue = video.shares; // Period shares for filtering
                                         break;
                                     case 'username':
                                         videoValue = video.username.toLowerCase();
@@ -474,19 +486,19 @@ export async function GET(req: Request) {
                         // Map database fields to transformed fields
                         switch (field) {
                             case 'currentViews':
-                                aValue = a.views;
+                                aValue = a.views; // Period views for sorting
                                 bValue = b.views;
                                 break;
                             case 'currentLikes':
-                                aValue = a.likes;
+                                aValue = a.likes; // Period likes for sorting
                                 bValue = b.likes;
                                 break;
                             case 'currentComments':
-                                aValue = a.comments;
+                                aValue = a.comments; // Period comments for sorting
                                 bValue = b.comments;
                                 break;
                             case 'currentShares':
-                                aValue = a.shares;
+                                aValue = a.shares; // Period shares for sorting
                                 bValue = b.shares;
                                 break;
                             case 'username':

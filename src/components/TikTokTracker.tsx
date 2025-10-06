@@ -28,10 +28,14 @@ interface TrackedVideo {
     posted: string;
     lastUpdate: string;
     status: string;
-    views: number;
-    likes: number;
-    comments: number;
-    shares: number;
+    views: number; // Period-specific views (delta when timeframe filter applied)
+    likes: number; // Period-specific likes
+    comments: number; // Period-specific comments
+    shares: number; // Period-specific shares
+    totalViews: number; // Always total current views
+    totalLikes: number; // Always total current likes
+    totalComments: number; // Always total current comments
+    totalShares: number; // Always total current shares
     history: VideoHistory[];
     hashtags: string[];
     thumbnailUrl?: string;
@@ -213,6 +217,7 @@ export default function TikTokTracker() {
             'Creator': 'username',
             'Platform': 'platform',
             'Views': 'currentViews',
+            'TotalViews': 'currentViews', // Sort by current views for total views column
             'Likes': 'currentLikes',
             'Comments': 'currentComments',
             'Shares': 'currentShares',
@@ -245,6 +250,7 @@ export default function TikTokTracker() {
             'Creator': 'username',
             'Platform': 'platform',
             'Views': 'currentViews',
+            'TotalViews': 'currentViews', // Sort by current views for total views column
             'Likes': 'currentLikes',
             'Comments': 'currentComments',
             'Shares': 'currentShares',
@@ -1276,6 +1282,7 @@ export default function TikTokTracker() {
     
     const totalMetrics = {
         videos: selectedTimePeriod === 'D' ? oldFilteredVideoCount : filteredVideosForTotals.length,
+        // Show period views when timeframe filter is active, total views otherwise
         totalViews: filteredVideosForTotals.reduce((sum, v) => sum + v.views, 0),
         totalLikes: filteredVideosForTotals.reduce((sum, v) => sum + v.likes, 0),
         totalComments: filteredVideosForTotals.reduce((sum, v) => sum + v.comments, 0),
@@ -1445,7 +1452,7 @@ export default function TikTokTracker() {
                                             <div className="text-2xl font-bold text-gray-900">{formatNumber(totalMetrics.totalViews)}</div>
                                             <div className="text-sm text-gray-500 flex items-center gap-1">
                                                 <Eye className="w-3 h-3" />
-                                                Total Views
+                                                {timeframe ? 'Period Views' : 'Total Views'}
                                             </div>
                                             <div className="text-xs mt-1">{formatGrowth(totalMetrics.avgGrowth)}</div>
                                         </CardContent>
@@ -1769,8 +1776,17 @@ export default function TikTokTracker() {
                                                                     onClick={() => handleHeaderClick('Views')}
                                                                 >
                                                                     <div className="flex items-center">
-                                                                        Views
+                                                                        {timeframe ? 'Period Views' : 'Views'}
                                                                         {renderSortIcon('Views')}
+                                                                    </div>
+                                                                </th>
+                                                                <th 
+                                                                    className="text-left p-4 font-medium text-gray-900 cursor-pointer hover:bg-gray-100 transition-colors select-none"
+                                                                    onClick={() => handleHeaderClick('TotalViews')}
+                                                                >
+                                                                    <div className="flex items-center">
+                                                                        Total Views
+                                                                        {renderSortIcon('TotalViews')}
                                                                     </div>
                                                                 </th>
                                                                 {/* Moderation columns moved here for better visibility */}
@@ -1926,6 +1942,7 @@ export default function TikTokTracker() {
                                                                         </div>
                                                                     </td>
                                                                     <td className="p-4 font-medium">{formatNumber(video.views)}</td>
+                                                                    <td className="p-4 font-medium text-gray-600">{formatNumber(video.totalViews)}</td>
                                                                     {/* Just Moderated column */}
                                                                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                                         <div className="flex flex-col gap-1">
@@ -2120,8 +2137,13 @@ export default function TikTokTracker() {
                                         <div className="text-3xl font-bold text-gray-900">{formatNumber(selectedVideo.views)}</div>
                                         <div className="text-sm text-gray-500 flex items-center justify-center gap-1 mt-1">
                                             <Eye className="w-3 h-3" />
-                                            Views
+                                            {timeframe ? 'Period Views' : 'Views'}
                                         </div>
+                                        {timeframe && (
+                                            <div className="text-xs text-gray-400 mt-1">
+                                                Total: {formatNumber(selectedVideo.totalViews)}
+                                            </div>
+                                        )}
                                         <div className="text-xs mt-1">{formatGrowth(selectedVideo.growth.views)}</div>
                                     </CardContent>
                                 </Card>
