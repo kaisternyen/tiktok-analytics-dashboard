@@ -1992,6 +1992,71 @@ export default function TikTokTracker() {
                                         </CardContent>
                                     </Card>
 
+                                    {/* Quick Tags Filter */}
+                                    {availableTags.length > 0 && (
+                                        <div className="mb-4 p-3 bg-gray-50 rounded-lg border">
+                                            <h4 className="text-sm font-medium text-gray-900 mb-2">Quick Filter by Tags:</h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {availableTags.map((tag) => {
+                                                    const isActive = filters.conditions.some(condition => 
+                                                        condition.field === 'tags' && 
+                                                        condition.operator === 'contains' && 
+                                                        condition.value === tag.name
+                                                    );
+                                                    return (
+                                                        <button
+                                                            key={tag.id}
+                                                            onClick={() => {
+                                                                if (isActive) {
+                                                                    // Remove tag filter
+                                                                    const newFilters = {
+                                                                        ...filters,
+                                                                        conditions: filters.conditions.filter(condition => 
+                                                                            !(condition.field === 'tags' && 
+                                                                              condition.operator === 'contains' && 
+                                                                              condition.value === tag.name)
+                                                                        )
+                                                                    };
+                                                                    setFilters(newFilters);
+                                                                } else {
+                                                                    // Add tag filter
+                                                                    const newFilters = {
+                                                                        ...filters,
+                                                                        conditions: [
+                                                                            ...filters.conditions,
+                                                                            {
+                                                                                field: 'tags',
+                                                                                operator: 'contains',
+                                                                                value: tag.name
+                                                                            }
+                                                                        ]
+                                                                    };
+                                                                    setFilters(newFilters);
+                                                                }
+                                                            }}
+                                                            className={`inline-flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-full border transition-colors ${
+                                                                isActive 
+                                                                    ? 'bg-blue-100 border-blue-300 text-blue-800' 
+                                                                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                            }`}
+                                                            style={isActive ? {} : {
+                                                                backgroundColor: tag.color ? `${tag.color}10` : undefined,
+                                                                borderColor: tag.color || undefined,
+                                                                color: tag.color || undefined
+                                                            }}
+                                                            title={tag.description || `Filter by ${tag.name}`}
+                                                        >
+                                                            {tag.name}
+                                                            <span className="text-xs text-gray-500 ml-1">
+                                                                ({tracked.filter(video => video.tags.some(vTag => vTag.id === tag.id)).length})
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Filter/Sort Bar (timeframe controlled by main time period selector) */}
                                     <VideoFilterSortBar
                                         filters={filters}

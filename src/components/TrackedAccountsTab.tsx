@@ -141,6 +141,7 @@ export function TrackedAccountsTab() {
     const [showCronDropdown, setShowCronDropdown] = useState(false);
     const [manualTriggerStatus, setManualTriggerStatus] = useState<string>('');
     const [runningVideos, setRunningVideos] = useState<Set<string>>(new Set());
+    const [refreshingStatus, setRefreshingStatus] = useState(false);
     const [formData, setFormData] = useState<AddAccountForm>({
         username: '',
         platform: 'tiktok',
@@ -153,6 +154,7 @@ export function TrackedAccountsTab() {
 
     const fetchCronStatus = async () => {
         try {
+            setRefreshingStatus(true);
             const response = await fetch('/api/cron-status');
             if (response.ok) {
                 const data = await response.json();
@@ -160,8 +162,19 @@ export function TrackedAccountsTab() {
             }
         } catch (err) {
             console.error('Failed to fetch cron status:', err);
+        } finally {
+            setRefreshingStatus(false);
         }
     };
+
+    // Auto-refresh cron status every 30 seconds to keep pending list accurate
+    useEffect(() => {
+        if (showCronDropdown) {
+            fetchCronStatus(); // Fetch immediately when dropdown opens
+            const interval = setInterval(fetchCronStatus, 30000); // Then every 30 seconds
+            return () => clearInterval(interval);
+        }
+    }, [showCronDropdown]);
 
     const runSingleVideo = async (videoId: string) => {
         try {
@@ -430,8 +443,14 @@ export function TrackedAccountsTab() {
                             {showCronDropdown && cronStatus && (
                                 <div className="absolute top-full left-0 mt-2 w-96 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
                                     <div className="p-4">
-                                        <div className="text-sm text-gray-600 mb-3">
-                                            Last updated: {new Date(cronStatus.system.timestamp).toLocaleTimeString()}
+                                        <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
+                                            <span>Last updated: {new Date(cronStatus.system.timestamp).toLocaleTimeString()}</span>
+                                            {refreshingStatus && (
+                                                <span className="flex items-center gap-1 text-xs text-blue-600">
+                                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                                    Refreshing...
+                                                </span>
+                                            )}
                                         </div>
                                         
                                         {/* Summary */}
