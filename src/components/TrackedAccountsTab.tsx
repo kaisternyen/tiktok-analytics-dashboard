@@ -142,6 +142,7 @@ export function TrackedAccountsTab() {
     const [manualTriggerStatus, setManualTriggerStatus] = useState<string>('');
     const [runningVideos, setRunningVideos] = useState<Set<string>>(new Set());
     const [refreshingStatus, setRefreshingStatus] = useState(false);
+    const [clearingPending, setClearingPending] = useState(false);
     const [formData, setFormData] = useState<AddAccountForm>({
         username: '',
         platform: 'tiktok',
@@ -175,6 +176,28 @@ export function TrackedAccountsTab() {
             return () => clearInterval(interval);
         }
     }, [showCronDropdown]);
+
+    const clearPending = async () => {
+        try {
+            setClearingPending(true);
+            const response = await fetch('/api/clear-pending', { method: 'POST' });
+            if (response.ok) {
+                // Immediately refresh the status to show cleared pending list
+                await fetchCronStatus();
+                setManualTriggerStatus('✅ Pending list cleared successfully');
+                setTimeout(() => setManualTriggerStatus(''), 3000);
+            } else {
+                setManualTriggerStatus('❌ Failed to clear pending list');
+                setTimeout(() => setManualTriggerStatus(''), 3000);
+            }
+        } catch (err) {
+            console.error('Failed to clear pending:', err);
+            setManualTriggerStatus('❌ Error clearing pending list');
+            setTimeout(() => setManualTriggerStatus(''), 3000);
+        } finally {
+            setClearingPending(false);
+        }
+    };
 
     const runSingleVideo = async (videoId: string) => {
         try {
@@ -615,6 +638,13 @@ export function TrackedAccountsTab() {
                                                     className="px-3 py-1 bg-orange-600 text-white rounded text-xs hover:bg-orange-700 disabled:opacity-50"
                                                 >
                                                     Run All
+                                                </button>
+                                                <button
+                                                    onClick={clearPending}
+                                                    disabled={clearingPending || manualTriggerStatus.includes('🔄')}
+                                                    className="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 disabled:opacity-50"
+                                                >
+                                                    {clearingPending ? 'Clearing...' : 'Clear Pending'}
                                                 </button>
                                                 <button
                                                     onClick={() => {

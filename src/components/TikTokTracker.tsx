@@ -317,6 +317,35 @@ export default function TikTokTracker() {
         }
     };
 
+    const deleteTag = async (tagId: string) => {
+        if (!confirm('Are you sure you want to delete this tag? This will remove it from all videos.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/tags/${tagId}`, {
+                method: 'DELETE',
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                // Update local state - remove tag from availableTags and from all videos
+                setAvailableTags(prev => prev.filter(tag => tag.id !== tagId));
+                setTracked(prev => prev.map(video => ({
+                    ...video,
+                    tags: video.tags.filter(tag => tag.id !== tagId)
+                })));
+                setSuccess('Tag deleted successfully');
+                setTimeout(() => setSuccess(''), 3000);
+            } else {
+                setError(data.error || 'Failed to delete tag');
+            }
+        } catch (error) {
+            console.error('Error deleting tag:', error);
+            setError('Failed to delete tag');
+        }
+    };
+
     // TODO: Implement chart drag selection
     // const handleMouseDown = (data: any) => { ... };
     // const handleMouseMove = (data: any) => { ... };
@@ -1660,6 +1689,13 @@ export default function TikTokTracker() {
                                         <span className="text-xs text-gray-500 ml-1">
                                             ({tracked.filter(video => video.tags.some(vTag => vTag.id === tag.id)).length})
                                         </span>
+                                        <button
+                                            onClick={() => deleteTag(tag.id)}
+                                            className="ml-1 hover:bg-red-100 rounded-full p-0.5 text-red-600 hover:text-red-800"
+                                            title="Delete tag"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
                                     </span>
                                 ))
                             )}
