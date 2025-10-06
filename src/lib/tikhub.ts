@@ -151,7 +151,7 @@ interface TikHubApiResponse {
 }
 
 // Centralized TikHub data extraction function
-export function extractTikTokStatsFromTikHubData(videoData: unknown): {
+export function extractTikTokStatsFromTikHubData(videoData: unknown, originalUrl?: string): {
     views: number;
     likes: number;
     comments: number;
@@ -192,10 +192,25 @@ export function extractTikTokStatsFromTikHubData(videoData: unknown): {
                    (data?.stats as Record<string, unknown>)?.share_count as number || 0;
     
     // Extract other data
-    const username = (data?.author as Record<string, unknown>)?.unique_id as string || 
-                     (data?.author as Record<string, unknown>)?.nickname as string || 
-                     (data?.author as Record<string, unknown>)?.username as string || 
-                     'N/A';
+    let username = (data?.author as Record<string, unknown>)?.unique_id as string || 
+                   (data?.author as Record<string, unknown>)?.nickname as string || 
+                   (data?.author as Record<string, unknown>)?.username as string;
+    
+    // If username is not found in API response, try to extract from URL
+    if (!username || username === 'N/A') {
+        if (originalUrl) {
+            const urlMatch = originalUrl.match(/@([^\/]+)/);
+            if (urlMatch && urlMatch[1]) {
+                username = urlMatch[1];
+                console.log('🔗 Extracted username from URL:', username);
+            }
+        }
+    }
+    
+    // Final fallback
+    if (!username) {
+        username = 'N/A';
+    }
                      
     const description = data?.desc as string || 
                         data?.content as string || 
@@ -596,7 +611,7 @@ export async function scrapeTikTokVideo(url: string): Promise<ScrapedVideoResult
         });
 
         // Use centralized TikHub data extraction function
-        const extractedData = extractTikTokStatsFromTikHubData(videoData);
+        const extractedData = extractTikTokStatsFromTikHubData(videoData, cleanUrl);
         
         const transformedData: TikTokVideoData = {
             id: extractedData.videoId,
