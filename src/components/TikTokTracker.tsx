@@ -210,56 +210,107 @@ export default function TikTokTracker() {
         setShowDatePicker(false);
     };
 
-    // Handle header click for sorting
-    const handleHeaderClick = (field: string) => {
-        // Define the mapping between display field names and database field names
-        const fieldMapping: Record<string, string> = {
-            'Creator': 'username',
-            'Platform': 'platform',
-            'Views': 'currentViews',
-            'TotalViews': 'currentViews', // Sort by current views for total views column
-            'Likes': 'currentLikes',
-            'Comments': 'currentComments',
-            'Shares': 'currentShares',
-            'Growth': 'currentViews', // Sort by views for growth
-            'Posted': 'createdAt',
-            'Cadence': 'scrapingCadence',
-            'Status': 'status'
-        };
+    // Define the mapping between display field names and database field names
+    const fieldMapping: Record<string, string> = {
+        'Creator': 'username',
+        'Platform': 'platform',
+        'Views': 'currentViews',
+        'TotalViews': 'currentViews', // Sort by current views for total views column
+        'Likes': 'currentLikes',
+        'Comments': 'currentComments',
+        'Shares': 'currentShares',
+        'Growth': 'currentViews', // Sort by views for growth
+        'Posted': 'createdAt',
+        'Cadence': 'scrapingCadence',
+        'Status': 'status'
+    };
 
+    // Local sorting function - no API calls needed (memoized for performance)
+    const sortVideosLocally = useCallback((videosToSort: TrackedVideo[], sortField: string, sortOrder: 'asc' | 'desc', displayField?: string): TrackedVideo[] => {
+        return [...videosToSort].sort((a, b) => {
+            let aValue: string | number, bValue: string | number;
+            
+            // Map database fields to video object properties
+            switch (sortField) {
+                case 'username':
+                    aValue = a.username.toLowerCase();
+                    bValue = b.username.toLowerCase();
+                    break;
+                case 'platform':
+                    aValue = a.platform.toLowerCase();
+                    bValue = b.platform.toLowerCase();
+                    break;
+                case 'currentViews':
+                    // If this is for TotalViews column, use totalViews; otherwise use period views
+                    if (displayField === 'TotalViews') {
+                        aValue = a.totalViews;
+                        bValue = b.totalViews;
+                    } else {
+                        aValue = a.views;
+                        bValue = b.views;
+                    }
+                    break;
+                case 'currentLikes':
+                    aValue = a.likes;
+                    bValue = b.likes;
+                    break;
+                case 'currentComments':
+                    aValue = a.comments;
+                    bValue = b.comments;
+                    break;
+                case 'currentShares':
+                    aValue = a.shares;
+                    bValue = b.shares;
+                    break;
+                case 'createdAt':
+                    aValue = new Date(a.posted).getTime();
+                    bValue = new Date(b.posted).getTime();
+                    break;
+                case 'scrapingCadence':
+                    aValue = a.scrapingCadence.toLowerCase();
+                    bValue = b.scrapingCadence.toLowerCase();
+                    break;
+                case 'status':
+                    aValue = a.status.toLowerCase();
+                    bValue = b.status.toLowerCase();
+                    break;
+                default:
+                    aValue = (a as any)[sortField] || '';
+                    bValue = (b as any)[sortField] || '';
+            }
+            
+            if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+            if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, []); // Empty dependency array since this function doesn't depend on any state
+
+    // Handle header click for sorting - now uses local sorting
+    const handleHeaderClick = (field: string) => {
         const dbField = fieldMapping[field] || field;
         const currentSort = sorts.find(sort => sort.field === dbField);
         
-        let newSorts: SortCondition[] = [];
+        let newSortOrder: 'asc' | 'desc';
         
         if (!currentSort || currentSort.order === 'desc') {
             // No current sort or currently descending, set to ascending
-            newSorts = [{ field: dbField, order: 'asc' }];
+            newSortOrder = 'asc';
         } else {
             // Currently ascending, change to descending
-            newSorts = [{ field: dbField, order: 'desc' }];
+            newSortOrder = 'desc';
         }
 
+        // Update sorts state for UI indicators
+        const newSorts: SortCondition[] = [{ field: dbField, order: newSortOrder }];
         setSorts(newSorts);
-        fetchVideos(filters, newSorts, timeframe);
+        
+        // Sort locally - no API call needed!
+        const sortedVideos = sortVideosLocally(tracked, dbField, newSortOrder, field);
+        setTracked(sortedVideos);
     };
 
     // Get current sort state for a field
     const getSortState = (field: string): 'asc' | 'desc' | null => {
-        const fieldMapping: Record<string, string> = {
-            'Creator': 'username',
-            'Platform': 'platform',
-            'Views': 'currentViews',
-            'TotalViews': 'currentViews', // Sort by current views for total views column
-            'Likes': 'currentLikes',
-            'Comments': 'currentComments',
-            'Shares': 'currentShares',
-            'Growth': 'currentViews',
-            'Posted': 'createdAt',
-            'Cadence': 'scrapingCadence',
-            'Status': 'status'
-        };
-
         const dbField = fieldMapping[field] || field;
         const currentSort = sorts.find(sort => sort.field === dbField);
         return currentSort ? currentSort.order : null;
@@ -417,6 +468,20 @@ export default function TikTokTracker() {
                 });
 
                 setTracked(transformedVideos);
+                
+                // Apply current sort order to the new data if any sort is active
+                if (sorts.length > 0) {
+                    const currentSort = sorts[0];
+                    // Find the display field name for the current sort
+                    const displayField = Object.keys(fieldMapping).find(key => 
+                        fieldMapping[key as keyof typeof fieldMapping] === currentSort.field
+                    );
+                    const sortedVideos = sortVideosLocally(transformedVideos, currentSort.field, currentSort.order, displayField);
+                    setTracked(sortedVideos);
+                } else {
+                    setTracked(transformedVideos);
+                }
+                
                 console.log(`✅ Loaded ${transformedVideos.length} videos from database`);
             } else {
                 console.error('❌ Failed to fetch videos:', result.error);
@@ -468,8 +533,9 @@ export default function TikTokTracker() {
     }, [fetchVideos]);
 
     useEffect(() => {
+        // Only fetch from API when filters or timeframe change, not sorts
         fetchVideos(filters, sorts, timeframe);
-    }, [filters, sorts, timeframe, fetchVideos]);
+    }, [filters, timeframe, fetchVideos]); // Removed 'sorts' from dependencies
 
     useEffect(() => {
         console.log('[TikTokTracker] sorts state changed:', sorts);
@@ -1735,9 +1801,34 @@ export default function TikTokTracker() {
                                         sorts={sorts}
                                         timeframe={timeframe}
                                         onChange={(newFilters, newSorts) => {
-                                            setFilters(newFilters);
-                                            setSorts(newSorts);
-                                            // timeframe changes are ignored - controlled by selectedTimePeriod
+                                            // Check if filters changed (should trigger API call)
+                                            const filtersChanged = JSON.stringify(filters) !== JSON.stringify(newFilters);
+                                            // Check if sorts changed (should only update local state)
+                                            const sortsChanged = JSON.stringify(sorts) !== JSON.stringify(newSorts);
+                                            
+                                            if (filtersChanged) {
+                                                setFilters(newFilters);
+                                                // Filters changed - fetch new data from API
+                                                fetchVideos(newFilters, newSorts, timeframe);
+                                            }
+                                            
+                                            if (sortsChanged && !filtersChanged) {
+                                                setSorts(newSorts);
+                                                // Only sorts changed - apply local sorting
+                                                if (newSorts.length > 0) {
+                                                    const sort = newSorts[0];
+                                                    const displayField = Object.keys(fieldMapping).find(key => 
+                                                        fieldMapping[key as keyof typeof fieldMapping] === sort.field
+                                                    );
+                                                    const sortedVideos = sortVideosLocally(tracked, sort.field, sort.order, displayField);
+                                                    setTracked(sortedVideos);
+                                                }
+                                            }
+                                            
+                                            if (filtersChanged && sortsChanged) {
+                                                // Both changed - API call will handle both
+                                                setSorts(newSorts);
+                                            }
                                         }}
                                     />
                                     <Card>
