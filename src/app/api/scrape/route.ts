@@ -358,6 +358,9 @@ export async function POST(request: NextRequest) {
                 currentShares: shares,
                 hashtags: (mediaData as TikTokVideoData | InstagramPostData).hashtags ? JSON.stringify((mediaData as TikTokVideoData | InstagramPostData).hashtags) : null,
                 music: (mediaData as TikTokVideoData | InstagramPostData).music ? JSON.stringify((mediaData as TikTokVideoData | InstagramPostData).music) : null,
+                scrapingCadence: 'hourly', // Set new videos to hourly by default
+                // Set lastScrapedAt to 2 hours ago so it gets picked up by the next cron run
+                lastScrapedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
                 isActive: true
             }
         });
@@ -401,7 +404,9 @@ export async function POST(request: NextRequest) {
             dbId: newVideo.id,
             postedAt: postedDate.toISOString(),
             initialViews: views,
-            initialLikes: likes
+            initialLikes: likes,
+            thumbnailUrl: thumbnailUrl,
+            lastScrapedAt: newVideo.lastScrapedAt.toISOString()
         });
 
         return NextResponse.json({

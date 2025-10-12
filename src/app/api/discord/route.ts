@@ -246,7 +246,8 @@ export async function POST(req: NextRequest) {
           currentComments: mediaData.comments,
           currentShares: shares,
           scrapingCadence: 'hourly', // Default for new videos
-          lastScrapedAt: new Date(),
+          // Set lastScrapedAt to 2 hours ago so it gets picked up by the next cron run
+          lastScrapedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
           hashtags: JSON.stringify(getHashtags(mediaData)),
           music: JSON.stringify(getMusic(mediaData)),
           isActive: true, // This is required for videos to show up in dashboard
