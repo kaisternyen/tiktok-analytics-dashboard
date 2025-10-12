@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
-import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, LogOut } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle, X, TrendingUp, TrendingDown, Eye, Heart, MessageCircle, Share, Play, LogOut, RefreshCw } from "lucide-react";
 import VideoFilterSortBar, { SortCondition, FilterGroup } from './VideoFilterSortBar';
 import { formatInTimeZone } from 'date-fns-tz';
 import { TrackedAccountsTab } from '../components/TrackedAccountsTab';
@@ -158,6 +158,7 @@ export default function TikTokTracker() {
     const [newTagName, setNewTagName] = useState("");
     const [newTagColor, setNewTagColor] = useState("#3b82f6");
     const [showAddTagForm, setShowAddTagForm] = useState(false);
+    const [refreshingVideos, setRefreshingVideos] = useState<Set<string>>(new Set());
     
     // Derive timeframe from selectedTimePeriod or custom date range for unified control
     const timeframe = React.useMemo<[string, string] | null>(() => {
@@ -381,6 +382,41 @@ export default function TikTokTracker() {
         } catch (error) {
             console.error('Error deleting tag:', error);
             setError('Failed to delete tag');
+        }
+    };
+
+    const handleManualRefresh = async (videoId: string) => {
+        try {
+            setRefreshingVideos(prev => new Set(prev).add(videoId));
+            
+            const response = await fetch(`/api/run-single-video`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ videoId }),
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                // Refresh the videos list to show updated data
+                await fetchVideos();
+                setSuccess(`Video data refreshed successfully for @${data.video?.username || 'video'}`);
+                setTimeout(() => setSuccess(''), 3000);
+            } else {
+                setError(data.error || 'Failed to refresh video data');
+                setTimeout(() => setError(''), 3000);
+            }
+        } catch (error) {
+            console.error('Error refreshing video:', error);
+            setError('Failed to refresh video data');
+            setTimeout(() => setError(''), 3000);
+        } finally {
+            setRefreshingVideos(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(videoId);
+                return newSet;
+            });
         }
     };
 
@@ -2248,6 +2284,8 @@ export default function TikTokTracker() {
                                                                         {renderSortIcon('TotalViews')}
                                                                     </div>
                                                                 </th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Data Age</th>
+                                                                <th className="text-left p-4 font-medium text-gray-900">Refresh</th>
                                                                 {/* Moderation columns moved here for better visibility */}
                                                                 <th className="text-left p-4 font-medium text-gray-900">New Comments</th>
                                                                 <th className="text-left p-4 font-medium text-gray-900">Threads Planted Note</th>
@@ -2403,6 +2441,50 @@ export default function TikTokTracker() {
                                                                     </td>
                                                                     <td className="p-4 font-medium">{formatNumber(video.views)}</td>
                                                                     <td className="p-4 font-medium text-gray-600">{formatNumber(video.totalViews)}</td>
+                                                                    {/* Data Age column */}
+                                                                    <td className="p-4 text-sm">
+                                                                        {(() => {
+                                                                            if (!video.lastUpdate) return 'Unknown';
+                                                                            const now = new Date();
+                                                                            const lastUpdate = new Date(video.lastUpdate);
+                                                                            const minutesAgo = Math.floor((now.getTime() - lastUpdate.getTime()) / (1000 * 60));
+                                                                            
+                                                                            if (minutesAgo < 1) return 'Just now';
+                                                                            if (minutesAgo < 60) return `${minutesAgo}m ago`;
+                                                                            
+                                                                            const hoursAgo = Math.floor(minutesAgo / 60);
+                                                                            if (hoursAgo < 24) return `${hoursAgo}h ago`;
+                                                                            
+                                                                            const daysAgo = Math.floor(hoursAgo / 24);
+                                                                            return `${daysAgo}d ago`;
+                                                                        })()}
+                                                                    </td>
+                                                                    {/* Manual Refresh column */}
+                                                                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            onClick={async (e) => {
+                                                                                e.stopPropagation();
+                                                                                await handleManualRefresh(video.id);
+                                                                            }}
+                                                                            disabled={refreshingVideos.has(video.id)}
+                                                                            className="text-xs"
+                                                                            title="Manually refresh this video's data"
+                                                                        >
+                                                                            {refreshingVideos.has(video.id) ? (
+                                                                                <>
+                                                                                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                                                                    Refreshing...
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <RefreshCw className="w-3 h-3 mr-1" />
+                                                                                    Refresh
+                                                                                </>
+                                                                            )}
+                                                                        </Button>
+                                                                    </td>
                                                                     {/* Just Moderated column */}
                                                                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
                                                                         <div className="flex flex-col gap-1">
