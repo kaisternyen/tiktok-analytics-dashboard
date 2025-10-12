@@ -207,15 +207,32 @@ export default function TikTokTracker() {
             const clickedTime = data.activePayload[0].payload.time;
             const clickedDate = new Date(clickedTime);
             
-            // Set date range to the clicked day (24 hours)
-            const startOfDay = new Date(clickedDate);
-            startOfDay.setHours(0, 0, 0, 0);
-            const endOfDay = new Date(clickedDate);
-            endOfDay.setHours(23, 59, 59, 999);
-            
-            setCustomDateRange([startOfDay.toISOString(), endOfDay.toISOString()]);
-            setSelectedTimePeriod('D'); // Update period display
-            setTimeGranularity('hourly'); // Switch to hourly view for day detail
+            // Check if we're already in hourly granularity (clicking on an hour)
+            if (timeGranularity === 'hourly') {
+                // Create a 2-point graph: previous hour + selected hour
+                const selectedHour = new Date(clickedDate);
+                const previousHour = new Date(selectedHour.getTime() - 60 * 60 * 1000); // 1 hour before
+                
+                // Set date range from previous hour to end of selected hour
+                const startTime = new Date(previousHour);
+                startTime.setMinutes(0, 0, 0); // Start of previous hour
+                const endTime = new Date(selectedHour);
+                endTime.setMinutes(59, 59, 999); // End of selected hour
+                
+                setCustomDateRange([startTime.toISOString(), endTime.toISOString()]);
+                // Keep hourly granularity to show the 2 data points
+                setTimeGranularity('hourly');
+            } else {
+                // Original behavior: Set date range to the clicked day (24 hours) and switch to hourly
+                const startOfDay = new Date(clickedDate);
+                startOfDay.setHours(0, 0, 0, 0);
+                const endOfDay = new Date(clickedDate);
+                endOfDay.setHours(23, 59, 59, 999);
+                
+                setCustomDateRange([startOfDay.toISOString(), endOfDay.toISOString()]);
+                setSelectedTimePeriod('D'); // Update period display
+                setTimeGranularity('hourly'); // Switch to hourly view for day detail
+            }
         }
     };
 
@@ -1957,9 +1974,32 @@ export default function TikTokTracker() {
                                                         {customDateRange && (
                                                             <div className="mt-2 text-xs text-gray-600">
                                                                 Selected: {new Date(customDateRange[0]).toLocaleDateString()} - {new Date(customDateRange[1]).toLocaleDateString()}
-                                                                <span className="ml-2 text-blue-600 cursor-pointer hover:underline" onClick={() => setShowDatePicker(false)}>
-                                                                    Click chart points to focus on specific days, or drag on chart to select range
-                                                                </span>
+                                                                {(() => {
+                                                                    // Check if this is a 2-hour range (2-point graph mode)
+                                                                    const start = new Date(customDateRange[0]);
+                                                                    const end = new Date(customDateRange[1]);
+                                                                    const hoursDiff = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+                                                                    
+                                                                    if (hoursDiff <= 2 && timeGranularity === 'hourly') {
+                                                                        return (
+                                                                            <span className="ml-2 text-green-600 font-medium">
+                                                                                (2-point hour view: {start.getHours()}:00-{end.getHours()}:00)
+                                                                            </span>
+                                                                        );
+                                                                    } else if (timeGranularity === 'hourly') {
+                                                                        return (
+                                                                            <span className="ml-2 text-blue-600 cursor-pointer hover:underline" onClick={() => setShowDatePicker(false)}>
+                                                                                Click specific hours to create 2-point graphs
+                                                                            </span>
+                                                                        );
+                                                                    } else {
+                                                                        return (
+                                                                            <span className="ml-2 text-blue-600 cursor-pointer hover:underline" onClick={() => setShowDatePicker(false)}>
+                                                                                Click chart points to focus on specific days, or drag on chart to select range
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                })()}
                                                             </div>
                                                         )}
                                                     </div>
