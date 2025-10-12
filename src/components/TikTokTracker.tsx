@@ -100,7 +100,21 @@ interface ChartDataPoint {
     originalTime: Date;
 }
 
-type TimePeriod = 'D' | 'W' | 'M' | '3M' | '1Y' | 'ALL';
+type TimePeriod = 'D' | 'W' | 'M' | '3M' | '1Y' | 'ALL' | 'TODAY_EST';
+
+// Helper function to get display label for time periods
+const getTimePeriodLabel = (period: TimePeriod): string => {
+    switch (period) {
+        case 'TODAY_EST': return 'Today EST';
+        case 'D': return 'D';
+        case 'W': return 'W';
+        case 'M': return 'M';
+        case '3M': return '3M';
+        case '1Y': return '1Y';
+        case 'ALL': return 'ALL';
+        default: return period;
+    }
+};
 
 export default function TikTokTracker() {
     const [videoUrl, setVideoUrl] = useState("");
@@ -172,6 +186,13 @@ export default function TikTokTracker() {
                 break;
             case '1Y':
                 startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+                break;
+            case 'TODAY_EST':
+                // Get today at midnight EST
+                const nowEST = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+                const midnightEST = new Date(nowEST.getFullYear(), nowEST.getMonth(), nowEST.getDate());
+                // Convert back to UTC for consistent handling
+                startDate = new Date(midnightEST.getTime() - (midnightEST.getTimezoneOffset() * 60000));
                 break;
             default:
                 return null;
@@ -1194,8 +1215,8 @@ export default function TikTokTracker() {
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         
-        // Check if this is the daily view (D preset) - only show hourly cadence videos
-        const isDailyView = selectedTimePeriod === 'D';
+        // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
+        const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
         
         const eligibleVideos = tracked.filter(video => {
             // For daily view (D preset), ONLY include hourly cadence videos
@@ -1287,6 +1308,15 @@ export default function TikTokTracker() {
                 case '1Y':
                     filteredTimestamps = sortedTimestamps.filter(timestamp =>
                         new Date(timestamp) >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+                    );
+                    break;
+                case 'TODAY_EST':
+                    // Filter timestamps from midnight EST today to now
+                    const nowEST = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+                    const midnightEST = new Date(nowEST.getFullYear(), nowEST.getMonth(), nowEST.getDate());
+                    const midnightUTC = new Date(midnightEST.getTime() - (midnightEST.getTimezoneOffset() * 60000));
+                    filteredTimestamps = sortedTimestamps.filter(timestamp =>
+                        new Date(timestamp) >= midnightUTC
                     );
                     break;
                 case 'ALL':
@@ -1385,8 +1415,8 @@ export default function TikTokTracker() {
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         
-        // Check if this is the daily view (D preset) - only show hourly cadence videos
-        const isDailyView = selectedTimePeriod === 'D';
+        // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
+        const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
         
         const eligibleVideos = tracked.filter(video => {
             // For daily view (D preset), ONLY include hourly cadence videos
@@ -1830,7 +1860,7 @@ export default function TikTokTracker() {
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-xs text-gray-600">Time Period:</span>
                                                         <div className="flex border border-gray-200 rounded-md">
-                                                            {(['D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
+                                                            {(['TODAY_EST', 'D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
                                                                 <button
                                                                     key={period}
                                                                     onClick={() => {
@@ -1842,7 +1872,7 @@ export default function TikTokTracker() {
                                                                         : 'text-gray-600 hover:bg-gray-100'
                                                                         } first:rounded-l-md last:rounded-r-md`}
                                                                     >
-                                                                    {period}
+                                                                    {getTimePeriodLabel(period)}
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -2641,7 +2671,7 @@ export default function TikTokTracker() {
                                     <div className="flex items-center gap-2">
                                         {/* Time Period Selector for Individual Charts */}
                                         <div className="flex border border-gray-200 rounded-md">
-                                            {(['D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
+                                            {(['TODAY_EST', 'D', 'W', 'M', '3M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
                                                 <button
                                                     key={period}
                                                     onClick={() => setSelectedVideoTimePeriod(period)}
@@ -2650,7 +2680,7 @@ export default function TikTokTracker() {
                                                         : 'text-gray-600 hover:bg-gray-100'
                                                         } first:rounded-l-md last:rounded-r-md`}
                                                 >
-                                                    {period}
+                                                    {getTimePeriodLabel(period)}
                                                 </button>
                                             ))}
                                         </div>
