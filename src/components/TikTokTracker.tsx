@@ -1156,13 +1156,13 @@ export default function TikTokTracker() {
                                 Delta: {formatNumber(data.delta)} views
                             </p>
                             <p className="text-gray-600 text-sm">
-                                Total: {formatNumber(totalMetrics.totalViews)} views
+                                Total at this time: {formatNumber(data.views)} views
                             </p>
                         </>
                     ) : (
                         <>
                             <p className="text-blue-600">
-                                Views: {formatNumber(data.views)}
+                                Total Views: {formatNumber(data.views)}
                             </p>
                             {data.delta !== 0 && (
                                 <p className="text-gray-600 text-sm">
@@ -1453,6 +1453,76 @@ export default function TikTokTracker() {
         return { chartData: finalChartData, filteredVideoCount: videosWithSufficientData.length };
     };
 
+    // UNIFIED CALCULATION: Use this for all totals to ensure consistency
+    const getUnifiedTotals = () => {
+        if (tracked.length === 0) return { videos: 0, totalViews: 0, totalLikes: 0, totalComments: 0, totalShares: 0 };
+
+        let timeframeStart: Date | null = null;
+        let timeframeEnd: Date | null = null;
+        if (timeframe && timeframe[0] && timeframe[1]) {
+            timeframeStart = new Date(timeframe[0]);
+            timeframeEnd = new Date(timeframe[1]);
+        }
+
+        // Filter videos based on timeframe and cadence (EXACT same logic as getChartData)
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
+        const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
+        
+        const eligibleVideos = tracked.filter(video => {
+            // For daily view (D preset), ONLY include hourly cadence videos
+            if (isDailyView) {
+                return video.platform && video.scrapingCadence === 'hourly';
+            }
+            
+            // For longer timeframes, use the original logic
+            // Always include hourly videos 
+            if (video.platform && video.scrapingCadence === 'hourly') {
+                return true;
+            }
+            
+            // For daily videos, only include if they've been scraped today
+            if (video.platform && video.scrapingCadence === 'daily') {
+                const lastScraped = new Date(video.lastUpdate);
+                return lastScraped >= todayStart;
+            }
+            
+            // Default: include video if cadence is unknown (backward compatibility)
+            return true;
+        });
+
+        // Filter out videos with insufficient data points (EXACT same logic)
+        const videosWithSufficientData = eligibleVideos.filter(video => {
+            if (!video.history || video.history.length < 2) {
+                return false; // Need at least 2 data points for meaningful totals
+            }
+            
+            // For daily view, ensure we have at least 2 data points in the timeframe
+            if (timeframeStart && timeframeEnd) {
+                const dataPointsInTimeframe = video.history.filter(point => {
+                    const t = new Date(point.time).getTime();
+                    return t >= timeframeStart!.getTime() && t <= timeframeEnd!.getTime();
+                });
+                return dataPointsInTimeframe.length >= 2;
+            }
+            
+            return true;
+        });
+
+        // Calculate totals using the SAME logic as displayed in individual videos
+        const totals = {
+            videos: videosWithSufficientData.length,
+            totalViews: videosWithSufficientData.reduce((sum, v) => sum + v.views, 0),
+            totalLikes: videosWithSufficientData.reduce((sum, v) => sum + v.likes, 0),
+            totalComments: videosWithSufficientData.reduce((sum, v) => sum + v.comments, 0),
+            totalShares: videosWithSufficientData.reduce((sum, v) => sum + v.shares, 0),
+        };
+
+        return totals;
+    };
+
     // Get videos with sufficient data points for totals calculation (same filtering as chart)
     const getFilteredVideosForTotals = (): TrackedVideo[] => {
         if (tracked.length === 0) return [];
@@ -1514,7 +1584,7 @@ export default function TikTokTracker() {
         return videosWithSufficientData;
     };
 
-    const { chartData, filteredVideoCount: oldFilteredVideoCount } = getChartData();
+    const { chartData } = getChartData();
     const yAxisDomain = getYAxisDomain(chartData);
 
     // Enhanced chart data processing for individual video metrics
@@ -1588,13 +1658,16 @@ export default function TikTokTracker() {
     // Use the filtered video count from the chart data
     const filteredVideosForTotals = getFilteredVideosForTotals();
     
+    // Use the unified calculation for consistent totals across all displays
+    const unifiedTotals = getUnifiedTotals();
+    
     const totalMetrics = {
-        videos: selectedTimePeriod === 'D' ? oldFilteredVideoCount : filteredVideosForTotals.length,
-        // Show period views when timeframe filter is active, total views otherwise
-        totalViews: filteredVideosForTotals.reduce((sum, v) => sum + v.views, 0),
-        totalLikes: filteredVideosForTotals.reduce((sum, v) => sum + v.likes, 0),
-        totalComments: filteredVideosForTotals.reduce((sum, v) => sum + v.comments, 0),
-        totalShares: filteredVideosForTotals.reduce((sum, v) => sum + v.shares, 0),
+        videos: unifiedTotals.videos,
+        // Use unified calculation for consistent totals
+        totalViews: unifiedTotals.totalViews,
+        totalLikes: unifiedTotals.totalLikes,
+        totalComments: unifiedTotals.totalComments,
+        totalShares: unifiedTotals.totalShares,
         avgGrowth: filteredVideosForTotals.length > 0 ? filteredVideosForTotals.reduce((sum, v) => sum + v.growth.views, 0) / filteredVideosForTotals.length : 0,
         totalThreads: filteredVideosForTotals.reduce((sum, v) => sum + (v.threadsPlanted || 0), 0),
         totalCommentsModerated: filteredVideosForTotals.reduce((sum, v) => sum + (v.totalCommentsModerated || 0), 0),
