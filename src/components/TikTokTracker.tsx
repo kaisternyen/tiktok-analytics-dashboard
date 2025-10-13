@@ -116,9 +116,22 @@ const getTimePeriodLabel = (period: TimePeriod): string => {
     }
 };
 
+// UNIFIED TIMEZONE HELPERS: Convert any date to EST consistently
+const toEasternTime = (date: Date): Date => {
+    // EST is UTC-5, EDT is UTC-4
+    // Simple approach: always use EST (UTC-5) for consistency
+    return new Date(date.getTime() - (5 * 60 * 60 * 1000));
+};
+
+// UNIFIED TIMEZONE HELPER: Convert EST date back to UTC
+const fromEasternTime = (estDate: Date): Date => {
+    return new Date(estDate.getTime() + (5 * 60 * 60 * 1000));
+};
+
 export default function TikTokTracker() {
     const [videoUrl, setVideoUrl] = useState("");
-    const [tracked, setTracked] = useState<TrackedVideo[]>([]);
+    const [originalVideos, setOriginalVideos] = useState<TrackedVideo[]>([]); // ORIGINAL unsorted data for calculations
+    const [tracked, setTracked] = useState<TrackedVideo[]>([]); // SORTED data for display
     const [selectedVideo, setSelectedVideo] = useState<TrackedVideo | null>(null);
     const [activeTab, setActiveTab] = useState("overview");
     const [isLoading, setIsLoading] = useState(false);
@@ -189,11 +202,11 @@ export default function TikTokTracker() {
                 startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
                 break;
             case 'TODAY_EST':
-                // Get today at midnight EST
-                const nowEST = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-                const midnightEST = new Date(nowEST.getFullYear(), nowEST.getMonth(), nowEST.getDate());
-                // Convert back to UTC for consistent handling
-                startDate = new Date(midnightEST.getTime() - (midnightEST.getTimezoneOffset() * 60000));
+                // Get today at midnight EST using consistent timezone helpers
+                const nowEST = toEasternTime(now);
+                const midnightEST = new Date(nowEST.getFullYear(), nowEST.getMonth(), nowEST.getDate(), 0, 0, 0, 0);
+                // Convert back to UTC for API calls
+                startDate = fromEasternTime(midnightEST);
                 break;
             default:
                 return null;
@@ -201,18 +214,6 @@ export default function TikTokTracker() {
         
         return [startDate.toISOString(), now.toISOString()];
     }, [selectedTimePeriod, customDateRange]);
-
-    // UNIFIED TIMEZONE HELPER: Convert any date to EST consistently
-    const toEasternTime = (date: Date): Date => {
-        // EST is UTC-5, EDT is UTC-4
-        // Simple approach: always use EST (UTC-5) for consistency
-        return new Date(date.getTime() - (5 * 60 * 60 * 1000));
-    };
-
-    // UNIFIED TIMEZONE HELPER: Convert EST date back to UTC
-    const fromEasternTime = (estDate: Date): Date => {
-        return new Date(estDate.getTime() + (5 * 60 * 60 * 1000));
-    };
 
     // Handle chart point click to focus on specific day with hourly granularity
     const handleChartClick = (data: { activePayload?: Array<{ payload: { time: string } }> }) => {
@@ -543,8 +544,8 @@ export default function TikTokTracker() {
         setSorts(newSorts);
         
         // Sort locally - no API call needed!
-        const sortedVideos = sortVideosLocally(tracked, dbField, newSortOrder, field);
-        setTracked(sortedVideos);
+        const sortedVideos = sortVideosLocally(originalVideos, dbField, newSortOrder, field); // Use originalVideos as source
+        setTracked(sortedVideos); // Only update display data
     };
 
     // Get current sort state for a field
@@ -709,6 +710,7 @@ export default function TikTokTracker() {
                 });
 
                 setTracked(transformedVideos);
+                setOriginalVideos(transformedVideos); // Store original unsorted data for calculations
                 
                 // Apply current sort order to the new data if any sort is active
                 if (sorts.length > 0) {
@@ -718,7 +720,7 @@ export default function TikTokTracker() {
                         fieldMapping[key as keyof typeof fieldMapping] === currentSort.field
                     );
                     const sortedVideos = sortVideosLocally(transformedVideos, currentSort.field, currentSort.order, displayField);
-                    setTracked(sortedVideos);
+                    setTracked(sortedVideos); // Only update display data, keep originalVideos unchanged
                 } else {
                     setTracked(transformedVideos);
                 }
@@ -1275,7 +1277,7 @@ export default function TikTokTracker() {
 
     // UNIFIED CALCULATION: Single source of truth for all metrics and chart data
     const getUnifiedMetrics = () => {
-        if (tracked.length === 0) return { 
+        if (originalVideos.length === 0) return { 
             videos: 0, 
             totalViews: 0, 
             totalLikes: 0, 
@@ -1293,13 +1295,14 @@ export default function TikTokTracker() {
         }
 
         // Filter videos based on timeframe and cadence (IDENTICAL logic for both chart and totals)
+        // USE ORIGINAL VIDEOS - not sorted display data!
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         
         // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
         const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
         
-        const eligibleVideos = tracked.filter(video => {
+        const eligibleVideos = originalVideos.filter(video => {
             // For daily view (D preset), ONLY include hourly cadence videos
             if (isDailyView) {
                 return video.platform && video.scrapingCadence === 'hourly';
@@ -1404,7 +1407,7 @@ export default function TikTokTracker() {
 
     // Get videos with sufficient data points for totals calculation (same filtering as chart)
     const getFilteredVideosForTotals = (): TrackedVideo[] => {
-        if (tracked.length === 0) return [];
+        if (originalVideos.length === 0) return []; // Use originalVideos instead of tracked
 
         let timeframeStart: Date | null = null;
         let timeframeEnd: Date | null = null;
@@ -1413,14 +1416,15 @@ export default function TikTokTracker() {
             timeframeEnd = new Date(timeframe[1]);
         }
 
-        // Filter videos based on timeframe and cadence (same logic as getChartData)
+        // Filter videos based on timeframe and cadence (same logic as getUnifiedMetrics)
+        // USE ORIGINAL VIDEOS - not sorted display data!
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         
         // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
         const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
         
-        const eligibleVideos = tracked.filter(video => {
+        const eligibleVideos = originalVideos.filter(video => {
             // For daily view (D preset), ONLY include hourly cadence videos
             if (isDailyView) {
                 return video.platform && video.scrapingCadence === 'hourly';
@@ -2175,8 +2179,8 @@ export default function TikTokTracker() {
                                                     const displayField = Object.keys(fieldMapping).find(key => 
                                                         fieldMapping[key as keyof typeof fieldMapping] === sort.field
                                                     );
-                                                    const sortedVideos = sortVideosLocally(tracked, sort.field, sort.order, displayField);
-                                                    setTracked(sortedVideos);
+                                                    const sortedVideos = sortVideosLocally(originalVideos, sort.field, sort.order, displayField); // Use originalVideos as source
+                                                    setTracked(sortedVideos); // Only update display data
                                                 }
                                             }
                                             
