@@ -202,6 +202,18 @@ export default function TikTokTracker() {
         return [startDate.toISOString(), now.toISOString()];
     }, [selectedTimePeriod, customDateRange]);
 
+    // UNIFIED TIMEZONE HELPER: Convert any date to EST consistently
+    const toEasternTime = (date: Date): Date => {
+        // EST is UTC-5, EDT is UTC-4
+        // Simple approach: always use EST (UTC-5) for consistency
+        return new Date(date.getTime() - (5 * 60 * 60 * 1000));
+    };
+
+    // UNIFIED TIMEZONE HELPER: Convert EST date back to UTC
+    const fromEasternTime = (estDate: Date): Date => {
+        return new Date(estDate.getTime() + (5 * 60 * 60 * 1000));
+    };
+
     // Handle chart point click to focus on specific day with hourly granularity
     const handleChartClick = (data: { activePayload?: Array<{ payload: { time: string } }> }) => {
         if (data && data.activePayload && data.activePayload[0]) {
@@ -224,20 +236,16 @@ export default function TikTokTracker() {
                 // Keep hourly granularity to show the 2 data points
                 setTimeGranularity('hourly');
             } else {
-                // FIXED: Use Eastern timezone for consistent day boundaries
-                // Convert UTC timestamp to Eastern time for proper day calculation
-                const easternOffset = clickedDate.getTimezoneOffset() > 240 ? -5 : -4; // EST/EDT detection
-                const clickedDateEST = new Date(clickedDate.getTime() + (easternOffset * 60 * 60 * 1000));
+                // FIXED: Use consistent Eastern timezone
+                const clickedDateEST = toEasternTime(clickedDate);
                 
-                // Get start and end of day in Eastern time (using UTC methods on the shifted date)
-                const startOfDayEST = new Date(clickedDateEST);
-                startOfDayEST.setUTCHours(0, 0, 0, 0);
-                const endOfDayEST = new Date(clickedDateEST);
-                endOfDayEST.setUTCHours(23, 59, 59, 999);
+                // Get start and end of day in Eastern time
+                const startOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
+                const endOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 23, 59, 59, 999);
                 
                 // Convert back to UTC for API calls
-                const startOfDayUTC = new Date(startOfDayEST.getTime() - (easternOffset * 60 * 60 * 1000));
-                const endOfDayUTC = new Date(endOfDayEST.getTime() - (easternOffset * 60 * 60 * 1000));
+                const startOfDayUTC = fromEasternTime(startOfDayEST);
+                const endOfDayUTC = fromEasternTime(endOfDayEST);
                 
                 setCustomDateRange([startOfDayUTC.toISOString(), endOfDayUTC.toISOString()]);
                 setSelectedTimePeriod('D'); // Update period display
@@ -1199,26 +1207,22 @@ export default function TikTokTracker() {
             switch (granularity) {
                 case 'hourly':
                     // Group by hour (YYYY-MM-DD HH:00) - use Eastern time
-                    // Convert UTC to Eastern (EST/EDT) - EST is UTC-5, EDT is UTC-4
-                    const easternOffsetHour = date.getTimezoneOffset() > 240 ? -5 : -4; // Rough DST detection
-                    const hourEST = new Date(date.getTime() + (easternOffsetHour * 60 * 60 * 1000));
-                    key = `${hourEST.getUTCFullYear()}-${String(hourEST.getUTCMonth() + 1).padStart(2, '0')}-${String(hourEST.getUTCDate()).padStart(2, '0')} ${String(hourEST.getUTCHours()).padStart(2, '0')}:00`;
+                    const hourEST = toEasternTime(date);
+                    key = `${hourEST.getFullYear()}-${String(hourEST.getMonth() + 1).padStart(2, '0')}-${String(hourEST.getDate()).padStart(2, '0')} ${String(hourEST.getHours()).padStart(2, '0')}:00`;
                     break;
                 case 'daily':
                     // Group by day (YYYY-MM-DD) - use Eastern time for consistent day boundaries
-                    const easternOffsetDay = date.getTimezoneOffset() > 240 ? -5 : -4; // Rough DST detection
-                    const dayEST = new Date(date.getTime() + (easternOffsetDay * 60 * 60 * 1000));
-                    key = `${dayEST.getUTCFullYear()}-${String(dayEST.getUTCMonth() + 1).padStart(2, '0')}-${String(dayEST.getUTCDate()).padStart(2, '0')}`;
+                    const dayEST = toEasternTime(date);
+                    key = `${dayEST.getFullYear()}-${String(dayEST.getMonth() + 1).padStart(2, '0')}-${String(dayEST.getDate()).padStart(2, '0')}`;
                     break;
                 case 'weekly':
                     // Group by week (start of week) - use Eastern time
-                    const easternOffsetWeek = date.getTimezoneOffset() > 240 ? -5 : -4; // Rough DST detection
-                    const weekEST = new Date(date.getTime() + (easternOffsetWeek * 60 * 60 * 1000));
+                    const weekEST = toEasternTime(date);
                     const weekStart = new Date(weekEST);
-                    const day = weekStart.getUTCDay();
-                    const diff = weekStart.getUTCDate() - day;
-                    weekStart.setUTCDate(diff);
-                    weekStart.setUTCHours(0, 0, 0, 0);
+                    const day = weekStart.getDay();
+                    const diff = weekStart.getDate() - day;
+                    weekStart.setDate(diff);
+                    weekStart.setHours(0, 0, 0, 0);
                     key = weekStart.toISOString().split('T')[0];
                     break;
                 default:
@@ -1269,274 +1273,133 @@ export default function TikTokTracker() {
         });
     };
 
-    // Enhanced chart data processing with proper aggregate data across ALL videos
-    const getChartData = (): { chartData: ChartDataPoint[], filteredVideoCount: number } => {
-        if (tracked.length === 0) return { chartData: [], filteredVideoCount: 0 };
-
-        let timeframeStart: Date | null = null;
-        let timeframeEnd: Date | null = null;
-        if (timeframe && timeframe[0] && timeframe[1]) {
-            timeframeStart = new Date(timeframe[0]);
-            timeframeEnd = new Date(timeframe[1]);
-        }
-
-        // Filter videos based on timeframe and cadence
-        const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        
-        // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
-        const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
-        
-        const eligibleVideos = tracked.filter(video => {
-            // For daily view (D preset), ONLY include hourly cadence videos
-            if (isDailyView) {
-                return video.platform && video.scrapingCadence === 'hourly';
-            }
-            
-            // For longer timeframes, use the original logic
-            // Always include hourly videos 
-            if (video.platform && video.scrapingCadence === 'hourly') {
-                return true;
-            }
-            
-            // For daily videos, only include if they've been scraped today
-            if (video.platform && video.scrapingCadence === 'daily') {
-                const lastScraped = new Date(video.lastUpdate);
-                return lastScraped >= todayStart;
-            }
-            
-            // Default: include video if cadence is unknown (backward compatibility)
-            return true;
-        });
-
-        // CRITICAL: Filter out videos with insufficient data points for meaningful charts
-        const videosWithSufficientData = eligibleVideos.filter(video => {
-            if (!video.history || video.history.length < 2) {
-                return false; // Need at least 2 data points for a meaningful chart
-            }
-            
-            // For daily view, ensure we have at least 2 data points in the timeframe
-            if (timeframeStart && timeframeEnd) {
-                const dataPointsInTimeframe = video.history.filter(point => {
-                    const pointTime = new Date(point.time).getTime();
-                    return pointTime >= timeframeStart.getTime() && pointTime <= timeframeEnd.getTime();
-                });
-                return dataPointsInTimeframe.length >= 2;
-            }
-            
-            return true; // No timeframe filter, use all data
-        });
-
-        // Collect all unique timestamps from videos with sufficient data
-        const allTimestamps = new Set<string>();
-        videosWithSufficientData.forEach(video => {
-            if (video.history?.length) {
-                video.history.forEach(point => {
-                    allTimestamps.add(point.time);
-                });
-            }
-        });
-
-        // Convert to sorted array
-        let sortedTimestamps = Array.from(allTimestamps).sort((a, b) => 
-            new Date(a).getTime() - new Date(b).getTime()
-        );
-
-        // If timeframe filter is present, filter timestamps to only those within the range
-        if (timeframeStart && timeframeEnd) {
-            sortedTimestamps = sortedTimestamps.filter(ts => {
-                const t = new Date(ts).getTime();
-                return t >= timeframeStart!.getTime() && t <= timeframeEnd!.getTime();
-            });
-        }
-
-        // Filter timestamps by selected time period (if no timeframe filter)
-        let filteredTimestamps = sortedTimestamps;
-        if (!timeframeStart || !timeframeEnd) {
-            switch (selectedTimePeriod) {
-                case 'D':
-                    filteredTimestamps = sortedTimestamps.filter(timestamp =>
-                        new Date(timestamp) >= new Date(now.getTime() - 24 * 60 * 60 * 1000)
-                    );
-                    break;
-                case 'W':
-                    filteredTimestamps = sortedTimestamps.filter(timestamp =>
-                        new Date(timestamp) >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-                    );
-                    break;
-                case 'M':
-                    filteredTimestamps = sortedTimestamps.filter(timestamp =>
-                        new Date(timestamp) >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-                    );
-                    break;
-                case '3M':
-                    filteredTimestamps = sortedTimestamps.filter(timestamp =>
-                        new Date(timestamp) >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-                    );
-                    break;
-                case '1Y':
-                    filteredTimestamps = sortedTimestamps.filter(timestamp =>
-                        new Date(timestamp) >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
-                    );
-                    break;
-                case 'TODAY_EST':
-                    // Filter timestamps from midnight EST today to now
-                    const nowEST = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-                    const midnightEST = new Date(nowEST.getFullYear(), nowEST.getMonth(), nowEST.getDate());
-                    const midnightUTC = new Date(midnightEST.getTime() - (midnightEST.getTimezoneOffset() * 60000));
-                    filteredTimestamps = sortedTimestamps.filter(timestamp =>
-                        new Date(timestamp) >= midnightUTC
-                    );
-                    break;
-                case 'ALL':
-                default:
-                    // Use all timestamps
-                    break;
-            }
-        }
-
-        // Build proper aggregate data by carrying forward last known values
-        const aggregateData: ChartDataPoint[] = [];
-        const lastKnownValues: { [videoId: string]: VideoHistory } = {};
-
-        // Initialize with first known values for each video with sufficient data
-        videosWithSufficientData.forEach(video => {
-            if (video.history?.length) {
-                const firstPoint = video.history
-                    .filter(h => filteredTimestamps.includes(h.time))
-                    .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())[0];
-                
-                if (firstPoint) {
-                    lastKnownValues[video.id] = firstPoint;
-                }
-            }
-        });
-
-        // Process each timestamp and build aggregate
-        filteredTimestamps.forEach(timestamp => {
-            // Update last known values for videos that have data at this timestamp
-            videosWithSufficientData.forEach(video => {
-                const pointAtTime = video.history?.find(h => h.time === timestamp);
-                if (pointAtTime) {
-                    lastKnownValues[video.id] = pointAtTime;
-                }
-            });
-
-            // Calculate aggregate values using last known values
-            const aggregateViews = Object.values(lastKnownValues).reduce((sum, point) => sum + point.views, 0);
-
-            // Only add if we have data for at least one video at this point
-            if (Object.keys(lastKnownValues).length > 0) {
-                aggregateData.push({
-                    time: timestamp,
-                    views: aggregateViews,
-                    delta: 0, // Will be calculated below
-                    originalTime: new Date(timestamp)
-                });
-            }
-        });
-
-        // First, create raw chart data with absolute values
-        const rawChartData: ChartDataPoint[] = aggregateData.map((point) => ({
-            time: point.time,
-            views: point.views,
-            delta: 0, // Will be calculated after aggregation
-            originalTime: new Date(point.time)
-        }));
-
-        // Apply time granularity aggregation (this will recalculate deltas)
-        const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity);
-        
-        // Apply delta mode if requested
-        const finalChartData = aggregatedData.map((point, index) => {
-            if (showDelta && index > 0) {
-                // Use the delta calculated by aggregateDataByGranularity
-                return {
-                    ...point,
-                    views: point.delta // Show delta instead of absolute views
-                };
-            } else if (showDelta && index === 0) {
-                // First point in delta mode should show 0
-                return {
-                    ...point,
-                    views: 0,
-                    delta: 0
-                };
-            }
-            return point; // Absolute mode - show actual views
-        });
-
-        return { chartData: finalChartData, filteredVideoCount: videosWithSufficientData.length };
-    };
-
-    // UNIFIED CALCULATION: Use this for all totals to ensure consistency
-    const getUnifiedTotals = () => {
-        if (tracked.length === 0) return { videos: 0, totalViews: 0, totalLikes: 0, totalComments: 0, totalShares: 0 };
-
-        let timeframeStart: Date | null = null;
-        let timeframeEnd: Date | null = null;
-        if (timeframe && timeframe[0] && timeframe[1]) {
-            timeframeStart = new Date(timeframe[0]);
-            timeframeEnd = new Date(timeframe[1]);
-        }
-
-        // Filter videos based on timeframe and cadence (EXACT same logic as getChartData)
-        const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        
-        // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
-        const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
-        
-        const eligibleVideos = tracked.filter(video => {
-            // For daily view (D preset), ONLY include hourly cadence videos
-            if (isDailyView) {
-                return video.platform && video.scrapingCadence === 'hourly';
-            }
-            
-            // For longer timeframes, use the original logic
-            // Always include hourly videos 
-            if (video.platform && video.scrapingCadence === 'hourly') {
-                return true;
-            }
-            
-            // For daily videos, only include if they've been scraped today
-            if (video.platform && video.scrapingCadence === 'daily') {
-                const lastScraped = new Date(video.lastUpdate);
-                return lastScraped >= todayStart;
-            }
-            
-            // Default: include video if cadence is unknown (backward compatibility)
-            return true;
-        });
-
-        // Filter out videos with insufficient data points (EXACT same logic)
-        const videosWithSufficientData = eligibleVideos.filter(video => {
-            if (!video.history || video.history.length < 2) {
-                return false; // Need at least 2 data points for meaningful totals
-            }
-            
-            // For daily view, ensure we have at least 2 data points in the timeframe
-            if (timeframeStart && timeframeEnd) {
-                const dataPointsInTimeframe = video.history.filter(point => {
-                    const t = new Date(point.time).getTime();
-                    return t >= timeframeStart!.getTime() && t <= timeframeEnd!.getTime();
-                });
-                return dataPointsInTimeframe.length >= 2;
-            }
-            
-            return true;
-        });
-
-        // Calculate totals using the SAME logic as displayed in individual videos
-        const totals = {
-            videos: videosWithSufficientData.length,
-            totalViews: videosWithSufficientData.reduce((sum, v) => sum + v.views, 0),
-            totalLikes: videosWithSufficientData.reduce((sum, v) => sum + v.likes, 0),
-            totalComments: videosWithSufficientData.reduce((sum, v) => sum + v.comments, 0),
-            totalShares: videosWithSufficientData.reduce((sum, v) => sum + v.shares, 0),
+    // UNIFIED CALCULATION: Single source of truth for all metrics and chart data
+    const getUnifiedMetrics = () => {
+        if (tracked.length === 0) return { 
+            videos: 0, 
+            totalViews: 0, 
+            totalLikes: 0, 
+            totalComments: 0, 
+            totalShares: 0,
+            chartData: [],
+            filteredVideoCount: 0
         };
 
-        return totals;
+        let timeframeStart: Date | null = null;
+        let timeframeEnd: Date | null = null;
+        if (timeframe && timeframe[0] && timeframe[1]) {
+            timeframeStart = new Date(timeframe[0]);
+            timeframeEnd = new Date(timeframe[1]);
+        }
+
+        // Filter videos based on timeframe and cadence (IDENTICAL logic for both chart and totals)
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
+        const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
+        
+        const eligibleVideos = tracked.filter(video => {
+            // For daily view (D preset), ONLY include hourly cadence videos
+            if (isDailyView) {
+                return video.platform && video.scrapingCadence === 'hourly';
+            }
+            
+            // For longer timeframes, use the original logic
+            // Always include hourly videos 
+            if (video.platform && video.scrapingCadence === 'hourly') {
+                return true;
+            }
+            
+            // For daily videos, only include if they've been scraped today
+            if (video.platform && video.scrapingCadence === 'daily') {
+                const lastScraped = video.lastUpdate ? new Date(video.lastUpdate) : null;
+                return lastScraped && lastScraped >= todayStart;
+            }
+            
+            return false;
+        });
+
+        // Calculate totals from the eligible videos
+        let totalViews = 0;
+        let totalLikes = 0;
+        let totalComments = 0;
+        let totalShares = 0;
+
+        // If we have a timeframe, calculate period-specific totals
+        if (timeframeStart && timeframeEnd) {
+            eligibleVideos.forEach(video => {
+                if (video.views !== undefined) totalViews += video.views; // period views
+                if (video.likes !== undefined) totalLikes += video.likes; // period likes
+                if (video.comments !== undefined) totalComments += video.comments; // period comments
+                if (video.shares !== undefined) totalShares += video.shares; // period shares
+            });
+        } else {
+            // No timeframe - use total views
+            eligibleVideos.forEach(video => {
+                if (video.totalViews !== undefined) totalViews += video.totalViews;
+                if (video.totalLikes !== undefined) totalLikes += video.totalLikes;
+                if (video.totalComments !== undefined) totalComments += video.totalComments;
+                if (video.totalShares !== undefined) totalShares += video.totalShares;
+            });
+        }
+
+        // Generate chart data using the same eligible videos
+        const videosWithSufficientData = eligibleVideos.filter(video => 
+            video.history && video.history.length >= 2
+        );
+
+        // Create chart data points
+        const allDataPoints: Array<{ time: string; views: number; likes: number; comments: number; shares: number; originalTime: Date }> = [];
+
+        videosWithSufficientData.forEach(video => {
+            video.history?.forEach(point => {
+                const pointTime = new Date(point.time);
+                
+                // Filter by timeframe if specified
+                if (timeframeStart && timeframeEnd) {
+                    if (pointTime < timeframeStart || pointTime > timeframeEnd) {
+                        return;
+                    }
+                }
+                
+                allDataPoints.push({
+                    time: point.time,
+                    views: point.views || 0,
+                    likes: point.likes || 0,
+                    comments: point.comments || 0,
+                    shares: point.shares || 0,
+                    originalTime: pointTime
+                });
+            });
+        });
+
+        // Sort by time
+        allDataPoints.sort((a, b) => a.originalTime.getTime() - b.originalTime.getTime());
+
+        // Convert to chart format
+        const rawChartData: ChartDataPoint[] = allDataPoints.map(point => ({
+            time: point.time,
+            views: point.views,
+            likes: point.likes,
+            comments: point.comments,
+            shares: point.shares,
+            delta: 0, // Will be calculated after aggregation
+            originalTime: point.originalTime
+        }));
+
+        // Apply time granularity aggregation
+        const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity);
+        
+        return {
+            videos: eligibleVideos.length,
+            totalViews,
+            totalLikes,
+            totalComments,
+            totalShares,
+            chartData: aggregatedData,
+            filteredVideoCount: videosWithSufficientData.length
+        };
     };
 
     // Get videos with sufficient data points for totals calculation (same filtering as chart)
@@ -1600,7 +1463,9 @@ export default function TikTokTracker() {
         return videosWithSufficientData;
     };
 
-    const { chartData } = getChartData();
+    // Use the unified calculation for both chart data and totals
+    const unifiedMetrics = getUnifiedMetrics();
+    const { chartData } = unifiedMetrics;
     const yAxisDomain = getYAxisDomain(chartData);
 
     // Enhanced chart data processing for individual video metrics
@@ -1674,16 +1539,13 @@ export default function TikTokTracker() {
     // Use the filtered video count from the chart data
     const filteredVideosForTotals = getFilteredVideosForTotals();
     
-    // Use the unified calculation for consistent totals across all displays
-    const unifiedTotals = getUnifiedTotals();
-    
     const totalMetrics = {
-        videos: unifiedTotals.videos,
+        videos: unifiedMetrics.videos,
         // Use unified calculation for consistent totals
-        totalViews: unifiedTotals.totalViews,
-        totalLikes: unifiedTotals.totalLikes,
-        totalComments: unifiedTotals.totalComments,
-        totalShares: unifiedTotals.totalShares,
+        totalViews: unifiedMetrics.totalViews,
+        totalLikes: unifiedMetrics.totalLikes,
+        totalComments: unifiedMetrics.totalComments,
+        totalShares: unifiedMetrics.totalShares,
         avgGrowth: filteredVideosForTotals.length > 0 ? filteredVideosForTotals.reduce((sum, v) => sum + v.growth.views, 0) / filteredVideosForTotals.length : 0,
         totalThreads: filteredVideosForTotals.reduce((sum, v) => sum + (v.threadsPlanted || 0), 0),
         totalCommentsModerated: filteredVideosForTotals.reduce((sum, v) => sum + (v.totalCommentsModerated || 0), 0),
