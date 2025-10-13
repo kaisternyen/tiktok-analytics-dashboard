@@ -130,8 +130,7 @@ const fromEasternTime = (estDate: Date): Date => {
 
 export default function TikTokTracker() {
     const [videoUrl, setVideoUrl] = useState("");
-    const [originalVideos, setOriginalVideos] = useState<TrackedVideo[]>([]); // ORIGINAL unsorted data for calculations
-    const [tracked, setTracked] = useState<TrackedVideo[]>([]); // SORTED data for display
+    const [tracked, setTracked] = useState<TrackedVideo[]>([]);
     const [selectedVideo, setSelectedVideo] = useState<TrackedVideo | null>(null);
     const [activeTab, setActiveTab] = useState("overview");
     const [isLoading, setIsLoading] = useState(false);
@@ -544,8 +543,8 @@ export default function TikTokTracker() {
         setSorts(newSorts);
         
         // Sort locally - no API call needed!
-        const sortedVideos = sortVideosLocally(originalVideos, dbField, newSortOrder, field); // Use originalVideos as source
-        setTracked(sortedVideos); // Only update display data
+        const sortedVideos = sortVideosLocally(tracked, dbField, newSortOrder, field);
+        setTracked(sortedVideos);
     };
 
     // Get current sort state for a field
@@ -710,7 +709,6 @@ export default function TikTokTracker() {
                 });
 
                 setTracked(transformedVideos);
-                setOriginalVideos(transformedVideos); // Store original unsorted data for calculations
                 
                 // Apply current sort order to the new data if any sort is active
                 if (sorts.length > 0) {
@@ -720,7 +718,7 @@ export default function TikTokTracker() {
                         fieldMapping[key as keyof typeof fieldMapping] === currentSort.field
                     );
                     const sortedVideos = sortVideosLocally(transformedVideos, currentSort.field, currentSort.order, displayField);
-                    setTracked(sortedVideos); // Only update display data, keep originalVideos unchanged
+                    setTracked(sortedVideos);
                 } else {
                     setTracked(transformedVideos);
                 }
@@ -1276,8 +1274,9 @@ export default function TikTokTracker() {
     };
 
     // UNIFIED CALCULATION: Single source of truth for all metrics and chart data
-    const getUnifiedMetrics = () => {
-        if (originalVideos.length === 0) return { 
+    // This is memoized to only recalculate when data or timeframe changes, NOT when sorting changes
+    const getUnifiedMetrics = useMemo(() => {
+        if (tracked.length === 0) return { 
             videos: 0, 
             totalViews: 0, 
             totalLikes: 0, 
@@ -1295,14 +1294,15 @@ export default function TikTokTracker() {
         }
 
         // Filter videos based on timeframe and cadence (IDENTICAL logic for both chart and totals)
-        // USE ORIGINAL VIDEOS - not sorted display data!
+        // Create a fresh copy to avoid mutation issues
+        const allVideos = [...tracked];
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         
         // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
         const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
         
-        const eligibleVideos = originalVideos.filter(video => {
+        const eligibleVideos = allVideos.filter(video => {
             // For daily view (D preset), ONLY include hourly cadence videos
             if (isDailyView) {
                 return video.platform && video.scrapingCadence === 'hourly';
@@ -1403,11 +1403,11 @@ export default function TikTokTracker() {
             chartData: aggregatedData,
             filteredVideoCount: videosWithSufficientData.length
         };
-    };
+    }, [tracked, timeframe, selectedTimePeriod, timeGranularity]); // Only recalculate when these change, NOT when sorting changes
 
     // Get videos with sufficient data points for totals calculation (same filtering as chart)
     const getFilteredVideosForTotals = (): TrackedVideo[] => {
-        if (originalVideos.length === 0) return []; // Use originalVideos instead of tracked
+        if (tracked.length === 0) return [];
 
         let timeframeStart: Date | null = null;
         let timeframeEnd: Date | null = null;
@@ -1417,14 +1417,13 @@ export default function TikTokTracker() {
         }
 
         // Filter videos based on timeframe and cadence (same logic as getUnifiedMetrics)
-        // USE ORIGINAL VIDEOS - not sorted display data!
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         
         // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
         const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
         
-        const eligibleVideos = originalVideos.filter(video => {
+        const eligibleVideos = tracked.filter(video => {
             // For daily view (D preset), ONLY include hourly cadence videos
             if (isDailyView) {
                 return video.platform && video.scrapingCadence === 'hourly';
@@ -1468,7 +1467,7 @@ export default function TikTokTracker() {
     };
 
     // Use the unified calculation for both chart data and totals
-    const unifiedMetrics = getUnifiedMetrics();
+    const unifiedMetrics = getUnifiedMetrics;
     const { chartData } = unifiedMetrics;
     const yAxisDomain = getYAxisDomain(chartData);
 
@@ -2179,8 +2178,8 @@ export default function TikTokTracker() {
                                                     const displayField = Object.keys(fieldMapping).find(key => 
                                                         fieldMapping[key as keyof typeof fieldMapping] === sort.field
                                                     );
-                                                    const sortedVideos = sortVideosLocally(originalVideos, sort.field, sort.order, displayField); // Use originalVideos as source
-                                                    setTracked(sortedVideos); // Only update display data
+                                                    const sortedVideos = sortVideosLocally(tracked, sort.field, sort.order, displayField);
+                                                    setTracked(sortedVideos);
                                                 }
                                             }
                                             
