@@ -224,13 +224,22 @@ export default function TikTokTracker() {
                 // Keep hourly granularity to show the 2 data points
                 setTimeGranularity('hourly');
             } else {
-                // Original behavior: Set date range to the clicked day (24 hours) and switch to hourly
-                const startOfDay = new Date(clickedDate);
-                startOfDay.setHours(0, 0, 0, 0);
-                const endOfDay = new Date(clickedDate);
-                endOfDay.setHours(23, 59, 59, 999);
+                // FIXED: Use Eastern timezone for consistent day boundaries
+                // Convert UTC timestamp to Eastern time for proper day calculation
+                const easternOffset = clickedDate.getTimezoneOffset() > 240 ? -5 : -4; // EST/EDT detection
+                const clickedDateEST = new Date(clickedDate.getTime() + (easternOffset * 60 * 60 * 1000));
                 
-                setCustomDateRange([startOfDay.toISOString(), endOfDay.toISOString()]);
+                // Get start and end of day in Eastern time (using UTC methods on the shifted date)
+                const startOfDayEST = new Date(clickedDateEST);
+                startOfDayEST.setUTCHours(0, 0, 0, 0);
+                const endOfDayEST = new Date(clickedDateEST);
+                endOfDayEST.setUTCHours(23, 59, 59, 999);
+                
+                // Convert back to UTC for API calls
+                const startOfDayUTC = new Date(startOfDayEST.getTime() - (easternOffset * 60 * 60 * 1000));
+                const endOfDayUTC = new Date(endOfDayEST.getTime() - (easternOffset * 60 * 60 * 1000));
+                
+                setCustomDateRange([startOfDayUTC.toISOString(), endOfDayUTC.toISOString()]);
                 setSelectedTimePeriod('D'); // Update period display
                 setTimeGranularity('hourly'); // Switch to hourly view for day detail
             }
@@ -1189,20 +1198,27 @@ export default function TikTokTracker() {
             
             switch (granularity) {
                 case 'hourly':
-                    // Group by hour (YYYY-MM-DD HH:00)
-                    key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`;
+                    // Group by hour (YYYY-MM-DD HH:00) - use Eastern time
+                    // Convert UTC to Eastern (EST/EDT) - EST is UTC-5, EDT is UTC-4
+                    const easternOffsetHour = date.getTimezoneOffset() > 240 ? -5 : -4; // Rough DST detection
+                    const hourEST = new Date(date.getTime() + (easternOffsetHour * 60 * 60 * 1000));
+                    key = `${hourEST.getUTCFullYear()}-${String(hourEST.getUTCMonth() + 1).padStart(2, '0')}-${String(hourEST.getUTCDate()).padStart(2, '0')} ${String(hourEST.getUTCHours()).padStart(2, '0')}:00`;
                     break;
                 case 'daily':
-                    // Group by day (YYYY-MM-DD)
-                    key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                    // Group by day (YYYY-MM-DD) - use Eastern time for consistent day boundaries
+                    const easternOffsetDay = date.getTimezoneOffset() > 240 ? -5 : -4; // Rough DST detection
+                    const dayEST = new Date(date.getTime() + (easternOffsetDay * 60 * 60 * 1000));
+                    key = `${dayEST.getUTCFullYear()}-${String(dayEST.getUTCMonth() + 1).padStart(2, '0')}-${String(dayEST.getUTCDate()).padStart(2, '0')}`;
                     break;
                 case 'weekly':
-                    // Group by week (start of week)
-                    const weekStart = new Date(date);
-                    const day = weekStart.getDay();
-                    const diff = weekStart.getDate() - day;
-                    weekStart.setDate(diff);
-                    weekStart.setHours(0, 0, 0, 0);
+                    // Group by week (start of week) - use Eastern time
+                    const easternOffsetWeek = date.getTimezoneOffset() > 240 ? -5 : -4; // Rough DST detection
+                    const weekEST = new Date(date.getTime() + (easternOffsetWeek * 60 * 60 * 1000));
+                    const weekStart = new Date(weekEST);
+                    const day = weekStart.getUTCDay();
+                    const diff = weekStart.getUTCDate() - day;
+                    weekStart.setUTCDate(diff);
+                    weekStart.setUTCHours(0, 0, 0, 0);
                     key = weekStart.toISOString().split('T')[0];
                     break;
                 default:
