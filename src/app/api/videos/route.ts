@@ -35,6 +35,7 @@ type VideoWithIncludes = {
     gotTopComment: boolean;
     totalCommentsModerated: number;
     threadsPlantedNote: string | null;
+    hasBeenNotifiedViral: boolean;
     metricsHistory: Array<{
         id: string;
         videoId: string;
