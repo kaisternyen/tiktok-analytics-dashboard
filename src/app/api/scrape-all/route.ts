@@ -717,17 +717,31 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         try {
                             const viralThreshold = checkViralThresholds(hourlyViewsChange);
                             if (viralThreshold) {
-                                await notifyViralVideo(
-                                    video.username,
-                                    video.platform,
-                                    video.url,
-                                    mediaData.description || 'No description',
-                                    views,
-                                    mediaData.likes,
-                                    hourlyViewsChange,
-                                    viralThreshold
-                                );
-                                console.log(`🔥 Viral threshold notification sent for @${video.username} - gained ${hourlyViewsChange} views in last hour (threshold: ${viralThreshold})`);
+                                // Only send viral notification if this video has never been notified for viral status
+                                if (!(video as any).hasBeenNotifiedViral) {
+                                    await notifyViralVideo(
+                                        video.username,
+                                        video.platform,
+                                        video.url,
+                                        mediaData.description || 'No description',
+                                        views,
+                                        mediaData.likes,
+                                        hourlyViewsChange,
+                                        viralThreshold
+                                    );
+                                    
+                                    // Mark this video as having been notified for viral status (one-time only)
+                                    await prisma.video.update({
+                                        where: { id: video.id },
+                                        data: { 
+                                            hasBeenNotifiedViral: true
+                                        } as any
+                                    });
+                                    
+                                    console.log(`🔥 Viral threshold notification sent for @${video.username} - gained ${hourlyViewsChange} views in last hour (threshold: ${viralThreshold})`);
+                                } else {
+                                    console.log(`⚠️ Viral notification skipped for @${video.username} - already notified for viral status`);
+                                }
                             }
                         } catch (viralError) {
                             console.error(`❌ Viral notification error for @${video.username}:`, viralError);

@@ -42,6 +42,7 @@ model Video {
   gotTopComment     Boolean          @default(false)  // Star checkbox for top comment achievement
   totalCommentsModerated Int         @default(0)      // Total comments moderated across all sessions
   threadsPlantedNote String?       // Free-form note about threads planted
+  hasBeenNotifiedViral Boolean     @default(false) // Whether this video has been notified for viral status
   
   metricsHistory    MetricsHistory[]
   moderationHistory ModerationHistory[]
