@@ -359,28 +359,18 @@ export async function GET(req: Request) {
         let transformedVideos;
         try {
             console.log(`🔄 Starting transformation of ${filteredVideos.length} videos`);
+            console.log(`📊 Timeframe filter active: ${!!timeframe}`, timeframe ? `from ${timeframe[0]} to ${timeframe[1]}` : '');
             transformedVideos = filteredVideos.map((video) => {
                 // Parse JSON fields
                 const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
                 const music = video.music ? JSON.parse(video.music) : null;
 
-                // Calculate growth from last 2 data points (in filtered history)
-                const history = video.metricsHistory;
+                // FIXED: Ensure consistent history ordering regardless of video sorting
+                const history = [...video.metricsHistory].sort((a, b) => 
+                    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+                ); // Always newest first
+                
                 let growth = { views: 0, likes: 0, comments: 0, shares: 0 };
-
-                if (history.length >= 2) {
-                    const latest = history[0];
-                    const previous = history[1];
-
-                    growth = {
-                        views: previous.views > 0 ? ((latest.views - previous.views) / previous.views) * 100 : 0,
-                        likes: previous.likes > 0 ? ((latest.likes - previous.likes) / previous.likes) * 100 : 0,
-                        comments: previous.comments > 0 ? ((latest.comments - previous.comments) / previous.comments) * 100 : 0,
-                        shares: previous.shares > 0 ? ((latest.shares - previous.shares) / previous.shares) * 100 : 0,
-                    };
-                }
-
-                // Calculate period-specific deltas and total views
                 let periodViews = 0;
                 let periodLikes = 0;
                 let periodComments = 0;
@@ -393,37 +383,64 @@ export async function GET(req: Request) {
                 const totalShares = video.currentShares;
 
                 if (timeframe) {
+                    // FIXED: Timeframe-specific delta calculation
                     if (history.length >= 2) {
-                        // Sort history by timestamp (oldest first)
+                        // For timeframe, we need oldest and newest in the timeframe
                         const sortedHistory = [...history].sort((a, b) => 
                             new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-                        );
-                        const start = sortedHistory[0];
-                        const end = sortedHistory[sortedHistory.length - 1];
-                        // Calculate deltas for the specified timeframe
-                        periodViews = end.views - start.views;
-                        periodLikes = end.likes - start.likes;
-                        periodComments = end.comments - start.comments;
-                        periodShares = end.shares - start.shares;
+                        ); // Oldest first for timeframe calculation
                         
-                // Removed debug logging for performance
+                        const start = sortedHistory[0]; // Oldest in timeframe
+                        const end = sortedHistory[sortedHistory.length - 1]; // Newest in timeframe
+                        
+                        // Calculate deltas for the specified timeframe
+                        periodViews = Math.max(0, end.views - start.views);
+                        periodLikes = Math.max(0, end.likes - start.likes);
+                        periodComments = Math.max(0, end.comments - start.comments);
+                        periodShares = Math.max(0, end.shares - start.shares);
+                        
+                        // Growth calculation for timeframe (percentage change)
+                        growth = {
+                            views: start.views > 0 ? ((end.views - start.views) / start.views) * 100 : 0,
+                            likes: start.likes > 0 ? ((end.likes - start.likes) / start.likes) * 100 : 0,
+                            comments: start.comments > 0 ? ((end.comments - start.comments) / start.comments) * 100 : 0,
+                            shares: start.shares > 0 ? ((end.shares - start.shares) / start.shares) * 100 : 0,
+                        };
                     } else {
-                        // Not enough data points in timeframe, use 0 for period deltas
+                        // Not enough data points in timeframe
                         periodViews = 0;
                         periodLikes = 0;
                         periodComments = 0;
                         periodShares = 0;
-                        
-                        // Removed debug logging for performance
+                        growth = { views: 0, likes: 0, comments: 0, shares: 0 };
                     }
                 } else {
-                    // No timeframe, period values same as totals for backward compatibility
-                    periodViews = totalViews;
-                    periodLikes = totalLikes;
-                    periodComments = totalComments;
-                    periodShares = totalShares;
-                    
-                // Removed debug logging for performance
+                    // FIXED: No timeframe - calculate deltas from last 2 data points
+                    if (history.length >= 2) {
+                        const latest = history[0]; // Newest (history is sorted newest first)
+                        const previous = history[1]; // Previous
+                        
+                        // Period deltas (absolute change)
+                        periodViews = Math.max(0, latest.views - previous.views);
+                        periodLikes = Math.max(0, latest.likes - previous.likes);
+                        periodComments = Math.max(0, latest.comments - previous.comments);
+                        periodShares = Math.max(0, latest.shares - previous.shares);
+                        
+                        // Growth calculation (percentage change)
+                        growth = {
+                            views: previous.views > 0 ? ((latest.views - previous.views) / previous.views) * 100 : 0,
+                            likes: previous.likes > 0 ? ((latest.likes - previous.likes) / previous.likes) * 100 : 0,
+                            comments: previous.comments > 0 ? ((latest.comments - previous.comments) / previous.comments) * 100 : 0,
+                            shares: previous.shares > 0 ? ((latest.shares - previous.shares) / previous.shares) * 100 : 0,
+                        };
+                    } else {
+                        // Not enough historical data
+                        periodViews = 0;
+                        periodLikes = 0;
+                        periodComments = 0;
+                        periodShares = 0;
+                        growth = { views: 0, likes: 0, comments: 0, shares: 0 };
+                    }
                 }
 
                 // Calculate new comments since last moderation
