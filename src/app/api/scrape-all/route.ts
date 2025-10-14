@@ -903,6 +903,64 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
     return { results, successful, failed, skipped, cadenceChanges };
 }
 
+// Clean up videos from accounts that are no longer being tracked
+async function cleanupOrphanedVideos(): Promise<{ deactivated: number; accounts: string[] }> {
+    try {
+        // Get all currently active tracked accounts
+        const trackedAccounts = await prisma.trackedAccount.findMany({
+            where: { isActive: true },
+            select: { username: true, platform: true }
+        });
+        
+        console.log(`📋 Found ${trackedAccounts.length} active tracked accounts`);
+        
+        // Get all active videos
+        const activeVideos = await prisma.video.findMany({
+            where: { isActive: true },
+            select: { id: true, username: true, platform: true }
+        });
+        
+        console.log(`📊 Found ${activeVideos.length} active videos`);
+        
+        // Find orphaned videos (videos from accounts no longer tracked)
+        const orphanedVideos = activeVideos.filter(video => {
+            return !trackedAccounts.some(acc => 
+                acc.username === video.username && acc.platform === video.platform
+            );
+        });
+        
+        if (orphanedVideos.length === 0) {
+            console.log(`✅ No orphaned videos found`);
+            return { deactivated: 0, accounts: [] };
+        }
+        
+        console.log(`🚨 Found ${orphanedVideos.length} orphaned videos from untracked accounts:`);
+        const orphanedAccounts = [...new Set(orphanedVideos.map(v => `@${v.username} (${v.platform})`))];
+        orphanedAccounts.forEach(account => console.log(`   - ${account}`));
+        
+        // Deactivate orphaned videos
+        const orphanedVideoIds = orphanedVideos.map(v => v.id);
+        const updateResult = await prisma.video.updateMany({
+            where: { id: { in: orphanedVideoIds } },
+            data: { 
+                isActive: false,
+                trackingMode: 'orphaned' // Mark as orphaned for future reference
+            }
+        });
+        
+        console.log(`🧹 Deactivated ${updateResult.count} orphaned videos`);
+        
+        return { 
+            deactivated: updateResult.count, 
+            accounts: orphanedAccounts 
+        };
+        
+    } catch (error) {
+        console.error(`❌ Error cleaning up orphaned videos:`, error);
+        return { deactivated: 0, accounts: [] };
+    }
+}
+
 export async function GET() {
     const startTime = Date.now();
     const cronStartTime = new Date();
@@ -984,8 +1042,12 @@ export async function GET() {
     }
 
     try {
+        // Step 2a: Clean up orphaned videos (videos from accounts no longer tracked)
+        console.log(`🧹 Step 2a: Cleaning up orphaned videos...`);
+        const cleanupResult = await cleanupOrphanedVideos();
+        
         // Fetch all active videos (with backward compatibility for missing cadence fields)
-        console.log(`📊 Step 2: Fetching active videos from database...`);
+        console.log(`📊 Step 2b: Fetching active videos from database...`);
         
         let videos: VideoRecord[] = [];
         
@@ -1260,9 +1322,13 @@ export async function GET() {
         
         return NextResponse.json({
             success: true,
-            message: `Processed ${result.successful}/${videos.length} videos successfully with ${result.cadenceChanges} cadence changes`,
+            message: `Processed ${result.successful}/${videos.length} videos successfully with ${result.cadenceChanges} cadence changes${cleanupResult.deactivated > 0 ? ` (cleaned up ${cleanupResult.deactivated} orphaned videos)` : ''}`,
             status,
             results: result.results.slice(0, 20), // Show more results
+            cleanup: {
+                orphanedVideosDeactivated: cleanupResult.deactivated,
+                orphanedAccounts: cleanupResult.accounts
+            },
             debugInfo: {
                 totalVideos: videos.length,
                 successful: result.successful,
