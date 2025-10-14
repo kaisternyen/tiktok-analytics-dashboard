@@ -130,7 +130,8 @@ const fromEasternTime = (estDate: Date): Date => {
 
 export default function TikTokTracker() {
     const [videoUrl, setVideoUrl] = useState("");
-    const [tracked, setTracked] = useState<TrackedVideo[]>([]);
+    const [originalVideos, setOriginalVideos] = useState<TrackedVideo[]>([]); // Raw data from API - NEVER sorted
+    const [displayedVideos, setDisplayedVideos] = useState<TrackedVideo[]>([]); // Sorted/filtered for display
     const [selectedVideo, setSelectedVideo] = useState<TrackedVideo | null>(null);
     const [activeTab, setActiveTab] = useState("overview");
     const [isLoading, setIsLoading] = useState(false);
@@ -333,12 +334,14 @@ export default function TikTokTracker() {
             
             const data = await response.json();
             if (data.success) {
-                // Update local state
-                setTracked(prev => prev.map(video => 
+                // Update both states
+                const updateVideo = (prev: TrackedVideo[]) => prev.map(video => 
                     video.id === videoId 
                         ? { ...video, tags: [...video.tags, data.data] }
                         : video
-                ));
+                );
+                setOriginalVideos(updateVideo);
+                setDisplayedVideos(updateVideo);
                 setSuccess(`Tag added to video`);
             } else {
                 setError(data.error || 'Failed to add tag to video');
@@ -357,12 +360,14 @@ export default function TikTokTracker() {
             
             const data = await response.json();
             if (data.success) {
-                // Update local state
-                setTracked(prev => prev.map(video => 
+                // Update both states
+                const updateVideo = (prev: TrackedVideo[]) => prev.map(video => 
                     video.id === videoId 
                         ? { ...video, tags: video.tags.filter(tag => tag.id !== tagId) }
                         : video
-                ));
+                );
+                setOriginalVideos(updateVideo);
+                setDisplayedVideos(updateVideo);
                 setSuccess(`Tag removed from video`);
             } else {
                 setError(data.error || 'Failed to remove tag from video');
@@ -387,10 +392,12 @@ export default function TikTokTracker() {
             if (data.success) {
                 // Update local state - remove tag from availableTags and from all videos
                 setAvailableTags(prev => prev.filter(tag => tag.id !== tagId));
-                setTracked(prev => prev.map(video => ({
+                const updateVideos = (prev: TrackedVideo[]) => prev.map(video => ({
                     ...video,
                     tags: video.tags.filter(tag => tag.id !== tagId)
-                })));
+                }));
+                setOriginalVideos(updateVideos);
+                setDisplayedVideos(updateVideos);
                 setSuccess('Tag deleted successfully');
                 setTimeout(() => setSuccess(''), 3000);
             } else {
@@ -543,8 +550,8 @@ export default function TikTokTracker() {
         setSorts(newSorts);
         
         // Sort locally - no API call needed!
-        const sortedVideos = sortVideosLocally(tracked, dbField, newSortOrder, field);
-        setTracked(sortedVideos);
+        const sortedVideos = sortVideosLocally(displayedVideos, dbField, newSortOrder, field);
+        setDisplayedVideos(sortedVideos);
     };
 
     // Get current sort state for a field
@@ -708,7 +715,8 @@ export default function TikTokTracker() {
                     } : null
                 });
 
-                setTracked(transformedVideos);
+                // Set original data (for charts) and displayed data (for list)
+                setOriginalVideos(transformedVideos); // Raw data for charts - NEVER sorted
                 
                 // Apply current sort order to the new data if any sort is active
                 if (sorts.length > 0) {
@@ -718,9 +726,9 @@ export default function TikTokTracker() {
                         fieldMapping[key as keyof typeof fieldMapping] === currentSort.field
                     );
                     const sortedVideos = sortVideosLocally(transformedVideos, currentSort.field, currentSort.order, displayField);
-                    setTracked(sortedVideos);
+                    setDisplayedVideos(sortedVideos);
                 } else {
-                    setTracked(transformedVideos);
+                    setDisplayedVideos(transformedVideos);
                 }
                 
                 console.log(`✅ Loaded ${transformedVideos.length} videos from database`);
@@ -911,7 +919,7 @@ export default function TikTokTracker() {
         event.stopPropagation();
 
         // Find the video to get username for confirmation
-        const videoToDelete = tracked.find(v => v.id === videoId);
+        const videoToDelete = displayedVideos.find(v => v.id === videoId);
         if (!videoToDelete) return;
 
         // Show confirmation
@@ -935,8 +943,10 @@ export default function TikTokTracker() {
 
             console.log(`✅ Successfully deleted: @${videoToDelete.username}`);
 
-            // Remove from local state immediately
-            setTracked(prev => prev.filter(video => video.id !== videoId));
+            // Remove from both states immediately
+            const filterVideos = (prev: TrackedVideo[]) => prev.filter(video => video.id !== videoId);
+            setOriginalVideos(filterVideos);
+            setDisplayedVideos(filterVideos);
 
             // Clear selected video if it was the deleted one
             if (selectedVideo?.id === videoId) {
@@ -981,7 +991,7 @@ export default function TikTokTracker() {
             console.log(`📝 Video ${videoId} marked as moderated`);
 
             // Update local state
-            setTracked(prev => prev.map(video => 
+            setDisplayedVideos(prev => prev.map(video => 
                 video.id === videoId
                     ? {
                         ...video,
@@ -1024,7 +1034,7 @@ export default function TikTokTracker() {
             console.log(`📝 Video ${videoId} top comment status: ${checked}`);
 
             // Update local state
-            setTracked(prev => prev.map(video => 
+            setDisplayedVideos(prev => prev.map(video => 
                 video.id === videoId
                     ? {
                         ...video,
@@ -1063,7 +1073,7 @@ export default function TikTokTracker() {
             console.log(`📝 Video ${videoId} phase updated to: ${newPhase}`);
 
             // Update local state
-            setTracked(prev => prev.map(video => 
+            setDisplayedVideos(prev => prev.map(video => 
                 video.id === videoId
                     ? {
                         ...video,
@@ -1273,10 +1283,10 @@ export default function TikTokTracker() {
         });
     };
 
-    // UNIFIED CALCULATION: Single source of truth for all metrics and chart data
+    // CHART CALCULATION: Uses original API data - NEVER affected by sorting
     // This is memoized to only recalculate when data or timeframe changes, NOT when sorting changes
-    const getUnifiedMetrics = useMemo(() => {
-        if (tracked.length === 0) return { 
+    const getChartMetrics = useMemo(() => {
+        if (originalVideos.length === 0) return { 
             videos: 0, 
             totalViews: 0, 
             totalLikes: 0, 
@@ -1294,8 +1304,8 @@ export default function TikTokTracker() {
         }
 
         // Filter videos based on timeframe and cadence (IDENTICAL logic for both chart and totals)
-        // Create a fresh copy to avoid mutation issues
-        const allVideos = [...tracked];
+        // Use original videos - never affected by sorting
+        const allVideos = [...originalVideos];
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         
@@ -1403,11 +1413,11 @@ export default function TikTokTracker() {
             chartData: aggregatedData,
             filteredVideoCount: videosWithSufficientData.length
         };
-    }, [tracked, timeframe, selectedTimePeriod, timeGranularity]); // Only recalculate when these change, NOT when sorting changes
+    }, [originalVideos, timeframe, selectedTimePeriod, timeGranularity]); // Only recalculate when these change, NOT when sorting changes
 
     // Get videos with sufficient data points for totals calculation (same filtering as chart)
     const getFilteredVideosForTotals = (): TrackedVideo[] => {
-        if (tracked.length === 0) return [];
+        if (originalVideos.length === 0) return [];
 
         let timeframeStart: Date | null = null;
         let timeframeEnd: Date | null = null;
@@ -1423,7 +1433,7 @@ export default function TikTokTracker() {
         // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
         const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
         
-        const eligibleVideos = tracked.filter(video => {
+        const eligibleVideos = originalVideos.filter(video => {
             // For daily view (D preset), ONLY include hourly cadence videos
             if (isDailyView) {
                 return video.platform && video.scrapingCadence === 'hourly';
@@ -1466,9 +1476,9 @@ export default function TikTokTracker() {
         return videosWithSufficientData;
     };
 
-    // Use the unified calculation for both chart data and totals
-    const unifiedMetrics = getUnifiedMetrics;
-    const { chartData } = unifiedMetrics;
+    // Use the chart calculation for chart data and totals
+    const chartMetrics = getChartMetrics;
+    const { chartData } = chartMetrics;
     const yAxisDomain = getYAxisDomain(chartData);
 
     // Enhanced chart data processing for individual video metrics
@@ -1543,12 +1553,12 @@ export default function TikTokTracker() {
     const filteredVideosForTotals = getFilteredVideosForTotals();
     
     const totalMetrics = {
-        videos: unifiedMetrics.videos,
-        // Use unified calculation for consistent totals
-        totalViews: unifiedMetrics.totalViews,
-        totalLikes: unifiedMetrics.totalLikes,
-        totalComments: unifiedMetrics.totalComments,
-        totalShares: unifiedMetrics.totalShares,
+        videos: chartMetrics.videos,
+        // Use chart calculation for consistent totals
+        totalViews: chartMetrics.totalViews,
+        totalLikes: chartMetrics.totalLikes,
+        totalComments: chartMetrics.totalComments,
+        totalShares: chartMetrics.totalShares,
         avgGrowth: filteredVideosForTotals.length > 0 ? filteredVideosForTotals.reduce((sum, v) => sum + v.growth.views, 0) / filteredVideosForTotals.length : 0,
         totalThreads: filteredVideosForTotals.reduce((sum, v) => sum + (v.threadsPlanted || 0), 0),
         totalCommentsModerated: filteredVideosForTotals.reduce((sum, v) => sum + (v.totalCommentsModerated || 0), 0),
@@ -1585,7 +1595,7 @@ export default function TikTokTracker() {
                                 className="flex items-center gap-2"
                                 onClick={async () => {
                                     // Test the first video with 0 stats
-                                    const firstZeroStatsVideo = tracked.find(v => v.views === 0 && v.likes === 0 && v.comments === 0);
+                                    const firstZeroStatsVideo = originalVideos.find(v => v.views === 0 && v.likes === 0 && v.comments === 0);
                                     if (!firstZeroStatsVideo) {
                                         console.log('❌ No videos with 0 stats found to test');
                                         return;
@@ -1639,7 +1649,7 @@ export default function TikTokTracker() {
                     {/* Status Indicators Row */}
                     <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100">
                         <span className="bg-green-100 text-green-800 text-xs font-medium px-3 py-1.5 rounded-full">
-                            ● {tracked.length} videos tracked
+                            ● {displayedVideos.length} videos tracked
                         </span>
                         {cronStatus && (
                             <div className="flex items-center gap-3">
@@ -1724,7 +1734,7 @@ export default function TikTokTracker() {
                                     >
                                         {tag.name}
                                         <span className="text-xs text-gray-500 ml-1">
-                                            ({tracked.filter(video => video.tags.some(vTag => vTag.id === tag.id)).length})
+                                            ({displayedVideos.filter(video => video.tags.some(vTag => vTag.id === tag.id)).length})
                                         </span>
                                         <button
                                             onClick={() => deleteTag(tag.id)}
@@ -1769,7 +1779,7 @@ export default function TikTokTracker() {
 
                     {/* Overview Tab */}
                     <TabsContent value="overview" className="space-y-6">
-                        {tracked.length === 0 ? (
+                        {displayedVideos.length === 0 ? (
                             <Card>
                                 <CardContent className="p-12 text-center">
                                     <div className="text-gray-500 mb-4">
@@ -1844,7 +1854,7 @@ export default function TikTokTracker() {
                                     <CardContent className="p-6">
                                         <div className="flex items-center justify-between mb-4">
                                             <h3 className="text-lg font-semibold">
-                                                Performance Overview - Aggregate Stats ({tracked.length} videos)
+                                                Performance Overview - Aggregate Stats ({originalVideos.length} videos)
                                             </h3>
                                             <div className="flex items-center gap-2">
                                                 {/* Time Granularity Selector */}
@@ -2144,7 +2154,7 @@ export default function TikTokTracker() {
                                                         >
                                                             {tag.name}
                                                             <span className="text-xs text-gray-500 ml-1">
-                                                                ({tracked.filter(video => video.tags.some(vTag => vTag.id === tag.id)).length})
+                                                                ({displayedVideos.filter(video => video.tags.some(vTag => vTag.id === tag.id)).length})
                                                             </span>
                                                         </button>
                                                     );
@@ -2178,8 +2188,8 @@ export default function TikTokTracker() {
                                                     const displayField = Object.keys(fieldMapping).find(key => 
                                                         fieldMapping[key as keyof typeof fieldMapping] === sort.field
                                                     );
-                                                    const sortedVideos = sortVideosLocally(tracked, sort.field, sort.order, displayField);
-                                                    setTracked(sortedVideos);
+                                                    const sortedVideos = sortVideosLocally(displayedVideos, sort.field, sort.order, displayField);
+                                                    setDisplayedVideos(sortedVideos);
                                                 }
                                             }
                                             
@@ -2191,7 +2201,7 @@ export default function TikTokTracker() {
                                     />
                                     <Card>
                                         <CardContent className="p-0">
-                                            {tracked.length === 0 ? (
+                                            {displayedVideos.length === 0 ? (
                                                 <div className="p-12 text-center text-gray-500">
                                                     <Play className="w-16 h-16 mx-auto mb-4 opacity-50" />
                                                     <h3 className="text-lg font-medium mb-2">No videos to display</h3>
@@ -2313,7 +2323,7 @@ export default function TikTokTracker() {
                                                             </tr>
                                                         </thead>
                                                         <tbody>
-                                                            {tracked.map((video) => (
+                                                            {displayedVideos.map((video) => (
                                                                 <tr
                                                                     key={video.id}
                                                                     className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
@@ -2488,7 +2498,7 @@ export default function TikTokTracker() {
                                                                                 type="text"
                                                                                 value={video.threadsPlantedNote || ''}
                                                                                 onChange={(e) => {
-                                                                                    setTracked(prev => prev.map(v => 
+                                                                                    setDisplayedVideos(prev => prev.map(v => 
                                                                                         v.id === video.id
                                                                                             ? { ...v, threadsPlantedNote: e.target.value }
                                                                                             : v
