@@ -1393,25 +1393,13 @@ export default function TikTokTracker() {
         const aggregateData: ChartDataPoint[] = [];
         const lastKnownValues: { [videoId: string]: VideoHistory } = {};
 
-        // Initialize with first known values for each video
-        videosWithSufficientData.forEach(video => {
-            if (video.history?.length) {
-                const firstPoint = video.history
-                    .filter(h => sortedTimestamps.includes(h.time))
-                    .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())[0];
-                
-                if (firstPoint) {
-                    lastKnownValues[video.id] = firstPoint;
-                }
-            }
-        });
-
         // Process each timestamp and build aggregate
         sortedTimestamps.forEach(timestamp => {
             // Update last known values for videos that have data at this timestamp
             videosWithSufficientData.forEach(video => {
                 const pointAtTime = video.history?.find(h => h.time === timestamp);
                 if (pointAtTime) {
+                    // Add or update this video's last known value
                     lastKnownValues[video.id] = pointAtTime;
                 }
             });
