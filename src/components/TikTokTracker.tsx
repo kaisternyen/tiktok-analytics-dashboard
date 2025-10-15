@@ -1181,13 +1181,13 @@ export default function TikTokTracker() {
                                 Change: {formatNumber(data.delta)} views
                             </p>
                             <p className="text-gray-600 text-sm">
-                                Period total: {formatNumber(data.views)} views
+                                Total at this time: {formatNumber(data.views)} views
                             </p>
                         </>
                     ) : (
                         <>
                             <p className="text-blue-600">
-                                Period Total: {formatNumber(data.views)}
+                                Total Views: {formatNumber(data.views)}
                             </p>
                             {data.delta !== 0 && (
                                 <p className="text-gray-600 text-sm">
@@ -1243,40 +1243,20 @@ export default function TikTokTracker() {
             grouped.get(key)!.push(point);
         });
 
-        // Aggregate the grouped data points
+        // Aggregate the grouped data points - take the latest point in each bucket
         const aggregated: ChartDataPoint[] = [];
         
         for (const [timeKey, points] of grouped.entries()) {
-            // Group by video ID first to avoid double-counting when a video has multiple points in the same bucket
-            const videoMap = new Map<string, ChartDataPoint>();
-            
-            points.forEach(point => {
-                const videoId = point.videoId;
-                if (videoId) {
-                    // If we already have a point for this video in this time bucket, keep the latest one
-                    const existing = videoMap.get(videoId);
-                    if (!existing || new Date(point.time).getTime() > new Date(existing.time).getTime()) {
-                        videoMap.set(videoId, point);
-                    }
-                } else {
-                    // Fallback for points without videoId
-                    videoMap.set(Math.random().toString(), point);
-                }
-            });
-            
-            // Now sum across videos (one data point per video)
-            const uniquePoints = Array.from(videoMap.values());
-            const totalViews = uniquePoints.reduce((sum, p) => sum + (p.views || 0), 0);
-            const totalLikes = uniquePoints.reduce((sum, p) => sum + (p.likes || 0), 0);
-            const totalComments = uniquePoints.reduce((sum, p) => sum + (p.comments || 0), 0);
-            const totalShares = uniquePoints.reduce((sum, p) => sum + (p.shares || 0), 0);
+            // Sort points by time and take the latest one (most recent data in this bucket)
+            const sortedPoints = points.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+            const latestPoint = sortedPoints[0];
             
             aggregated.push({
                 time: timeKey,
-                views: totalViews,
-                likes: totalLikes,
-                comments: totalComments,
-                shares: totalShares,
+                views: latestPoint.views,
+                likes: latestPoint.likes || 0,
+                comments: latestPoint.comments || 0,
+                shares: latestPoint.shares || 0,
                 delta: 0,
                 originalTime: new Date(timeKey)
             });
@@ -1386,75 +1366,85 @@ export default function TikTokTracker() {
             video.history && video.history.length >= 2
         );
 
-        // Create chart data points - group by video first to avoid double-counting
-        const allDataPoints: Array<{ time: string; views: number; likes: number; comments: number; shares: number; originalTime: Date; videoId: string }> = [];
-
+        // Collect all unique timestamps from videos with sufficient data
+        const allTimestamps = new Set<string>();
         videosWithSufficientData.forEach(video => {
-            // For each video, calculate baseline (start of timeframe) if timeframe is set
-            let baselineViews = 0;
-            let baselineLikes = 0;
-            let baselineComments = 0;
-            let baselineShares = 0;
-            
-            if (timeframeStart && video.history && video.history.length > 0) {
-                // Find the last data point before or at the start of timeframe
-                const sortedHistory = [...video.history].sort((a, b) => 
-                    new Date(a.time).getTime() - new Date(b.time).getTime()
-                );
-                
-                for (const point of sortedHistory) {
+            if (video.history?.length) {
+                video.history.forEach(point => {
                     const pointTime = new Date(point.time);
-                    if (pointTime <= timeframeStart) {
-                        baselineViews = point.views || 0;
-                        baselineLikes = point.likes || 0;
-                        baselineComments = point.comments || 0;
-                        baselineShares = point.shares || 0;
+                    // Filter by timeframe if specified
+                    if (timeframeStart && timeframeEnd) {
+                        if (pointTime >= timeframeStart && pointTime <= timeframeEnd) {
+                            allTimestamps.add(point.time);
+                        }
                     } else {
-                        break;
+                        allTimestamps.add(point.time);
                     }
-                }
-            }
-            
-            video.history?.forEach(point => {
-                const pointTime = new Date(point.time);
-                
-                // Filter by timeframe if specified
-                if (timeframeStart && timeframeEnd) {
-                    if (pointTime < timeframeStart || pointTime > timeframeEnd) {
-                        return;
-                    }
-                }
-                
-                // Calculate delta from baseline if timeframe is set, otherwise use cumulative
-                const views = timeframeStart ? Math.max(0, (point.views || 0) - baselineViews) : (point.views || 0);
-                const likes = timeframeStart ? Math.max(0, (point.likes || 0) - baselineLikes) : (point.likes || 0);
-                const comments = timeframeStart ? Math.max(0, (point.comments || 0) - baselineComments) : (point.comments || 0);
-                const shares = timeframeStart ? Math.max(0, (point.shares || 0) - baselineShares) : (point.shares || 0);
-                
-                allDataPoints.push({
-                    time: point.time,
-                    views,
-                    likes,
-                    comments,
-                    shares,
-                    originalTime: pointTime,
-                    videoId: video.id
                 });
-            });
+            }
         });
 
-        // Sort by time
-        allDataPoints.sort((a, b) => a.originalTime.getTime() - b.originalTime.getTime());
+        // Convert to sorted array
+        const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => 
+            new Date(a).getTime() - new Date(b).getTime()
+        );
 
-        // Convert to chart format
-        const rawChartData: ChartDataPoint[] = allDataPoints.map(point => ({
+        // Build proper aggregate data by carrying forward last known values
+        const aggregateData: ChartDataPoint[] = [];
+        const lastKnownValues: { [videoId: string]: VideoHistory } = {};
+
+        // Initialize with first known values for each video
+        videosWithSufficientData.forEach(video => {
+            if (video.history?.length) {
+                const firstPoint = video.history
+                    .filter(h => sortedTimestamps.includes(h.time))
+                    .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())[0];
+                
+                if (firstPoint) {
+                    lastKnownValues[video.id] = firstPoint;
+                }
+            }
+        });
+
+        // Process each timestamp and build aggregate
+        sortedTimestamps.forEach(timestamp => {
+            // Update last known values for videos that have data at this timestamp
+            videosWithSufficientData.forEach(video => {
+                const pointAtTime = video.history?.find(h => h.time === timestamp);
+                if (pointAtTime) {
+                    lastKnownValues[video.id] = pointAtTime;
+                }
+            });
+
+            // Calculate aggregate values using last known values (cumulative totals)
+            const aggregateViews = Object.values(lastKnownValues).reduce((sum, point) => sum + point.views, 0);
+            const aggregateLikes = Object.values(lastKnownValues).reduce((sum, point) => sum + point.likes, 0);
+            const aggregateComments = Object.values(lastKnownValues).reduce((sum, point) => sum + point.comments, 0);
+            const aggregateShares = Object.values(lastKnownValues).reduce((sum, point) => sum + point.shares, 0);
+
+            // Only add if we have data for at least one video at this point
+            if (Object.keys(lastKnownValues).length > 0) {
+                aggregateData.push({
+                    time: timestamp,
+                    views: aggregateViews,
+                    likes: aggregateLikes,
+                    comments: aggregateComments,
+                    shares: aggregateShares,
+                    delta: 0,
+                    originalTime: new Date(timestamp)
+                });
+            }
+        });
+
+        // Create raw chart data with absolute values
+        const rawChartData: ChartDataPoint[] = aggregateData.map((point) => ({
             time: point.time,
             views: point.views,
             likes: point.likes,
             comments: point.comments,
             shares: point.shares,
-            delta: 0, // Will be calculated after aggregation
-            originalTime: point.originalTime
+            delta: 0,
+            originalTime: new Date(point.time)
         }));
 
         // Apply time granularity aggregation
