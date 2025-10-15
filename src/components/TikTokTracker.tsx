@@ -96,6 +96,9 @@ interface CronStatus {
 interface ChartDataPoint {
     time: string;
     views: number;
+    likes?: number;
+    comments?: number;
+    shares?: number;
     delta: number;
     originalTime: Date;
 }
@@ -1243,16 +1246,18 @@ export default function TikTokTracker() {
         const aggregated: ChartDataPoint[] = [];
         
         for (const [timeKey, points] of grouped.entries()) {
-            // For each time bucket, take the latest values (most recent data point)
-            const sortedPoints = points.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-            const latestPoint = sortedPoints[0];
+            const totalViews = points.reduce((sum, p) => sum + (p.views || 0), 0);
+            const totalLikes = points.reduce((sum, p) => sum + (p.likes || 0), 0);
+            const totalComments = points.reduce((sum, p) => sum + (p.comments || 0), 0);
+            const totalShares = points.reduce((sum, p) => sum + (p.shares || 0), 0);
             
-            // Use the time key as the display time and the latest point's data
-            // Don't preserve delta - it will be recalculated based on aggregated points
             aggregated.push({
                 time: timeKey,
-                views: latestPoint.views,
-                delta: 0, // Will be recalculated
+                views: totalViews,
+                likes: totalLikes,
+                comments: totalComments,
+                shares: totalShares,
+                delta: 0,
                 originalTime: new Date(timeKey)
             });
         }
