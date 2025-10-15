@@ -101,6 +101,7 @@ interface ChartDataPoint {
     shares?: number;
     delta: number;
     originalTime: Date;
+    videoId?: string;
 }
 
 type TimePeriod = 'D' | 'W' | 'M' | '3M' | '1Y' | 'ALL' | 'TODAY_EST';
@@ -1177,16 +1178,16 @@ export default function TikTokTracker() {
                     {showDelta ? (
                         <>
                             <p className="text-blue-600">
-                                Delta: {formatNumber(data.delta)} views
+                                Change: {formatNumber(data.delta)} views
                             </p>
                             <p className="text-gray-600 text-sm">
-                                Total at this time: {formatNumber(data.views)} views
+                                Period total: {formatNumber(data.views)} views
                             </p>
                         </>
                     ) : (
                         <>
                             <p className="text-blue-600">
-                                Total Views: {formatNumber(data.views)}
+                                Period Total: {formatNumber(data.views)}
                             </p>
                             {data.delta !== 0 && (
                                 <p className="text-gray-600 text-sm">
@@ -1246,10 +1247,29 @@ export default function TikTokTracker() {
         const aggregated: ChartDataPoint[] = [];
         
         for (const [timeKey, points] of grouped.entries()) {
-            const totalViews = points.reduce((sum, p) => sum + (p.views || 0), 0);
-            const totalLikes = points.reduce((sum, p) => sum + (p.likes || 0), 0);
-            const totalComments = points.reduce((sum, p) => sum + (p.comments || 0), 0);
-            const totalShares = points.reduce((sum, p) => sum + (p.shares || 0), 0);
+            // Group by video ID first to avoid double-counting when a video has multiple points in the same bucket
+            const videoMap = new Map<string, ChartDataPoint>();
+            
+            points.forEach(point => {
+                const videoId = point.videoId;
+                if (videoId) {
+                    // If we already have a point for this video in this time bucket, keep the latest one
+                    const existing = videoMap.get(videoId);
+                    if (!existing || new Date(point.time).getTime() > new Date(existing.time).getTime()) {
+                        videoMap.set(videoId, point);
+                    }
+                } else {
+                    // Fallback for points without videoId
+                    videoMap.set(Math.random().toString(), point);
+                }
+            });
+            
+            // Now sum across videos (one data point per video)
+            const uniquePoints = Array.from(videoMap.values());
+            const totalViews = uniquePoints.reduce((sum, p) => sum + (p.views || 0), 0);
+            const totalLikes = uniquePoints.reduce((sum, p) => sum + (p.likes || 0), 0);
+            const totalComments = uniquePoints.reduce((sum, p) => sum + (p.comments || 0), 0);
+            const totalShares = uniquePoints.reduce((sum, p) => sum + (p.shares || 0), 0);
             
             aggregated.push({
                 time: timeKey,
@@ -1366,10 +1386,35 @@ export default function TikTokTracker() {
             video.history && video.history.length >= 2
         );
 
-        // Create chart data points
-        const allDataPoints: Array<{ time: string; views: number; likes: number; comments: number; shares: number; originalTime: Date }> = [];
+        // Create chart data points - group by video first to avoid double-counting
+        const allDataPoints: Array<{ time: string; views: number; likes: number; comments: number; shares: number; originalTime: Date; videoId: string }> = [];
 
         videosWithSufficientData.forEach(video => {
+            // For each video, calculate baseline (start of timeframe) if timeframe is set
+            let baselineViews = 0;
+            let baselineLikes = 0;
+            let baselineComments = 0;
+            let baselineShares = 0;
+            
+            if (timeframeStart && video.history && video.history.length > 0) {
+                // Find the last data point before or at the start of timeframe
+                const sortedHistory = [...video.history].sort((a, b) => 
+                    new Date(a.time).getTime() - new Date(b.time).getTime()
+                );
+                
+                for (const point of sortedHistory) {
+                    const pointTime = new Date(point.time);
+                    if (pointTime <= timeframeStart) {
+                        baselineViews = point.views || 0;
+                        baselineLikes = point.likes || 0;
+                        baselineComments = point.comments || 0;
+                        baselineShares = point.shares || 0;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            
             video.history?.forEach(point => {
                 const pointTime = new Date(point.time);
                 
@@ -1380,13 +1425,20 @@ export default function TikTokTracker() {
                     }
                 }
                 
+                // Calculate delta from baseline if timeframe is set, otherwise use cumulative
+                const views = timeframeStart ? Math.max(0, (point.views || 0) - baselineViews) : (point.views || 0);
+                const likes = timeframeStart ? Math.max(0, (point.likes || 0) - baselineLikes) : (point.likes || 0);
+                const comments = timeframeStart ? Math.max(0, (point.comments || 0) - baselineComments) : (point.comments || 0);
+                const shares = timeframeStart ? Math.max(0, (point.shares || 0) - baselineShares) : (point.shares || 0);
+                
                 allDataPoints.push({
                     time: point.time,
-                    views: point.views || 0,
-                    likes: point.likes || 0,
-                    comments: point.comments || 0,
-                    shares: point.shares || 0,
-                    originalTime: pointTime
+                    views,
+                    likes,
+                    comments,
+                    shares,
+                    originalTime: pointTime,
+                    videoId: video.id
                 });
             });
         });
