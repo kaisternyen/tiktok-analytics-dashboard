@@ -1309,9 +1309,17 @@ export default function TikTokTracker() {
         const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
         
         const eligibleVideos = allVideos.filter(video => {
-            // For daily view (D preset), ONLY include hourly cadence videos
+            // For daily view (D preset), ONLY include hourly cadence videos with recent data
             if (isDailyView) {
-                return video.platform && video.scrapingCadence === 'hourly';
+                if (video.platform && video.scrapingCadence === 'hourly') {
+                    // Check if video has data from today
+                    const hasRecentData = video.history?.some(point => {
+                        const pointTime = new Date(point.time);
+                        return pointTime >= todayStart;
+                    });
+                    return hasRecentData;
+                }
+                return false;
             }
             
             // For longer timeframes, use the original logic
@@ -1430,9 +1438,17 @@ export default function TikTokTracker() {
         const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
         
         const eligibleVideos = originalVideos.filter(video => {
-            // For daily view (D preset), ONLY include hourly cadence videos
+            // For daily view (D preset), ONLY include hourly cadence videos with recent data
             if (isDailyView) {
-                return video.platform && video.scrapingCadence === 'hourly';
+                if (video.platform && video.scrapingCadence === 'hourly') {
+                    // Check if video has data from today
+                    const hasRecentData = video.history?.some(point => {
+                        const pointTime = new Date(point.time);
+                        return pointTime >= todayStart;
+                    });
+                    return hasRecentData;
+                }
+                return false;
             }
             
             // For longer timeframes, use the original logic
