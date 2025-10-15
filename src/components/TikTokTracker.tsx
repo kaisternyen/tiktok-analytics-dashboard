@@ -130,8 +130,8 @@ const fromEasternTime = (estDate: Date): Date => {
 
 export default function TikTokTracker() {
     const [videoUrl, setVideoUrl] = useState("");
-    const [originalVideos, setOriginalVideos] = useState<TrackedVideo[]>([]); // Raw data from API - NEVER sorted
-    const [displayedVideos, setDisplayedVideos] = useState<TrackedVideo[]>([]); // Sorted/filtered for display
+    const [originalVideos, setOriginalVideos] = useState<TrackedVideo[]>([]);
+    const [displayedVideos, setDisplayedVideos] = useState<TrackedVideo[]>([]);
     const [selectedVideo, setSelectedVideo] = useState<TrackedVideo | null>(null);
     const [activeTab, setActiveTab] = useState("overview");
     const [isLoading, setIsLoading] = useState(false);
@@ -572,8 +572,8 @@ export default function TikTokTracker() {
         return <span className="w-4 h-4 ml-1"></span>; // Placeholder for consistent spacing
     };
 
-    const fetchVideos = useCallback(async (customFilters: FilterGroup = filters, customSorts = sorts, customTimeframe: [string, string] | null = timeframe) => {
-        console.log('fetchVideos called with:', { customFilters, customSorts, customTimeframe });
+    const fetchVideos = useCallback(async (customFilters: FilterGroup = filters, customTimeframe: [string, string] | null = timeframe) => {
+        console.log('fetchVideos called with:', { customFilters, customTimeframe });
         try {
             console.log('📋 Fetching videos from API...');
             // Build query params for filters and sorts
@@ -593,10 +593,7 @@ export default function TikTokTracker() {
             if (filterGroup.conditions.length > 0) {
                 params.set('filter', encodeURIComponent(JSON.stringify(filterGroup)));
             }
-            if (customSorts.length > 0) {
-                params.set('sort', encodeURIComponent(JSON.stringify(customSorts)));
-            }
-            // Do NOT send separate timeframe param
+            
             const apiUrl = `/api/videos${params.toString() ? `?${params.toString()}` : ''}`;
             console.log('➡️ API Request URL:', apiUrl);
             const response = await fetch(apiUrl);
@@ -715,13 +712,12 @@ export default function TikTokTracker() {
                     } : null
                 });
 
-                // Set original data (for charts) and displayed data (for list)
-                setOriginalVideos(transformedVideos); // Raw data for charts - NEVER sorted
+                // Store raw data for chart calculations
+                setOriginalVideos(transformedVideos);
                 
-                // Apply current sort order to the new data if any sort is active
+                // Apply active sort to displayed list
                 if (sorts.length > 0) {
                     const currentSort = sorts[0];
-                    // Find the display field name for the current sort
                     const displayField = Object.keys(fieldMapping).find(key => 
                         fieldMapping[key as keyof typeof fieldMapping] === currentSort.field
                     );
@@ -738,7 +734,8 @@ export default function TikTokTracker() {
         } catch (err) {
             console.error('💥 Error fetching videos:', err);
         }
-    }, [filters, sorts, timeframe, fieldMapping, sortVideosLocally]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filters, timeframe, fieldMapping, sortVideosLocally]);
 
     // Fetch videos from database on component mount
     useEffect(() => {
@@ -787,10 +784,7 @@ export default function TikTokTracker() {
     }, [fetchVideos]);
 
     useEffect(() => {
-        // Only fetch from API when filters or timeframe change, not sorts
-        // We intentionally don't include 'sorts' in dependencies to prevent API calls on sort changes
-        fetchVideos(filters, sorts, timeframe);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        fetchVideos(filters, timeframe);
     }, [filters, timeframe, fetchVideos]);
 
     useEffect(() => {
@@ -1283,8 +1277,6 @@ export default function TikTokTracker() {
         });
     };
 
-    // CHART CALCULATION: Uses original API data - NEVER affected by sorting
-    // This is memoized to only recalculate when data or timeframe changes, NOT when sorting changes
     const getChartMetrics = useMemo(() => {
         if (originalVideos.length === 0) return { 
             videos: 0, 
@@ -1304,7 +1296,6 @@ export default function TikTokTracker() {
         }
 
         // Filter videos based on timeframe and cadence (IDENTICAL logic for both chart and totals)
-        // Use original videos - never affected by sorting
         const allVideos = [...originalVideos];
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1413,7 +1404,7 @@ export default function TikTokTracker() {
             chartData: aggregatedData,
             filteredVideoCount: videosWithSufficientData.length
         };
-    }, [originalVideos, timeframe, selectedTimePeriod, timeGranularity]); // Only recalculate when these change, NOT when sorting changes
+    }, [originalVideos, timeframe, selectedTimePeriod, timeGranularity]);
 
     // Get videos with sufficient data points for totals calculation (same filtering as chart)
     const getFilteredVideosForTotals = (): TrackedVideo[] => {
@@ -2169,20 +2160,16 @@ export default function TikTokTracker() {
                                         sorts={sorts}
                                         timeframe={timeframe}
                                         onChange={(newFilters, newSorts) => {
-                                            // Check if filters changed (should trigger API call)
                                             const filtersChanged = JSON.stringify(filters) !== JSON.stringify(newFilters);
-                                            // Check if sorts changed (should only update local state)
                                             const sortsChanged = JSON.stringify(sorts) !== JSON.stringify(newSorts);
                                             
                                             if (filtersChanged) {
                                                 setFilters(newFilters);
-                                                // Filters changed - fetch new data from API
-                                                fetchVideos(newFilters, newSorts, timeframe);
+                                                fetchVideos(newFilters, timeframe);
                                             }
                                             
                                             if (sortsChanged && !filtersChanged) {
                                                 setSorts(newSorts);
-                                                // Only sorts changed - apply local sorting
                                                 if (newSorts.length > 0) {
                                                     const sort = newSorts[0];
                                                     const displayField = Object.keys(fieldMapping).find(key => 
@@ -2194,7 +2181,6 @@ export default function TikTokTracker() {
                                             }
                                             
                                             if (filtersChanged && sortsChanged) {
-                                                // Both changed - API call will handle both
                                                 setSorts(newSorts);
                                             }
                                         }}
