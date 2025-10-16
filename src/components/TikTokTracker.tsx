@@ -1194,7 +1194,7 @@ export default function TikTokTracker() {
         // Convert to Eastern time for consistent day boundaries
         const clickedDateEST = toEasternTime(date);
         
-        // Get start of clicked day and start of next day in Eastern time
+        // Get start of clicked day (12am) and start of next day (12am) - 25 hours total
         const startOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
         const endOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate() + 1, 0, 0, 0, 0);
         
@@ -1233,6 +1233,50 @@ export default function TikTokTracker() {
         return totalViews;
     };
 
+    // Helper function to calculate hourly period views for a specific hour (what the tooltip should show in hourly view)
+    const calculateHourlyPeriodViews = (date: Date): number => {
+        // Convert to Eastern time for consistent hour boundaries
+        const clickedDateEST = toEasternTime(date);
+        
+        // Get start of clicked hour and end of clicked hour
+        const startOfHourEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), clickedDateEST.getHours(), 0, 0, 0);
+        const endOfHourEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), clickedDateEST.getHours() + 1, 0, 0, 0);
+        
+        // Convert back to UTC for API calls
+        const startOfHourUTC = fromEasternTime(startOfHourEST);
+        const endOfHourUTC = fromEasternTime(endOfHourEST);
+        
+        // Calculate hourly period views by looking at historical data for this specific hour
+        let totalViews = 0;
+        originalVideos.forEach(video => {
+            if (!video.history) return;
+            
+            // Check if video has data within this specific hour
+            const hasDataInHour = video.history.some(point => {
+                const pointTime = new Date(point.time);
+                return pointTime >= startOfHourUTC && pointTime <= endOfHourUTC;
+            });
+            
+            if (hasDataInHour) {
+                // Calculate period delta for this video in this specific hour
+                const hourPoints = video.history.filter(point => {
+                    const pointTime = new Date(point.time);
+                    return pointTime >= startOfHourUTC && pointTime <= endOfHourUTC;
+                });
+                
+                if (hourPoints.length > 0) {
+                    const sortedPoints = hourPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                    const firstPoint = sortedPoints[0];
+                    const lastPoint = sortedPoints[sortedPoints.length - 1];
+                    
+                    totalViews += Math.max(0, lastPoint.views - firstPoint.views);
+                }
+            }
+        });
+        
+        return totalViews;
+    };
+
     // Custom tooltip with hover details
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: ChartDataPoint }>; label?: string }) => {
         if (active && payload && payload.length) {
@@ -1243,23 +1287,14 @@ export default function TikTokTracker() {
             // Calculate the period total for the specific day/hour being hovered
             let periodTotal = 0;
             if (showDelta) {
-                // For daily/weekly granularity: show daily period views for that specific day
-                if (timeGranularity === 'daily' || timeGranularity === 'weekly') {
-                    const clickedDate = new Date(data.time);
+                const clickedDate = new Date(data.time);
+                
+                if (timeGranularity === 'hourly') {
+                    // For hourly granularity: show hourly period views for that specific hour
+                    periodTotal = calculateHourlyPeriodViews(clickedDate);
+                } else {
+                    // For daily/weekly granularity: show daily period views for that specific day
                     periodTotal = calculateDailyPeriodViews(clickedDate);
-                } else if (timeGranularity === 'hourly') {
-                    // For hourly: show previous hour + selected hour
-                    const clickedDate = new Date(data.time);
-                    const selectedHour = new Date(clickedDate);
-                    const previousHour = new Date(selectedHour.getTime() - 60 * 60 * 1000);
-                    
-                    const startTime = new Date(previousHour);
-                    startTime.setMinutes(0, 0, 0);
-                    const endTime = new Date(selectedHour);
-                    endTime.setMinutes(59, 59, 999);
-                    
-                    const pointTimeframe: [string, string] = [startTime.toISOString(), endTime.toISOString()];
-                    periodTotal = calculatePeriodViewsForTimeframe(pointTimeframe);
                 }
             }
 
