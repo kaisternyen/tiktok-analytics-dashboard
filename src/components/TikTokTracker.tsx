@@ -1455,14 +1455,28 @@ export default function TikTokTracker() {
         let totalComments = 0;
         let totalShares = 0;
 
-        // Calculate totals consistently - always use period values from API
+        // Calculate totals consistently - calculate period deltas from historical data
         eligibleVideos.forEach(video => {
             if (timeframeStart && timeframeEnd) {
-                // With timeframe: use period deltas from API
-                if (video.views !== undefined) totalViews += video.views;
-                if (video.likes !== undefined) totalLikes += video.likes;
-                if (video.comments !== undefined) totalComments += video.comments;
-                if (video.shares !== undefined) totalShares += video.shares;
+                // With timeframe: calculate period deltas from historical data
+                if (video.history && video.history.length > 0) {
+                    // Find first and last data points within the timeframe
+                    const timeframePoints = video.history.filter(point => {
+                        const pointTime = new Date(point.time);
+                        return pointTime >= timeframeStart && pointTime <= timeframeEnd;
+                    });
+                    
+                    if (timeframePoints.length > 0) {
+                        const sortedPoints = timeframePoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                        const firstPoint = sortedPoints[0];
+                        const lastPoint = sortedPoints[sortedPoints.length - 1];
+                        
+                        totalViews += Math.max(0, lastPoint.views - firstPoint.views);
+                        totalLikes += Math.max(0, lastPoint.likes - firstPoint.likes);
+                        totalComments += Math.max(0, lastPoint.comments - firstPoint.comments);
+                        totalShares += Math.max(0, lastPoint.shares - firstPoint.shares);
+                    }
+                }
             } else {
                 // No timeframe: use total values from API
                 if (video.totalViews !== undefined) totalViews += video.totalViews;
