@@ -1170,23 +1170,39 @@ export default function TikTokTracker() {
             // Format in EST
             const dateStr = formatInTimeZone(label || '', 'America/New_York', 'MMM d, yyyy h:mm aa zzz');
 
-            // Calculate the actual period total for this day to match click totals
+            // Calculate the period total for this specific day
             let periodTotal = 0;
             if (showDelta && timeframe && timeframe[0] && timeframe[1]) {
-                // Use the exact same calculation as click totals
-                // Sum up period views for all videos that have data in the timeframe
+                // Calculate period total for this specific day in EST
+                const clickedDate = new Date(data.time);
+                
+                // Convert to EST for day boundaries
+                const clickedDateEST = toEasternTime(clickedDate);
+                const dayStartEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
+                const dayEndEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate() + 1, 0, 0, 0, 0);
+                
+                // Convert back to UTC for comparison with video history timestamps
+                const dayStartUTC = fromEasternTime(dayStartEST);
+                const dayEndUTC = fromEasternTime(dayEndEST);
+                
+                // Sum up period views for all videos that have data on this specific day
                 periodTotal = originalVideos.reduce((sum, video) => {
-                    // Check if video has data within the timeframe (same logic as getChartMetrics)
-                    const hasDataInTimeframe = video.history?.some(point => {
+                    if (!video.history) return sum;
+                    
+                    // Find first and last data points for this video on this specific day
+                    const dayPoints = video.history.filter(point => {
                         const pointTime = new Date(point.time);
-                        const timeframeStart = new Date(timeframe[0]);
-                        const timeframeEnd = new Date(timeframe[1]);
-                        return pointTime >= timeframeStart && pointTime <= timeframeEnd;
+                        return pointTime >= dayStartUTC && pointTime < dayEndUTC;
                     });
                     
-                    if (hasDataInTimeframe && video.views !== undefined) {
-                        // Use the period views from API (same as click totals)
-                        return sum + video.views;
+                    if (dayPoints.length > 0) {
+                        // Sort by time to get first and last
+                        const sortedPoints = dayPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                        const firstPoint = sortedPoints[0];
+                        const lastPoint = sortedPoints[sortedPoints.length - 1];
+                        
+                        // Add the period delta for this video on this specific day
+                        return sum + Math.max(0, lastPoint.views - firstPoint.views);
                     }
                     
                     return sum;
