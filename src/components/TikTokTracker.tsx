@@ -2433,7 +2433,7 @@ export default function TikTokTracker() {
                                                     {timeframe && timeframe[0] && timeframe[1] && (
                                                         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                                                             <div className="text-sm text-blue-800">
-                                                                <strong>Sanity Check:</strong> Manual sum of displayed videos' period views: <strong>{formatNumber(calculateManualPeriodViewsSum())}</strong>
+                                                                <strong>Sanity Check:</strong> Manual sum of displayed videos&apos; period views: <strong>{formatNumber(calculateManualPeriodViewsSum())}</strong>
                                                                 <br />
                                                                 <span className="text-xs text-blue-600">
                                                                     Total period views (from calculation): {formatNumber(totalMetrics.totalViews)}
