@@ -1178,10 +1178,10 @@ export default function TikTokTracker() {
                     {showDelta ? (
                         <>
                             <p className="text-blue-600">
-                                Period Total: {formatNumber(data.views)} views
+                                Change: {formatNumber(data.delta)} views
                             </p>
                             <p className="text-gray-600 text-sm">
-                                Click to see detailed breakdown
+                                Total at this time: {formatNumber(data.views)} views
                             </p>
                         </>
                     ) : (
@@ -1203,7 +1203,7 @@ export default function TikTokTracker() {
     };
 
     // Helper function to group data points by time granularity
-    const aggregateDataByGranularity = (data: ChartDataPoint[], granularity: 'hourly' | 'daily' | 'weekly'): ChartDataPoint[] => {
+    const aggregateDataByGranularity = (data: ChartDataPoint[], granularity: 'hourly' | 'daily' | 'weekly', timeframe?: [string, string] | null): ChartDataPoint[] => {
         if (data.length === 0) return [];
 
         const grouped = new Map<string, ChartDataPoint[]>();
@@ -1247,17 +1247,42 @@ export default function TikTokTracker() {
         const aggregated: ChartDataPoint[] = [];
         
         for (const [timeKey, points] of grouped.entries()) {
-            // Sort points by time and take the latest one (most recent data in this bucket)
-            const sortedPoints = points.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-            const latestPoint = sortedPoints[0];
+            // Sort points by time
+            const sortedPoints = points.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+            
+            let views, likes, comments, shares, delta;
+            
+            // Check if we're in timeframe mode with daily granularity - calculate day delta
+            const isTimeframeMode = timeframe && timeframe[0] && timeframe[1];
+            const isDailyGranularity = granularity === 'daily';
+            
+            if (isTimeframeMode && isDailyGranularity && sortedPoints.length >= 2) {
+                // PERIOD MODE + DAILY: Calculate delta for this specific day
+                const firstPoint = sortedPoints[0];
+                const lastPoint = sortedPoints[sortedPoints.length - 1];
+                
+                views = lastPoint.views;
+                likes = lastPoint.likes || 0;
+                comments = lastPoint.comments || 0;
+                shares = lastPoint.shares || 0;
+                delta = Math.max(0, lastPoint.views - firstPoint.views); // Day delta
+            } else {
+                // ALL TIME MODE or other granularities: Use latest point
+                const latestPoint = sortedPoints[sortedPoints.length - 1];
+                views = latestPoint.views;
+                likes = latestPoint.likes || 0;
+                comments = latestPoint.comments || 0;
+                shares = latestPoint.shares || 0;
+                delta = 0; // Will be calculated later
+            }
             
             aggregated.push({
                 time: timeKey,
-                views: latestPoint.views,
-                likes: latestPoint.likes || 0,
-                comments: latestPoint.comments || 0,
-                shares: latestPoint.shares || 0,
-                delta: 0,
+                views,
+                likes,
+                comments,
+                shares,
+                delta,
                 originalTime: new Date(timeKey)
             });
         }
@@ -1265,11 +1290,17 @@ export default function TikTokTracker() {
         // Sort by time and recalculate deltas based on aggregated data
         const sortedAggregated = aggregated.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
         
-        // Recalculate deltas for aggregated data
+        // Recalculate deltas for aggregated data (only for ALL TIME mode)
         return sortedAggregated.map((point, index) => {
+            // If we already calculated day deltas, keep them
+            if (point.delta !== 0) {
+                return point;
+            }
+            
+            // Otherwise calculate delta from previous point (ALL TIME mode)
             if (index > 0) {
                 const previousPoint = sortedAggregated[index - 1];
-                const delta = Math.max(0, point.views - previousPoint.views); // Ensure non-negative
+                const delta = Math.max(0, point.views - previousPoint.views);
                 return {
                     ...point,
                     delta
@@ -1446,7 +1477,7 @@ export default function TikTokTracker() {
         }));
 
         // Apply time granularity aggregation
-        const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity);
+        const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity, timeframe);
         
         return {
             videos: eligibleVideos.length,
