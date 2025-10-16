@@ -241,16 +241,12 @@ export default function TikTokTracker() {
                 // Keep hourly granularity to show the 2 data points
                 setTimeGranularity('hourly');
             } else {
-                // FIXED: Use consistent Eastern timezone
-                const clickedDateEST = toEasternTime(clickedDate);
+                // Chart timestamps are already in UTC, so work with them directly
+                const clickedDateUTC = new Date(clickedTime);
                 
-                // Get start and end of day in Eastern time
-                const startOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
-                const endOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 23, 59, 59, 999);
-                
-                // Convert back to UTC for API calls
-                const startOfDayUTC = fromEasternTime(startOfDayEST);
-                const endOfDayUTC = fromEasternTime(endOfDayEST);
+                // Get start and end of day in UTC (same day as clicked point)
+                const startOfDayUTC = new Date(clickedDateUTC.getFullYear(), clickedDateUTC.getMonth(), clickedDateUTC.getDate(), 0, 0, 0, 0);
+                const endOfDayUTC = new Date(clickedDateUTC.getFullYear(), clickedDateUTC.getMonth(), clickedDateUTC.getDate(), 23, 59, 59, 999);
                 
                 setCustomDateRange([startOfDayUTC.toISOString(), endOfDayUTC.toISOString()]);
                 setSelectedTimePeriod('D'); // Update period display
