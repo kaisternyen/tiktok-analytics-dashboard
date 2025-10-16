@@ -719,16 +719,32 @@ export default function TikTokTracker() {
                 // Store raw data for chart calculations
                 setOriginalVideos(transformedVideos);
                 
-                // Apply active sort to displayed list
+                // Filter videos to match the same criteria as period calculation
+                let filteredVideos = transformedVideos;
+                if (customTimeframe && customTimeframe[0] && customTimeframe[1]) {
+                    const timeframeStart = new Date(customTimeframe[0]);
+                    const timeframeEnd = new Date(customTimeframe[1]);
+                    
+                    filteredVideos = transformedVideos.filter((video: any) => {
+                        // Only include videos that have data within the timeframe (same as period calculation)
+                        const hasDataInTimeframe = video.history?.some((point: any) => {
+                            const pointTime = new Date(point.time);
+                            return pointTime >= timeframeStart && pointTime <= timeframeEnd;
+                        });
+                        return hasDataInTimeframe;
+                    });
+                }
+                
+                // Apply active sort to filtered list
                 if (sorts.length > 0) {
                     const currentSort = sorts[0];
                     const displayField = Object.keys(fieldMapping).find(key => 
                         fieldMapping[key as keyof typeof fieldMapping] === currentSort.field
                     );
-                    const sortedVideos = sortVideosLocally(transformedVideos, currentSort.field, currentSort.order, displayField);
+                    const sortedVideos = sortVideosLocally(filteredVideos, currentSort.field, currentSort.order, displayField);
                     setDisplayedVideos(sortedVideos);
                 } else {
-                    setDisplayedVideos(transformedVideos);
+                    setDisplayedVideos(filteredVideos);
                 }
                 
                 console.log(`✅ Loaded ${transformedVideos.length} videos from database`);
@@ -1163,6 +1179,32 @@ export default function TikTokTracker() {
         return formatInTimeZone(new Date(tickItem), 'America/New_York', 'MMM d, h aa');
     };
 
+    // Helper function to calculate period views for a specific video within a timeframe
+    const calculateVideoPeriodViews = (video: TrackedVideo, timeframeStart: Date, timeframeEnd: Date): number => {
+        if (!video.history || video.history.length === 0) return 0;
+        
+        // Find first and last data points within the timeframe
+        const timeframePoints = video.history.filter(point => {
+            const pointTime = new Date(point.time);
+            return pointTime >= timeframeStart && pointTime <= timeframeEnd;
+        });
+        
+        if (timeframePoints.length === 0) return 0;
+        
+        const sortedPoints = timeframePoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        const firstPoint = sortedPoints[0];
+        const lastPoint = sortedPoints[sortedPoints.length - 1];
+        
+        const periodViews = Math.max(0, lastPoint.views - firstPoint.views);
+        
+        // Debug logging
+        if (periodViews > 0) {
+            console.log(`Video ${video.username}: ${periodViews} period views (${timeframePoints.length} data points)`);
+        }
+        
+        return periodViews;
+    };
+
     // Helper function to calculate daily period views for a specific day (what the tooltip should show)
     const calculateDailyPeriodViews = (date: Date): number => {
         // Convert to Eastern time for consistent day boundaries
@@ -1456,6 +1498,7 @@ export default function TikTokTracker() {
         let totalShares = 0;
 
         // Calculate totals consistently - calculate period deltas from historical data
+        console.log(`Total calculation: ${eligibleVideos.length} eligible videos`);
         eligibleVideos.forEach(video => {
             if (timeframeStart && timeframeEnd) {
                 // With timeframe: calculate period deltas from historical data
@@ -1471,10 +1514,16 @@ export default function TikTokTracker() {
                         const firstPoint = sortedPoints[0];
                         const lastPoint = sortedPoints[sortedPoints.length - 1];
                         
-                        totalViews += Math.max(0, lastPoint.views - firstPoint.views);
+                        const videoPeriodViews = Math.max(0, lastPoint.views - firstPoint.views);
+                        totalViews += videoPeriodViews;
                         totalLikes += Math.max(0, lastPoint.likes - firstPoint.likes);
                         totalComments += Math.max(0, lastPoint.comments - firstPoint.comments);
                         totalShares += Math.max(0, lastPoint.shares - firstPoint.shares);
+                        
+                        // Debug logging
+                        if (videoPeriodViews > 0) {
+                            console.log(`Total calc - Video ${video.username}: ${videoPeriodViews} period views`);
+                        }
                     }
                 }
             } else {
@@ -2576,7 +2625,16 @@ export default function TikTokTracker() {
                                                                             </span>
                                                                         </div>
                                                                     </td>
-                                                                    <td className="p-4 font-medium">{formatNumber(video.views)}</td>
+                                                                    <td className="p-4 font-medium">
+                                                                        {timeframe && timeframe[0] && timeframe[1] 
+                                                                            ? (() => {
+                                                                                const periodViews = calculateVideoPeriodViews(video, new Date(timeframe[0]), new Date(timeframe[1]));
+                                                                                console.log(`Individual calc - Video ${video.username}: ${periodViews} period views`);
+                                                                                return formatNumber(periodViews);
+                                                                            })()
+                                                                            : formatNumber(video.totalViews)
+                                                                        }
+                                                                    </td>
                                                                     <td className="p-4 font-medium text-gray-600">{formatNumber(video.totalViews)}</td>
                                                                     {/* Data Age column */}
                                                                     <td className="p-4 text-sm">
