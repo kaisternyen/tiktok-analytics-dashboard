@@ -1189,6 +1189,50 @@ export default function TikTokTracker() {
         return totalViews;
     };
 
+    // Helper function to calculate daily period views for a specific day (what the tooltip should show)
+    const calculateDailyPeriodViews = (date: Date): number => {
+        // Convert to Eastern time for consistent day boundaries
+        const clickedDateEST = toEasternTime(date);
+        
+        // Get start of clicked day and start of next day in Eastern time
+        const startOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
+        const endOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate() + 1, 0, 0, 0, 0);
+        
+        // Convert back to UTC for API calls
+        const startOfDayUTC = fromEasternTime(startOfDayEST);
+        const endOfDayUTC = fromEasternTime(endOfDayEST);
+        
+        // Calculate daily period views by looking at historical data for this specific day
+        let totalViews = 0;
+        originalVideos.forEach(video => {
+            if (!video.history) return;
+            
+            // Check if video has data within this specific day
+            const hasDataInDay = video.history.some(point => {
+                const pointTime = new Date(point.time);
+                return pointTime >= startOfDayUTC && pointTime <= endOfDayUTC;
+            });
+            
+            if (hasDataInDay) {
+                // Calculate period delta for this video in this specific day
+                const dayPoints = video.history.filter(point => {
+                    const pointTime = new Date(point.time);
+                    return pointTime >= startOfDayUTC && pointTime <= endOfDayUTC;
+                });
+                
+                if (dayPoints.length > 0) {
+                    const sortedPoints = dayPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                    const firstPoint = sortedPoints[0];
+                    const lastPoint = sortedPoints[sortedPoints.length - 1];
+                    
+                    totalViews += Math.max(0, lastPoint.views - firstPoint.views);
+                }
+            }
+        });
+        
+        return totalViews;
+    };
+
     // Custom tooltip with hover details
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: ChartDataPoint }>; label?: string }) => {
         if (active && payload && payload.length) {
@@ -1199,12 +1243,13 @@ export default function TikTokTracker() {
             // Calculate the period total for the specific day/hour being hovered
             let periodTotal = 0;
             if (showDelta) {
-                // Determine the timeframe for this specific chart point
-                const clickedDate = new Date(data.time);
-                let pointTimeframe: [string, string] | null = null;
-                
-                if (timeGranularity === 'hourly') {
+                // For daily/weekly granularity: show daily period views for that specific day
+                if (timeGranularity === 'daily' || timeGranularity === 'weekly') {
+                    const clickedDate = new Date(data.time);
+                    periodTotal = calculateDailyPeriodViews(clickedDate);
+                } else if (timeGranularity === 'hourly') {
                     // For hourly: show previous hour + selected hour
+                    const clickedDate = new Date(data.time);
                     const selectedHour = new Date(clickedDate);
                     const previousHour = new Date(selectedHour.getTime() - 60 * 60 * 1000);
                     
@@ -1213,22 +1258,7 @@ export default function TikTokTracker() {
                     const endTime = new Date(selectedHour);
                     endTime.setMinutes(59, 59, 999);
                     
-                    pointTimeframe = [startTime.toISOString(), endTime.toISOString()];
-                } else {
-                    // For daily/weekly: show the specific day
-                    const clickedDateEST = toEasternTime(clickedDate);
-                    
-                    const startOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
-                    const endOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate() + 1, 0, 0, 0, 0);
-                    
-                    const startOfDayUTC = fromEasternTime(startOfDayEST);
-                    const endOfDayUTC = fromEasternTime(endOfDayEST);
-                    
-                    pointTimeframe = [startOfDayUTC.toISOString(), endOfDayUTC.toISOString()];
-                }
-                
-                // Use the same calculation method as getChartMetrics
-                if (pointTimeframe) {
+                    const pointTimeframe: [string, string] = [startTime.toISOString(), endTime.toISOString()];
                     periodTotal = calculatePeriodViewsForTimeframe(pointTimeframe);
                 }
             }
