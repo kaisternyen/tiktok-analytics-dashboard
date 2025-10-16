@@ -1170,15 +1170,15 @@ export default function TikTokTracker() {
             // Format in EST
             const dateStr = formatInTimeZone(label || '', 'America/New_York', 'MMM d, yyyy h:mm aa zzz');
 
-            // Calculate the period total that would be shown if you clicked on this point
+            // Calculate the period total for the specific day/hour being hovered
             let periodTotal = 0;
-            if (showDelta && timeframe && timeframe[0] && timeframe[1]) {
-                // Determine the timeframe that would be set if you clicked on this point
-                let clickTimeframe: [string, string] | null = null;
+            if (showDelta) {
+                // Determine the timeframe for this specific chart point
+                const clickedDate = new Date(data.time);
+                let pointTimeframe: [string, string] | null = null;
                 
                 if (timeGranularity === 'hourly') {
-                    // For hourly: show previous hour + selected hour (same as click handler)
-                    const clickedDate = new Date(data.time);
+                    // For hourly: show previous hour + selected hour
                     const selectedHour = new Date(clickedDate);
                     const previousHour = new Date(selectedHour.getTime() - 60 * 60 * 1000);
                     
@@ -1187,10 +1187,9 @@ export default function TikTokTracker() {
                     const endTime = new Date(selectedHour);
                     endTime.setMinutes(59, 59, 999);
                     
-                    clickTimeframe = [startTime.toISOString(), endTime.toISOString()];
+                    pointTimeframe = [startTime.toISOString(), endTime.toISOString()];
                 } else {
-                    // For daily/weekly: show the specific day (same as click handler)
-                    const clickedDate = new Date(data.time);
+                    // For daily/weekly: show the specific day
                     const clickedDateEST = toEasternTime(clickedDate);
                     
                     const startOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
@@ -1199,29 +1198,29 @@ export default function TikTokTracker() {
                     const startOfDayUTC = fromEasternTime(startOfDayEST);
                     const endOfDayUTC = fromEasternTime(endOfDayEST);
                     
-                    clickTimeframe = [startOfDayUTC.toISOString(), endOfDayUTC.toISOString()];
+                    pointTimeframe = [startOfDayUTC.toISOString(), endOfDayUTC.toISOString()];
                 }
                 
-                // Calculate period views for videos that would be included in this click timeframe
-                if (clickTimeframe) {
-                    const [clickStart, clickEnd] = clickTimeframe;
-                    const clickStartDate = new Date(clickStart);
-                    const clickEndDate = new Date(clickEnd);
+                // Calculate period views for this specific timeframe
+                if (pointTimeframe) {
+                    const [pointStart, pointEnd] = pointTimeframe;
+                    const pointStartDate = new Date(pointStart);
+                    const pointEndDate = new Date(pointEnd);
                     
                     periodTotal = originalVideos.reduce((sum, video) => {
                         if (!video.history) return sum;
                         
-                        // Check if video has data within the click timeframe
-                        const hasDataInClickTimeframe = video.history.some(point => {
+                        // Check if video has data within this point's timeframe
+                        const hasDataInPointTimeframe = video.history.some(point => {
                             const pointTime = new Date(point.time);
-                            return pointTime >= clickStartDate && pointTime <= clickEndDate;
+                            return pointTime >= pointStartDate && pointTime <= pointEndDate;
                         });
                         
-                        if (hasDataInClickTimeframe) {
-                            // Find first and last data points for this video in the click timeframe
+                        if (hasDataInPointTimeframe) {
+                            // Calculate period delta for this video in this point's timeframe
                             const timeframePoints = video.history.filter(point => {
                                 const pointTime = new Date(point.time);
-                                return pointTime >= clickStartDate && pointTime <= clickEndDate;
+                                return pointTime >= pointStartDate && pointTime <= pointEndDate;
                             });
                             
                             if (timeframePoints.length > 0) {
@@ -1229,7 +1228,6 @@ export default function TikTokTracker() {
                                 const firstPoint = sortedPoints[0];
                                 const lastPoint = sortedPoints[sortedPoints.length - 1];
                                 
-                                // Add the period delta for this video in this timeframe
                                 return sum + Math.max(0, lastPoint.views - firstPoint.views);
                             }
                         }
