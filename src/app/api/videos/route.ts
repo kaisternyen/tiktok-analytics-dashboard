@@ -365,36 +365,20 @@ export async function GET(req: Request) {
                 const hashtags = video.hashtags ? JSON.parse(video.hashtags) : [];
                 const music = video.music ? JSON.parse(video.music) : null;
 
-                // Calculate actual period deltas from history
+                // SIMPLIFIED: Just return the raw data and let frontend handle calculations
                 const history = video.metricsHistory;
                 
-                // Always return current totals
+                // Always return current totals - no complex calculations here
                 const totalViews = video.currentViews;
                 const totalLikes = video.currentLikes;
                 const totalComments = video.currentComments;
                 const totalShares = video.currentShares;
                 
-                // Calculate period deltas from history
-                let periodViews = 0;
-                let periodLikes = 0;
-                let periodComments = 0;
-                let periodShares = 0;
-                
-                if (history.length >= 2) {
-                    // Sort history by timestamp (oldest first)
-                    const sortedHistory = [...history].sort((a, b) => 
-                        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-                    );
-                    
-                    const firstPoint = sortedHistory[0];
-                    const lastPoint = sortedHistory[sortedHistory.length - 1];
-                    
-                    // Calculate deltas (change during the period)
-                    periodViews = Math.max(0, lastPoint.views - firstPoint.views);
-                    periodLikes = Math.max(0, lastPoint.likes - firstPoint.likes);
-                    periodComments = Math.max(0, lastPoint.comments - firstPoint.comments);
-                    periodShares = Math.max(0, lastPoint.shares - firstPoint.shares);
-                }
+                // For period values, just return totals (frontend will calculate deltas)
+                const periodViews = totalViews;
+                const periodLikes = totalLikes;
+                const periodComments = totalComments;
+                const periodShares = totalShares;
                 
                 // Simple growth calculation from last 2 points if available
                 let growth = { views: 0, likes: 0, comments: 0, shares: 0 };
