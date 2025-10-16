@@ -1300,41 +1300,20 @@ export default function TikTokTracker() {
             timeframeEnd = new Date(timeframe[1]);
         }
 
-        // Filter videos based on timeframe and cadence (IDENTICAL logic for both chart and totals)
-        const allVideos = [...originalVideos];
-        const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        
-        // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
-        const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
-        
-        const eligibleVideos = allVideos.filter(video => {
-            // For daily view (D preset), ONLY include hourly cadence videos with recent data
-            if (isDailyView) {
-                if (video.platform && video.scrapingCadence === 'hourly') {
-                    // Check if video has data from today
-                    const hasRecentData = video.history?.some(point => {
-                        const pointTime = new Date(point.time);
-                        return pointTime >= todayStart;
-                    });
-                    return hasRecentData;
-                }
-                return false;
+        // Filter videos based on timeframe (data-driven only)
+        const eligibleVideos = originalVideos.filter(video => {
+            // Pure data-driven filtering - only check if video has data in the timeframe
+            if (timeframeStart && timeframeEnd) {
+                // Check if video has data within the timeframe
+                const hasDataInTimeframe = video.history?.some(point => {
+                    const pointTime = new Date(point.time);
+                    return pointTime >= timeframeStart && pointTime <= timeframeEnd;
+                });
+                return hasDataInTimeframe;
             }
             
-            // For longer timeframes, use the original logic
-            // Always include hourly videos 
-            if (video.platform && video.scrapingCadence === 'hourly') {
-                return true;
-            }
-            
-            // For daily videos, only include if they've been scraped today
-            if (video.platform && video.scrapingCadence === 'daily') {
-                const lastScraped = video.lastUpdate ? new Date(video.lastUpdate) : null;
-                return lastScraped && lastScraped >= todayStart;
-            }
-            
-            return false;
+            // No timeframe filter - include all videos with any data
+            return video.history && video.history.length > 0;
         });
 
         // Calculate totals from the eligible videos
@@ -1447,7 +1426,7 @@ export default function TikTokTracker() {
             chartData: aggregatedData,
             filteredVideoCount: videosWithSufficientData.length
         };
-    }, [originalVideos, timeframe, selectedTimePeriod, timeGranularity]);
+    }, [originalVideos, timeframe, timeGranularity]);
 
     // Get videos with sufficient data points for totals calculation (same filtering as chart)
     const getFilteredVideosForTotals = (): TrackedVideo[] => {
@@ -1460,41 +1439,20 @@ export default function TikTokTracker() {
             timeframeEnd = new Date(timeframe[1]);
         }
 
-        // Filter videos based on timeframe and cadence (same logic as getUnifiedMetrics)
-        const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        
-        // Check if this is the daily view (D preset or TODAY_EST) - only show hourly cadence videos
-        const isDailyView = selectedTimePeriod === 'D' || selectedTimePeriod === 'TODAY_EST';
-        
+        // Filter videos based on timeframe (data-driven only)
         const eligibleVideos = originalVideos.filter(video => {
-            // For daily view (D preset), ONLY include hourly cadence videos with recent data
-            if (isDailyView) {
-                if (video.platform && video.scrapingCadence === 'hourly') {
-                    // Check if video has data from today
-                    const hasRecentData = video.history?.some(point => {
-                        const pointTime = new Date(point.time);
-                        return pointTime >= todayStart;
-                    });
-                    return hasRecentData;
-                }
-                return false;
+            // Pure data-driven filtering - only check if video has data in the timeframe
+            if (timeframeStart && timeframeEnd) {
+                // Check if video has data within the timeframe
+                const hasDataInTimeframe = video.history?.some(point => {
+                    const pointTime = new Date(point.time);
+                    return pointTime >= timeframeStart && pointTime <= timeframeEnd;
+                });
+                return hasDataInTimeframe;
             }
             
-            // For longer timeframes, use the original logic
-            // Always include hourly videos 
-            if (video.platform && video.scrapingCadence === 'hourly') {
-                return true;
-            }
-            
-            // For daily videos, only include if they've been scraped today
-            if (video.platform && video.scrapingCadence === 'daily') {
-                const lastScraped = new Date(video.lastUpdate);
-                return lastScraped >= todayStart;
-            }
-            
-            // Default: include video if cadence is unknown (backward compatibility)
-            return true;
+            // No timeframe filter - include all videos with any data
+            return video.history && video.history.length > 0;
         });
 
         // CRITICAL: Filter out videos with insufficient data points for meaningful totals
