@@ -1178,10 +1178,10 @@ export default function TikTokTracker() {
                     {showDelta ? (
                         <>
                             <p className="text-blue-600">
-                                Change: {formatNumber(data.delta)} views
+                                Period Total: {formatNumber(data.views)} views
                             </p>
                             <p className="text-gray-600 text-sm">
-                                Total at this time: {formatNumber(data.views)} views
+                                Click to see detailed breakdown
                             </p>
                         </>
                     ) : (
