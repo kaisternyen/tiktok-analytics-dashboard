@@ -241,12 +241,16 @@ export default function TikTokTracker() {
                 // Keep hourly granularity to show the 2 data points
                 setTimeGranularity('hourly');
             } else {
-                // Chart timestamps are already in UTC, so work with them directly
-                const clickedDateUTC = new Date(clickedTime);
+                // FIXED: Use consistent Eastern timezone
+                const clickedDateEST = toEasternTime(clickedDate);
                 
-                // Get start and end of day in UTC (same day as clicked point)
-                const startOfDayUTC = new Date(clickedDateUTC.getFullYear(), clickedDateUTC.getMonth(), clickedDateUTC.getDate(), 0, 0, 0, 0);
-                const endOfDayUTC = new Date(clickedDateUTC.getFullYear(), clickedDateUTC.getMonth(), clickedDateUTC.getDate(), 23, 59, 59, 999);
+                // Get start and end of day in Eastern time
+                const startOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
+                const endOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 23, 59, 59, 999);
+                
+                // Convert back to UTC for API calls
+                const startOfDayUTC = fromEasternTime(startOfDayEST);
+                const endOfDayUTC = fromEasternTime(endOfDayEST);
                 
                 setCustomDateRange([startOfDayUTC.toISOString(), endOfDayUTC.toISOString()]);
                 setSelectedTimePeriod('D'); // Update period display
@@ -1166,6 +1170,45 @@ export default function TikTokTracker() {
             // Format in EST
             const dateStr = formatInTimeZone(label || '', 'America/New_York', 'MMM d, yyyy h:mm aa zzz');
 
+            // Calculate the actual period total for this day to match click totals
+            let periodTotal = 0;
+            if (showDelta && timeframe && timeframe[0] && timeframe[1]) {
+                // Calculate period total for this specific day in EST
+                const clickedDate = new Date(data.time);
+                
+                // Convert to EST for day boundaries
+                const clickedDateEST = toEasternTime(clickedDate);
+                const dayStartEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
+                const dayEndEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 23, 59, 59, 999);
+                
+                // Convert back to UTC for comparison with video history timestamps
+                const dayStartUTC = fromEasternTime(dayStartEST);
+                const dayEndUTC = fromEasternTime(dayEndEST);
+                
+                // Sum up period views for all videos that have data on this day
+                periodTotal = originalVideos.reduce((sum, video) => {
+                    if (!video.history) return sum;
+                    
+                    // Find first and last data points for this video on this day
+                    const dayPoints = video.history.filter(point => {
+                        const pointTime = new Date(point.time);
+                        return pointTime >= dayStartUTC && pointTime <= dayEndUTC;
+                    });
+                    
+                    if (dayPoints.length > 0) {
+                        // Sort by time to get first and last
+                        const sortedPoints = dayPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                        const firstPoint = sortedPoints[0];
+                        const lastPoint = sortedPoints[sortedPoints.length - 1];
+                        
+                        // Add the period delta for this video on this day
+                        return sum + Math.max(0, lastPoint.views - firstPoint.views);
+                    }
+                    
+                    return sum;
+                }, 0);
+            }
+
             return (
                 <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
                     <p className="font-medium text-gray-900">
@@ -1174,7 +1217,7 @@ export default function TikTokTracker() {
                     {showDelta ? (
                         <>
                             <p className="text-blue-600">
-                                Change: {formatNumber(data.delta)} views
+                                Change: {formatNumber(periodTotal)} views
                             </p>
                             <p className="text-gray-600 text-sm">
                                 Total at this time: {formatNumber(data.views)} views
