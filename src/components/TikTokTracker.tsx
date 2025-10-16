@@ -490,13 +490,19 @@ export default function TikTokTracker() {
                     bValue = b.platform.toLowerCase();
                     break;
                 case 'currentViews':
-                    // If this is for TotalViews column, use totalViews; otherwise use period views
+                    // If this is for TotalViews column, use totalViews; otherwise use calculated period views
                     if (displayField === 'TotalViews') {
                         aValue = a.totalViews;
                         bValue = b.totalViews;
                     } else {
-                        aValue = a.views;
-                        bValue = b.views;
+                        // For Period Views, calculate the actual period views for sorting
+                        if (timeframe && timeframe[0] && timeframe[1]) {
+                            aValue = calculateVideoPeriodViews(a, new Date(timeframe[0]), new Date(timeframe[1]));
+                            bValue = calculateVideoPeriodViews(b, new Date(timeframe[0]), new Date(timeframe[1]));
+                        } else {
+                            aValue = a.totalViews;
+                            bValue = b.totalViews;
+                        }
                     }
                     break;
                 case 'currentLikes':
@@ -532,7 +538,7 @@ export default function TikTokTracker() {
             if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, []); // Empty dependency array since this function doesn't depend on any state
+    }, [timeframe]); // Include timeframe since calculateVideoPeriodViews uses it
 
     // Handle header click for sorting - now uses local sorting
     const handleHeaderClick = (field: string) => {
@@ -754,8 +760,7 @@ export default function TikTokTracker() {
         } catch (err) {
             console.error('💥 Error fetching videos:', err);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filters, timeframe, fieldMapping, sortVideosLocally]);
+    }, [filters, timeframe, fieldMapping, sortVideosLocally, sorts]);
 
     // Fetch videos from database on component mount
     useEffect(() => {
@@ -1183,11 +1188,10 @@ export default function TikTokTracker() {
     const calculateManualPeriodViewsSum = (): number => {
         if (!timeframe || !timeframe[0] || !timeframe[1]) return 0;
         
-        const timeframeStart = new Date(timeframe[0]);
-        const timeframeEnd = new Date(timeframe[1]);
-        
+        // Sum the actual displayed period views (what's shown in the table)
         return displayedVideos.reduce((sum, video) => {
-            return sum + calculateVideoPeriodViews(video, timeframeStart, timeframeEnd);
+            const periodViews = calculateVideoPeriodViews(video, new Date(timeframe[0]), new Date(timeframe[1]));
+            return sum + periodViews;
         }, 0);
     };
 
