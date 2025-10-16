@@ -1243,42 +1243,20 @@ export default function TikTokTracker() {
             grouped.get(key)!.push(point);
         });
 
-        // Aggregate the grouped data points
+        // Aggregate the grouped data points - take the latest point in each bucket
         const aggregated: ChartDataPoint[] = [];
         
         for (const [timeKey, points] of grouped.entries()) {
-            // Sort points by time
-            const sortedPoints = points.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-            
-            let views, likes, comments, shares;
-            
-            // Check if we're in timeframe mode (period view)
-            const isTimeframeMode = timeframe && timeframe[0] && timeframe[1];
-            
-            if (isTimeframeMode && sortedPoints.length >= 2) {
-                // PERIOD MODE: Calculate delta from first to last point (same as API)
-                const firstPoint = sortedPoints[0];
-                const lastPoint = sortedPoints[sortedPoints.length - 1];
-                
-                views = Math.max(0, lastPoint.views - firstPoint.views);
-                likes = Math.max(0, (lastPoint.likes || 0) - (firstPoint.likes || 0));
-                comments = Math.max(0, (lastPoint.comments || 0) - (firstPoint.comments || 0));
-                shares = Math.max(0, (lastPoint.shares || 0) - (firstPoint.shares || 0));
-            } else {
-                // ALL TIME MODE: Use latest point (cumulative)
-                const latestPoint = sortedPoints[sortedPoints.length - 1];
-                views = latestPoint.views;
-                likes = latestPoint.likes || 0;
-                comments = latestPoint.comments || 0;
-                shares = latestPoint.shares || 0;
-            }
+            // Sort points by time and take the latest one (most recent data in this bucket)
+            const sortedPoints = points.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+            const latestPoint = sortedPoints[0];
             
             aggregated.push({
                 time: timeKey,
-                views,
-                likes,
-                comments,
-                shares,
+                views: latestPoint.views,
+                likes: latestPoint.likes || 0,
+                comments: latestPoint.comments || 0,
+                shares: latestPoint.shares || 0,
                 delta: 0,
                 originalTime: new Date(timeKey)
             });
