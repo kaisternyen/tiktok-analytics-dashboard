@@ -1163,32 +1163,6 @@ export default function TikTokTracker() {
         return formatInTimeZone(new Date(tickItem), 'America/New_York', 'MMM d, h aa');
     };
 
-    // Helper function to calculate period views for a specific timeframe using the same logic as getChartMetrics
-    const calculatePeriodViewsForTimeframe = (timeframe: [string, string]): number => {
-        const timeframeStart = new Date(timeframe[0]);
-        const timeframeEnd = new Date(timeframe[1]);
-        
-        // Filter videos based on timeframe (same logic as getChartMetrics)
-        const eligibleVideos = originalVideos.filter(video => {
-            const hasDataInTimeframe = video.history?.some(point => {
-                const pointTime = new Date(point.time);
-                return pointTime >= timeframeStart && pointTime <= timeframeEnd;
-            });
-            return hasDataInTimeframe;
-        });
-        
-        // Calculate totals using the same method as getChartMetrics
-        let totalViews = 0;
-        eligibleVideos.forEach(video => {
-            // Use the same logic as getChartMetrics - with timeframe, use period deltas from API
-            if (video.views !== undefined) {
-                totalViews += video.views;
-            }
-        });
-        
-        return totalViews;
-    };
-
     // Helper function to calculate daily period views for a specific day (what the tooltip should show)
     const calculateDailyPeriodViews = (date: Date): number => {
         // Convert to Eastern time for consistent day boundaries
