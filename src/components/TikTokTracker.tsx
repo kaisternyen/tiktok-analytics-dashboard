@@ -725,9 +725,9 @@ export default function TikTokTracker() {
                     const timeframeStart = new Date(customTimeframe[0]);
                     const timeframeEnd = new Date(customTimeframe[1]);
                     
-                    filteredVideos = transformedVideos.filter((video: any) => {
+                    filteredVideos = transformedVideos.filter((video: TrackedVideo) => {
                         // Only include videos that have data within the timeframe (same as period calculation)
-                        const hasDataInTimeframe = video.history?.some((point: any) => {
+                        const hasDataInTimeframe = video.history?.some((point: VideoHistory) => {
                             const pointTime = new Date(point.time);
                             return pointTime >= timeframeStart && pointTime <= timeframeEnd;
                         });
