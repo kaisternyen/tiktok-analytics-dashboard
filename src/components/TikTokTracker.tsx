@@ -1170,26 +1170,21 @@ export default function TikTokTracker() {
             // Format in EST
             const dateStr = formatInTimeZone(label || '', 'America/New_York', 'MMM d, yyyy h:mm aa zzz');
 
-            // Check if we're in a timeframe mode (period view)
-            const isTimeframeMode = timeframe && timeframe[0] && timeframe[1];
-
             return (
                 <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
                     <p className="font-medium text-gray-900">
                         {dateStr}
                     </p>
-                    {isTimeframeMode ? (
-                        // PERIOD MODE: Show period deltas (matches click totals)
+                    {showDelta ? (
                         <>
                             <p className="text-blue-600">
-                                Period Views: {formatNumber(data.views)}
+                                Change: {formatNumber(data.delta)} views
                             </p>
                             <p className="text-gray-600 text-sm">
-                                Total change during period
+                                Total at this time: {formatNumber(data.views)} views
                             </p>
                         </>
                     ) : (
-                        // ALL TIME MODE: Show total views
                         <>
                             <p className="text-blue-600">
                                 Total Views: {formatNumber(data.views)}
@@ -1376,40 +1371,36 @@ export default function TikTokTracker() {
         const aggregateData: ChartDataPoint[] = [];
         
         if (timeframeStart && timeframeEnd) {
-            // PERIOD MODE: Show period deltas (same as API calculation)
-            // Calculate the total period delta for all videos
-            let totalPeriodViews = 0;
-            let totalPeriodLikes = 0;
-            let totalPeriodComments = 0;
-            let totalPeriodShares = 0;
+            // PERIOD MODE: Show cumulative progress within the timeframe
+            const lastKnownValues: { [videoId: string]: VideoHistory } = {};
             
-            videosWithSufficientData.forEach(video => {
-                if (video.history && video.history.length >= 2) {
-                    const sortedHistory = [...video.history].sort((a, b) => 
-                        new Date(a.time).getTime() - new Date(b.time).getTime()
-                    );
-                    const firstPoint = sortedHistory[0];
-                    const lastPoint = sortedHistory[sortedHistory.length - 1];
-                    
-                    totalPeriodViews += Math.max(0, lastPoint.views - firstPoint.views);
-                    totalPeriodLikes += Math.max(0, lastPoint.likes - firstPoint.likes);
-                    totalPeriodComments += Math.max(0, lastPoint.comments - firstPoint.comments);
-                    totalPeriodShares += Math.max(0, lastPoint.shares - firstPoint.shares);
+            sortedTimestamps.forEach(timestamp => {
+                // Update last known values for videos that have data at this timestamp
+                videosWithSufficientData.forEach(video => {
+                    const pointAtTime = video.history?.find(h => h.time === timestamp);
+                    if (pointAtTime) {
+                        lastKnownValues[video.id] = pointAtTime;
+                    }
+                });
+
+                // Calculate cumulative values within the timeframe
+                const aggregateViews = Object.values(lastKnownValues).reduce((sum, point) => sum + point.views, 0);
+                const aggregateLikes = Object.values(lastKnownValues).reduce((sum, point) => sum + point.likes, 0);
+                const aggregateComments = Object.values(lastKnownValues).reduce((sum, point) => sum + point.comments, 0);
+                const aggregateShares = Object.values(lastKnownValues).reduce((sum, point) => sum + point.shares, 0);
+
+                if (Object.keys(lastKnownValues).length > 0) {
+                    aggregateData.push({
+                        time: timestamp,
+                        views: aggregateViews,
+                        likes: aggregateLikes,
+                        comments: aggregateComments,
+                        shares: aggregateShares,
+                        delta: 0,
+                        originalTime: new Date(timestamp)
+                    });
                 }
             });
-            
-            // Create a single data point representing the total period delta
-            if (sortedTimestamps.length > 0) {
-                aggregateData.push({
-                    time: sortedTimestamps[sortedTimestamps.length - 1], // Use the last timestamp
-                    views: totalPeriodViews,
-                    likes: totalPeriodLikes,
-                    comments: totalPeriodComments,
-                    shares: totalPeriodShares,
-                    delta: 0,
-                    originalTime: new Date(sortedTimestamps[sortedTimestamps.length - 1])
-                });
-            }
         } else {
             // ALL TIME MODE: Show cumulative totals over time
             const lastKnownValues: { [videoId: string]: VideoHistory } = {};
