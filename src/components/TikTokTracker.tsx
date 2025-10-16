@@ -1163,6 +1163,32 @@ export default function TikTokTracker() {
         return formatInTimeZone(new Date(tickItem), 'America/New_York', 'MMM d, h aa');
     };
 
+    // Helper function to calculate period views for a specific timeframe using the same logic as getChartMetrics
+    const calculatePeriodViewsForTimeframe = (timeframe: [string, string]): number => {
+        const timeframeStart = new Date(timeframe[0]);
+        const timeframeEnd = new Date(timeframe[1]);
+        
+        // Filter videos based on timeframe (same logic as getChartMetrics)
+        const eligibleVideos = originalVideos.filter(video => {
+            const hasDataInTimeframe = video.history?.some(point => {
+                const pointTime = new Date(point.time);
+                return pointTime >= timeframeStart && pointTime <= timeframeEnd;
+            });
+            return hasDataInTimeframe;
+        });
+        
+        // Calculate totals using the same method as getChartMetrics
+        let totalViews = 0;
+        eligibleVideos.forEach(video => {
+            // Use the same logic as getChartMetrics - with timeframe, use period deltas from API
+            if (video.views !== undefined) {
+                totalViews += video.views;
+            }
+        });
+        
+        return totalViews;
+    };
+
     // Custom tooltip with hover details
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: ChartDataPoint }>; label?: string }) => {
         if (active && payload && payload.length) {
@@ -1201,40 +1227,9 @@ export default function TikTokTracker() {
                     pointTimeframe = [startOfDayUTC.toISOString(), endOfDayUTC.toISOString()];
                 }
                 
-                // Calculate period views for this specific data point's timeframe
+                // Use the same calculation method as getChartMetrics
                 if (pointTimeframe) {
-                    const [pointStart, pointEnd] = pointTimeframe;
-                    const pointStartDate = new Date(pointStart);
-                    const pointEndDate = new Date(pointEnd);
-                    
-                    // Calculate period total for this specific point's timeframe
-                    periodTotal = originalVideos.reduce((sum, video) => {
-                        if (!video.history) return sum;
-                        
-                        // Check if video has data within this point's timeframe
-                        const hasDataInPointTimeframe = video.history.some(point => {
-                            const pointTime = new Date(point.time);
-                            return pointTime >= pointStartDate && pointTime <= pointEndDate;
-                        });
-                        
-                        if (hasDataInPointTimeframe) {
-                            // Calculate period delta for this video in this point's timeframe
-                            const timeframePoints = video.history.filter(point => {
-                                const pointTime = new Date(point.time);
-                                return pointTime >= pointStartDate && pointTime <= pointEndDate;
-                            });
-                            
-                            if (timeframePoints.length > 0) {
-                                const sortedPoints = timeframePoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                                const firstPoint = sortedPoints[0];
-                                const lastPoint = sortedPoints[sortedPoints.length - 1];
-                                
-                                return sum + Math.max(0, lastPoint.views - firstPoint.views);
-                            }
-                        }
-                        
-                        return sum;
-                    }, 0);
+                    periodTotal = calculatePeriodViewsForTimeframe(pointTimeframe);
                 }
             }
 
