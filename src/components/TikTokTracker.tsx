@@ -1322,23 +1322,22 @@ export default function TikTokTracker() {
         let totalComments = 0;
         let totalShares = 0;
 
-        // If we have a timeframe, calculate period-specific totals
-        if (timeframeStart && timeframeEnd) {
-            eligibleVideos.forEach(video => {
-                if (video.views !== undefined) totalViews += video.views; // period views
-                if (video.likes !== undefined) totalLikes += video.likes; // period likes
-                if (video.comments !== undefined) totalComments += video.comments; // period comments
-                if (video.shares !== undefined) totalShares += video.shares; // period shares
-            });
-        } else {
-            // No timeframe - use total views
-            eligibleVideos.forEach(video => {
+        // Calculate totals consistently - always use period values from API
+        eligibleVideos.forEach(video => {
+            if (timeframeStart && timeframeEnd) {
+                // With timeframe: use period deltas from API
+                if (video.views !== undefined) totalViews += video.views;
+                if (video.likes !== undefined) totalLikes += video.likes;
+                if (video.comments !== undefined) totalComments += video.comments;
+                if (video.shares !== undefined) totalShares += video.shares;
+            } else {
+                // No timeframe: use total values from API
                 if (video.totalViews !== undefined) totalViews += video.totalViews;
                 if (video.totalLikes !== undefined) totalLikes += video.totalLikes;
                 if (video.totalComments !== undefined) totalComments += video.totalComments;
                 if (video.totalShares !== undefined) totalShares += video.totalShares;
-            });
-        }
+            }
+        });
 
         // Generate chart data using the same eligible videos
         const videosWithSufficientData = eligibleVideos.filter(video => 
@@ -1368,40 +1367,72 @@ export default function TikTokTracker() {
             new Date(a).getTime() - new Date(b).getTime()
         );
 
-        // Build proper aggregate data by carrying forward last known values
+        // Build chart data based on timeframe type
         const aggregateData: ChartDataPoint[] = [];
-        const lastKnownValues: { [videoId: string]: VideoHistory } = {};
+        
+        if (timeframeStart && timeframeEnd) {
+            // PERIOD MODE: Show cumulative progress within the timeframe
+            const lastKnownValues: { [videoId: string]: VideoHistory } = {};
+            
+            sortedTimestamps.forEach(timestamp => {
+                // Update last known values for videos that have data at this timestamp
+                videosWithSufficientData.forEach(video => {
+                    const pointAtTime = video.history?.find(h => h.time === timestamp);
+                    if (pointAtTime) {
+                        lastKnownValues[video.id] = pointAtTime;
+                    }
+                });
 
-        // Process each timestamp and build aggregate
-        sortedTimestamps.forEach(timestamp => {
-            // Update last known values for videos that have data at this timestamp
-            videosWithSufficientData.forEach(video => {
-                const pointAtTime = video.history?.find(h => h.time === timestamp);
-                if (pointAtTime) {
-                    // Add or update this video's last known value
-                    lastKnownValues[video.id] = pointAtTime;
+                // Calculate cumulative values within the timeframe
+                const aggregateViews = Object.values(lastKnownValues).reduce((sum, point) => sum + point.views, 0);
+                const aggregateLikes = Object.values(lastKnownValues).reduce((sum, point) => sum + point.likes, 0);
+                const aggregateComments = Object.values(lastKnownValues).reduce((sum, point) => sum + point.comments, 0);
+                const aggregateShares = Object.values(lastKnownValues).reduce((sum, point) => sum + point.shares, 0);
+
+                if (Object.keys(lastKnownValues).length > 0) {
+                    aggregateData.push({
+                        time: timestamp,
+                        views: aggregateViews,
+                        likes: aggregateLikes,
+                        comments: aggregateComments,
+                        shares: aggregateShares,
+                        delta: 0,
+                        originalTime: new Date(timestamp)
+                    });
                 }
             });
-
-            // Calculate aggregate values using last known values (cumulative totals)
-            const aggregateViews = Object.values(lastKnownValues).reduce((sum, point) => sum + point.views, 0);
-            const aggregateLikes = Object.values(lastKnownValues).reduce((sum, point) => sum + point.likes, 0);
-            const aggregateComments = Object.values(lastKnownValues).reduce((sum, point) => sum + point.comments, 0);
-            const aggregateShares = Object.values(lastKnownValues).reduce((sum, point) => sum + point.shares, 0);
-
-            // Only add if we have data for at least one video at this point
-            if (Object.keys(lastKnownValues).length > 0) {
-                aggregateData.push({
-                    time: timestamp,
-                    views: aggregateViews,
-                    likes: aggregateLikes,
-                    comments: aggregateComments,
-                    shares: aggregateShares,
-                    delta: 0,
-                    originalTime: new Date(timestamp)
+        } else {
+            // ALL TIME MODE: Show cumulative totals over time
+            const lastKnownValues: { [videoId: string]: VideoHistory } = {};
+            
+            sortedTimestamps.forEach(timestamp => {
+                // Update last known values for videos that have data at this timestamp
+                videosWithSufficientData.forEach(video => {
+                    const pointAtTime = video.history?.find(h => h.time === timestamp);
+                    if (pointAtTime) {
+                        lastKnownValues[video.id] = pointAtTime;
+                    }
                 });
-            }
-        });
+
+                // Calculate cumulative totals across all time
+                const aggregateViews = Object.values(lastKnownValues).reduce((sum, point) => sum + point.views, 0);
+                const aggregateLikes = Object.values(lastKnownValues).reduce((sum, point) => sum + point.likes, 0);
+                const aggregateComments = Object.values(lastKnownValues).reduce((sum, point) => sum + point.comments, 0);
+                const aggregateShares = Object.values(lastKnownValues).reduce((sum, point) => sum + point.shares, 0);
+
+                if (Object.keys(lastKnownValues).length > 0) {
+                    aggregateData.push({
+                        time: timestamp,
+                        views: aggregateViews,
+                        likes: aggregateLikes,
+                        comments: aggregateComments,
+                        shares: aggregateShares,
+                        delta: 0,
+                        originalTime: new Date(timestamp)
+                    });
+                }
+            });
+        }
 
         // Create raw chart data with absolute values
         const rawChartData: ChartDataPoint[] = aggregateData.map((point) => ({
