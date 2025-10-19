@@ -1444,7 +1444,7 @@ export default function TikTokTracker() {
         
         // Recalculate deltas for aggregated data (only for ALL TIME mode)
         return sortedAggregated.map((point, index) => {
-            // If we already calculated period deltas or day deltas, keep them
+            // If we already calculated daily deltas (PERIOD MODE), keep them
             if (point.delta !== 0) {
                 return point;
             }
@@ -1568,65 +1568,67 @@ export default function TikTokTracker() {
         const aggregateData: ChartDataPoint[] = [];
         
         if (timeframeStart && timeframeEnd) {
-            // PERIOD MODE: Calculate period deltas for each time point
-            const baselineValues: { [videoId: string]: VideoHistory } = {};
+            // PERIOD MODE: Calculate daily deltas for each day
+            const dailyDeltas: { [dayKey: string]: { views: number; likes: number; comments: number; shares: number } } = {};
             
-            // Find baseline values (first data point for each video in timeframe)
+            // Calculate daily deltas for each video
             videosWithSufficientData.forEach(video => {
                 if (video.history?.length) {
-                    const firstPointInTimeframe = video.history
+                    // Filter to timeframe and sort by time
+                    const timeframePoints = video.history
                         .filter(point => {
                             const pointTime = new Date(point.time);
                             return pointTime >= timeframeStart && pointTime <= timeframeEnd;
                         })
-                        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())[0];
+                        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
                     
-                    if (firstPointInTimeframe) {
-                        baselineValues[video.id] = firstPointInTimeframe;
-                    }
+                    // Group points by day (EST)
+                    const pointsByDay: { [dayKey: string]: VideoHistory[] } = {};
+                    timeframePoints.forEach(point => {
+                        const pointDate = toEasternTime(new Date(point.time));
+                        const dayKey = `${pointDate.getFullYear()}-${String(pointDate.getMonth() + 1).padStart(2, '0')}-${String(pointDate.getDate()).padStart(2, '0')}`;
+                        
+                        if (!pointsByDay[dayKey]) {
+                            pointsByDay[dayKey] = [];
+                        }
+                        pointsByDay[dayKey].push(point);
+                    });
+                    
+                    // Calculate daily deltas for this video
+                    Object.keys(pointsByDay).forEach(dayKey => {
+                        const dayPoints = pointsByDay[dayKey].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                        const firstPoint = dayPoints[0];
+                        const lastPoint = dayPoints[dayPoints.length - 1];
+                        
+                        const dayDeltaViews = Math.max(0, lastPoint.views - firstPoint.views);
+                        const dayDeltaLikes = Math.max(0, lastPoint.likes - firstPoint.likes);
+                        const dayDeltaComments = Math.max(0, lastPoint.comments - firstPoint.comments);
+                        const dayDeltaShares = Math.max(0, lastPoint.shares - firstPoint.shares);
+                        
+                        if (!dailyDeltas[dayKey]) {
+                            dailyDeltas[dayKey] = { views: 0, likes: 0, comments: 0, shares: 0 };
+                        }
+                        
+                        dailyDeltas[dayKey].views += dayDeltaViews;
+                        dailyDeltas[dayKey].likes += dayDeltaLikes;
+                        dailyDeltas[dayKey].comments += dayDeltaComments;
+                        dailyDeltas[dayKey].shares += dayDeltaShares;
+                    });
                 }
             });
             
-            sortedTimestamps.forEach(timestamp => {
-                const currentValues: { [videoId: string]: VideoHistory } = {};
-                
-                // Get current values for videos that have data at this timestamp
-                videosWithSufficientData.forEach(video => {
-                    const pointAtTime = video.history?.find(h => h.time === timestamp);
-                    if (pointAtTime) {
-                        currentValues[video.id] = pointAtTime;
-                    }
+            // Convert daily deltas to chart data points
+            Object.keys(dailyDeltas).sort().forEach(dayKey => {
+                const deltas = dailyDeltas[dayKey];
+                aggregateData.push({
+                    time: dayKey,
+                    views: deltas.views,
+                    likes: deltas.likes,
+                    comments: deltas.comments,
+                    shares: deltas.shares,
+                    delta: deltas.views, // Daily delta
+                    originalTime: new Date(dayKey)
                 });
-
-                // Calculate period deltas (current - baseline for each video)
-                let totalPeriodViews = 0;
-                let totalPeriodLikes = 0;
-                let totalPeriodComments = 0;
-                let totalPeriodShares = 0;
-                
-                Object.keys(currentValues).forEach(videoId => {
-                    const current = currentValues[videoId];
-                    const baseline = baselineValues[videoId];
-                    
-                    if (baseline) {
-                        totalPeriodViews += Math.max(0, current.views - baseline.views);
-                        totalPeriodLikes += Math.max(0, current.likes - baseline.likes);
-                        totalPeriodComments += Math.max(0, current.comments - baseline.comments);
-                        totalPeriodShares += Math.max(0, current.shares - baseline.shares);
-                    }
-                });
-
-                if (Object.keys(currentValues).length > 0) {
-                    aggregateData.push({
-                        time: timestamp,
-                        views: totalPeriodViews,
-                        likes: totalPeriodLikes,
-                        comments: totalPeriodComments,
-                        shares: totalPeriodShares,
-                        delta: totalPeriodViews, // Use period views as delta
-                        originalTime: new Date(timestamp)
-                    });
-                }
             });
         } else {
             // ALL TIME MODE: Show cumulative totals over time
