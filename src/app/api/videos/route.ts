@@ -273,7 +273,8 @@ export async function GET(req: Request) {
         const decodedFilterParam = filterParam ? decodeURIComponent(filterParam) : null;
         const decodedSortParam = sortParam ? decodeURIComponent(sortParam) : null;
         console.log('RAW filterParam:', filterParam);
-        let where: Record<string, unknown> = { isActive: true };
+        let where: Record<string, unknown> = {}; // Temporarily remove isActive filter for debugging
+        console.log('🔍 Initial where clause (NO isActive filter):', JSON.stringify(where, null, 2));
         let timeframe: [string, string] | null = null;
         let filterParamToParse = decodedFilterParam;
         let hasTimeframeFilter = false;
@@ -297,13 +298,13 @@ export async function GET(req: Request) {
                 const parsedFilters = parseFilters(filterParamToParse);
                 console.log('PARSED filters:', JSON.stringify(parsedFilters, null, 2));
                 if (parsedFilters) where = { 
-                    ...parsedFilters, 
-                    isActive: true
+                    ...parsedFilters
+                    // Temporarily removed isActive: true for debugging
                 };
             } else {
                 // Only filter by isActive in DB, all other filters after delta calculation
                 where = { 
-                    isActive: true
+                    // Temporarily removed isActive: true for debugging
                 };
                 console.log('⏰ Timeframe filter detected - will apply other filters after delta calculation');
             }
@@ -339,6 +340,11 @@ export async function GET(req: Request) {
         }) as VideoWithIncludes[];
 
         console.log(`✅ Found ${videos.length} videos in database`);
+        
+        // Debug: Check how many are active vs inactive
+        const activeCount = videos.filter(v => v.isActive).length;
+        const inactiveCount = videos.filter(v => !v.isActive).length;
+        console.log(`📊 Active videos: ${activeCount}, Inactive videos: ${inactiveCount}`);
         
         // Removed verbose logging to prevent console spam every 30 seconds
 
