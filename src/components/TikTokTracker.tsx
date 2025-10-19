@@ -144,7 +144,7 @@ export default function TikTokTracker() {
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
     // Unified time period for both chart and videos list
-    const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('W');
+    const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('ALL');
     const [showDelta, setShowDelta] = useState(true); // Default to delta view
     const [timeGranularity, setTimeGranularity] = useState<'hourly' | 'daily' | 'weekly'>('daily');
     
@@ -1164,7 +1164,7 @@ export default function TikTokTracker() {
     const getYAxisDomain = (data: ChartDataPoint[]) => {
         if (data.length === 0) return [0, 100];
         
-        const values = data.map(d => d.views);
+        const values = data.map(d => showDelta ? d.delta : d.views);
         const min = Math.min(...values);
         const max = Math.max(...values);
         
@@ -2267,7 +2267,7 @@ export default function TikTokTracker() {
                                                         <Tooltip content={<CustomTooltip />} />
                                                         <Area
                                                             type="monotone"
-                                                            dataKey="views"
+                                                            dataKey={showDelta ? "delta" : "views"}
                                                             stroke="#3b82f6"
                                                             fill="#3b82f6"
                                                             fillOpacity={0.1}
