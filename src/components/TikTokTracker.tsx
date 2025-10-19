@@ -143,8 +143,7 @@ export default function TikTokTracker() {
     const [success, setSuccess] = useState<string | null>(null);
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
-    // Unified time period for both chart and videos list
-    const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('ALL');
+    const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('W');
     const [showDelta, setShowDelta] = useState(true); // Default to delta view
     const [timeGranularity, setTimeGranularity] = useState<'hourly' | 'daily' | 'weekly'>('daily');
     
