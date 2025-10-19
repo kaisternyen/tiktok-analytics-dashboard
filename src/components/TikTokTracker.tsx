@@ -1444,7 +1444,7 @@ export default function TikTokTracker() {
         
         // Recalculate deltas for aggregated data (only for ALL TIME mode)
         return sortedAggregated.map((point, index) => {
-            // If we already calculated day deltas, keep them
+            // If we already calculated period deltas or day deltas, keep them
             if (point.delta !== 0) {
                 return point;
             }
@@ -1568,32 +1568,62 @@ export default function TikTokTracker() {
         const aggregateData: ChartDataPoint[] = [];
         
         if (timeframeStart && timeframeEnd) {
-            // PERIOD MODE: Show cumulative progress within the timeframe
-            const lastKnownValues: { [videoId: string]: VideoHistory } = {};
+            // PERIOD MODE: Calculate period deltas for each time point
+            const baselineValues: { [videoId: string]: VideoHistory } = {};
+            
+            // Find baseline values (first data point for each video in timeframe)
+            videosWithSufficientData.forEach(video => {
+                if (video.history?.length) {
+                    const firstPointInTimeframe = video.history
+                        .filter(point => {
+                            const pointTime = new Date(point.time);
+                            return pointTime >= timeframeStart && pointTime <= timeframeEnd;
+                        })
+                        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())[0];
+                    
+                    if (firstPointInTimeframe) {
+                        baselineValues[video.id] = firstPointInTimeframe;
+                    }
+                }
+            });
             
             sortedTimestamps.forEach(timestamp => {
-                // Update last known values for videos that have data at this timestamp
+                const currentValues: { [videoId: string]: VideoHistory } = {};
+                
+                // Get current values for videos that have data at this timestamp
                 videosWithSufficientData.forEach(video => {
                     const pointAtTime = video.history?.find(h => h.time === timestamp);
                     if (pointAtTime) {
-                        lastKnownValues[video.id] = pointAtTime;
+                        currentValues[video.id] = pointAtTime;
                     }
                 });
 
-                // Calculate cumulative values within the timeframe
-                const aggregateViews = Object.values(lastKnownValues).reduce((sum, point) => sum + point.views, 0);
-                const aggregateLikes = Object.values(lastKnownValues).reduce((sum, point) => sum + point.likes, 0);
-                const aggregateComments = Object.values(lastKnownValues).reduce((sum, point) => sum + point.comments, 0);
-                const aggregateShares = Object.values(lastKnownValues).reduce((sum, point) => sum + point.shares, 0);
+                // Calculate period deltas (current - baseline for each video)
+                let totalPeriodViews = 0;
+                let totalPeriodLikes = 0;
+                let totalPeriodComments = 0;
+                let totalPeriodShares = 0;
+                
+                Object.keys(currentValues).forEach(videoId => {
+                    const current = currentValues[videoId];
+                    const baseline = baselineValues[videoId];
+                    
+                    if (baseline) {
+                        totalPeriodViews += Math.max(0, current.views - baseline.views);
+                        totalPeriodLikes += Math.max(0, current.likes - baseline.likes);
+                        totalPeriodComments += Math.max(0, current.comments - baseline.comments);
+                        totalPeriodShares += Math.max(0, current.shares - baseline.shares);
+                    }
+                });
 
-                if (Object.keys(lastKnownValues).length > 0) {
+                if (Object.keys(currentValues).length > 0) {
                     aggregateData.push({
                         time: timestamp,
-                        views: aggregateViews,
-                        likes: aggregateLikes,
-                        comments: aggregateComments,
-                        shares: aggregateShares,
-                        delta: 0,
+                        views: totalPeriodViews,
+                        likes: totalPeriodLikes,
+                        comments: totalPeriodComments,
+                        shares: totalPeriodShares,
+                        delta: totalPeriodViews, // Use period views as delta
                         originalTime: new Date(timestamp)
                     });
                 }
