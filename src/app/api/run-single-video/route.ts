@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { scrapeMediaPost, extractTikTokStatsFromTikHubData } from '@/lib/tikhub';
+import { scrapeMediaPost } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import { sanitizeMetrics, logSanitizationWarnings } from '@/lib/metrics-validation';
 
@@ -114,21 +114,14 @@ export async function POST(req: Request) {
         console.log(`  - All keys:`, Object.keys((tikHubResult.data as unknown as Record<string, unknown>) || {}));
         
         if (video.platform === 'tiktok' && tikHubResult.data) {
-            // Use centralized TikHub data extraction
-            const rawResponse = tikHubResult.debugInfo?.tikHubRawResponse;
-            console.log(`🔍 Raw response exists:`, !!rawResponse);
-            console.log(`🔍 Raw response keys:`, rawResponse ? Object.keys(rawResponse) : 'undefined');
+            // Data is already perfectly extracted in tikHubResult.data
+            const tikTokData = tikHubResult.data as unknown as Record<string, unknown>;
+            views = tikTokData.views as number || 0;
+            likes = tikTokData.likes as number || 0;
+            comments = tikTokData.comments as number || 0;
+            shares = tikTokData.shares as number || 0;
             
-            // Use raw response if available, otherwise use transformed data
-            const dataToExtract = rawResponse || tikHubResult.data;
-            console.log(`🔍 Using data source:`, rawResponse ? 'raw response' : 'transformed data');
-            
-            const extractedData = extractTikTokStatsFromTikHubData(dataToExtract, video.url);
-            console.log(`📊 Extracted data for @${video.username}:`, extractedData);
-            views = extractedData.views;
-            likes = extractedData.likes;
-            comments = extractedData.comments;
-            shares = extractedData.shares;
+            console.log(`📊 Using direct data for @${video.username}:`, { views, likes, comments, shares });
         } else if (video.platform === 'instagram' && tikHubResult.data) {
             const instagramData = tikHubResult.data as unknown as Record<string, unknown>;
             views = instagramData.view_count as number || 0;
