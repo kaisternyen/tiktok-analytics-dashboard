@@ -1500,7 +1500,7 @@ export default function TikTokTracker() {
                 likes = latestPoint.likes || 0;
                 comments = latestPoint.comments || 0;
                 shares = latestPoint.shares || 0;
-                delta = 0; // Will be calculated later
+                delta = latestPoint.delta; // Use the delta from chart data
             }
             
             aggregated.push({
@@ -1721,14 +1721,21 @@ export default function TikTokTracker() {
                 const pointDate = new Date(point.time);
                 if (timeGranularity === 'hourly') {
                     delta = calculateHourlyPeriodViews(pointDate);
-                } else {
+                } else if (timeGranularity === 'daily') {
                     delta = calculateDailyPeriodViews(pointDate);
+                } else if (timeGranularity === 'weekly') {
+                    delta = calculateDailyPeriodViews(pointDate); // Weekly uses daily calculation
                 }
             }
             
             return {
                 time: point.time,
-                views: showDelta ? (timeGranularity === 'hourly' ? calculateHourlyPeriodViews(new Date(point.time)) : calculateDailyPeriodViews(new Date(point.time))) : point.views,
+                views: showDelta ? (
+                    timeGranularity === 'hourly' ? calculateHourlyPeriodViews(new Date(point.time)) :
+                    timeGranularity === 'daily' ? calculateDailyPeriodViews(new Date(point.time)) :
+                    timeGranularity === 'weekly' ? calculateDailyPeriodViews(new Date(point.time)) :
+                    point.views
+                ) : point.views,
                 likes: point.likes,
                 comments: point.comments,
                 shares: point.shares,
