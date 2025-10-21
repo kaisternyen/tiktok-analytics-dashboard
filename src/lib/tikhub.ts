@@ -199,24 +199,13 @@ export function extractTikTokStatsFromTikHubData(videoData: unknown, originalUrl
     
     console.log('📊 Using video data from:', awemeDetail ? 'aweme_detail' : 'top level');
     
-    // Extract statistics with comprehensive fallback chain
-    const views = (videoDataToUse?.statistics as Record<string, unknown>)?.play_count as number || 
-                  videoDataToUse?.play_count as number || 
-                  (videoDataToUse?.stats as Record<string, unknown>)?.play_count as number || 
-                  videoDataToUse?.view_count as number || 0;
-                  
-    const likes = (videoDataToUse?.statistics as Record<string, unknown>)?.digg_count as number || 
-                  videoDataToUse?.digg_count as number || 
-                  (videoDataToUse?.stats as Record<string, unknown>)?.digg_count as number || 
-                  videoDataToUse?.like_count as number || 0;
-                  
-    const comments = (videoDataToUse?.statistics as Record<string, unknown>)?.comment_count as number || 
-                     videoDataToUse?.comment_count as number || 
-                     (videoDataToUse?.stats as Record<string, unknown>)?.comment_count as number || 0;
-                     
-    const shares = (videoDataToUse?.statistics as Record<string, unknown>)?.share_count as number || 
-                   videoDataToUse?.share_count as number || 
-                   (videoDataToUse?.stats as Record<string, unknown>)?.share_count as number || 0;
+    // Extract statistics using correct TikHub field names
+    const views = (videoDataToUse?.statistics as Record<string, unknown>)?.play_count as number || 0;
+    const likes = (videoDataToUse?.statistics as Record<string, unknown>)?.digg_count as number || 0;
+    const comments = (videoDataToUse?.statistics as Record<string, unknown>)?.comment_count as number || 0;
+    const shares = (videoDataToUse?.statistics as Record<string, unknown>)?.share_count as number || 0;
+    
+    console.log('📊 EXTRACTED VALUES:', { views, likes, comments, shares });
     
     // Extract other data
     let username = (videoDataToUse?.author as Record<string, unknown>)?.unique_id as string || 
