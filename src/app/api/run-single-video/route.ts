@@ -124,10 +124,25 @@ export async function POST(req: Request) {
             console.log(`📊 Using direct data for @${video.username}:`, { views, likes, comments, shares });
         } else if (video.platform === 'instagram' && tikHubResult.data) {
             const instagramData = tikHubResult.data as unknown as Record<string, unknown>;
-            views = instagramData.view_count as number || 0;
+            
+            console.log(`📸 INSTAGRAM DEBUG for @${video.username}:`);
+            console.log(`📸 Instagram data keys:`, Object.keys(instagramData));
+            console.log(`📸 Instagram data:`, JSON.stringify(instagramData, null, 2));
+            console.log(`📸 Instagram view_count:`, instagramData.view_count);
+            console.log(`📸 Instagram views:`, instagramData.views);
+            console.log(`📸 Instagram likes:`, instagramData.likes);
+            console.log(`📸 Instagram comments:`, instagramData.comments);
+            console.log(`📸 Instagram play_count:`, instagramData.play_count);
+            console.log(`📸 Instagram statistics:`, instagramData.statistics);
+            
+            views = instagramData.view_count as number || 
+                   instagramData.views as number || 
+                   instagramData.play_count as number || 0;
             likes = instagramData.likes as number || 0;
             comments = instagramData.comments as number || 0;
             shares = 0; // Instagram doesn't have shares
+            
+            console.log(`📸 Instagram extracted values:`, { views, likes, comments, shares });
         } else if (video.platform === 'youtube' && tikHubResult.data) {
             const youtubeData = tikHubResult.data as unknown as Record<string, unknown>;
             views = (youtubeData.statistics as Record<string, unknown>)?.viewCount as number || youtubeData.viewCount as number || 0;
