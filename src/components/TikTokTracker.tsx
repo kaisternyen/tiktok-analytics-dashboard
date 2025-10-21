@@ -1538,16 +1538,18 @@ export default function TikTokTracker() {
         const aggregateData: ChartDataPoint[] = [];
         
         if (timeframeStart && timeframeEnd) {
-            // PERIOD MODE: Use existing data points instead of forcing granularity buckets
-            const granularityData: { [timeKey: string]: number } = {};
+            // PERIOD MODE: Use the EXACT SAME logic as the period total calculation
+            console.log(`📊 Using unified period calculation logic for ${timeGranularity} granularity`);
+            console.log(`📊 Timeframe: ${timeframeStart.toISOString()} to ${timeframeEnd.toISOString()}`);
+            console.log(`📊 Eligible videos: ${eligibleVideos.length}`);
             
-            if (timeGranularity === 'hourly') {
-                // For hourly view, generate hourly buckets and calculate deltas for each hour
-                const generateHourlyBuckets = () => {
-                    const buckets: string[] = [];
-                    const start = new Date(timeframeStart);
-                    const end = new Date(timeframeEnd);
-                    
+            // Generate time buckets based on granularity
+            const generateTimeBuckets = () => {
+                const buckets: string[] = [];
+                const start = new Date(timeframeStart);
+                const end = new Date(timeframeEnd);
+                
+                if (timeGranularity === 'hourly') {
                     // Generate hourly buckets
                     for (let time = start.getTime(); time <= end.getTime(); time += 60 * 60 * 1000) { // 1 hour = 60 * 60 * 1000 ms
                         const hourDate = new Date(time);
@@ -1555,34 +1557,41 @@ export default function TikTokTracker() {
                         const key = `${hourEST.getFullYear()}-${String(hourEST.getMonth() + 1).padStart(2, '0')}-${String(hourEST.getDate()).padStart(2, '0')} ${String(hourEST.getHours()).padStart(2, '0')}:00`;
                         buckets.push(key);
                     }
-                    
-                    return buckets;
-                };
-                
-                const hourlyBuckets = generateHourlyBuckets();
-                
-                console.log(`🕐 Generated ${hourlyBuckets.length} hourly buckets:`, hourlyBuckets.slice(0, 5), '...');
-                console.log(`🕐 Timeframe: ${timeframeStart?.toISOString()} to ${timeframeEnd?.toISOString()}`);
-                console.log(`🕐 Videos with sufficient data: ${videosWithSufficientData.length}`);
-                
-                // Debug: Show data points for first few videos
-                videosWithSufficientData.slice(0, 3).forEach((video, index) => {
-                    console.log(`🕐 Video ${index + 1} (@${video.username}): ${video.history?.length} data points`);
-                    if (video.history && video.history.length > 0) {
-                        const firstPoint = video.history[0];
-                        const lastPoint = video.history[video.history.length - 1];
-                        console.log(`🕐   First: ${firstPoint.time} (${firstPoint.views} views)`);
-                        console.log(`🕐   Last: ${lastPoint.time} (${lastPoint.views} views)`);
+                } else if (timeGranularity === 'daily') {
+                    // Generate daily buckets
+                    for (let time = start.getTime(); time <= end.getTime(); time += 24 * 60 * 60 * 1000) {
+                        const dayDate = new Date(time);
+                        const dayEST = toEasternTime(dayDate);
+                        const key = `${dayEST.getFullYear()}-${String(dayEST.getMonth() + 1).padStart(2, '0')}-${String(dayEST.getDate()).padStart(2, '0')}`;
+                        buckets.push(key);
                     }
-                });
+                } else if (timeGranularity === 'weekly') {
+                    // Generate weekly buckets
+                    for (let time = start.getTime(); time <= end.getTime(); time += 7 * 24 * 60 * 60 * 1000) {
+                        const weekDate = new Date(time);
+                        const weekEST = toEasternTime(weekDate);
+                        const weekStart = new Date(weekEST);
+                        const day = weekStart.getDay();
+                        const diff = weekStart.getDate() - day;
+                        weekStart.setDate(diff);
+                        weekStart.setHours(0, 0, 0, 0);
+                        const key = weekStart.toISOString().split('T')[0];
+                        buckets.push(key);
+                    }
+                }
                 
-                // Initialize all hourly buckets to 0
-                hourlyBuckets.forEach(bucket => {
-                    granularityData[bucket] = 0;
-                });
+                return buckets;
+            };
+            
+            const timeBuckets = generateTimeBuckets();
+            console.log(`📊 Generated ${timeBuckets.length} ${timeGranularity} buckets:`, timeBuckets.slice(0, 3), '...');
+            
+            // For each time bucket, calculate the delta using the EXACT SAME logic as period total
+            timeBuckets.forEach(timeKey => {
+                let bucketStart: Date;
+                let bucketEnd: Date;
                 
-                // For each hourly bucket, calculate the delta using the SAME logic as calculateVideoPeriodViews
-                hourlyBuckets.forEach(timeKey => {
+                if (timeGranularity === 'hourly') {
                     // Parse hourly bucket: "2025-10-20 14:00" (this is in EST)
                     const [datePart, timePart] = timeKey.split(' ');
                     const [year, month, day] = datePart.split('-').map(Number);
@@ -1592,150 +1601,81 @@ export default function TikTokTracker() {
                     const bucketStartEST = new Date(year, month - 1, day, hour, 0, 0, 0);
                     const bucketEndEST = new Date(year, month - 1, day, hour, 59, 59, 999);
                     
-                    // Convert EST bucket boundaries to UTC for proper comparison with data points
-                    const bucketStart = fromEasternTime(bucketStartEST);
-                    const bucketEnd = fromEasternTime(bucketEndEST);
+                    bucketStart = fromEasternTime(bucketStartEST);
+                    bucketEnd = fromEasternTime(bucketEndEST);
+                } else if (timeGranularity === 'daily') {
+                    // Parse daily bucket: "2025-10-20" (this is in EST)
+                    const [year, month, day] = timeKey.split('-').map(Number);
                     
-                    // Calculate delta for each video in this specific hour bucket
-                    videosWithSufficientData.forEach(video => {
-                        if (video.history && video.history.length > 0) {
-                            // Find data points within this specific hour bucket
-                            const bucketPoints = video.history.filter(point => {
-                                const pointTime = new Date(point.time);
-                                return pointTime >= bucketStart && pointTime <= bucketEnd;
-                            });
+                    // Create bucket boundaries in EST, then convert to UTC for comparison with data points
+                    const bucketStartEST = new Date(year, month - 1, day, 0, 0, 0, 0);
+                    const bucketEndEST = new Date(year, month - 1, day, 23, 59, 59, 999);
+                    
+                    bucketStart = fromEasternTime(bucketStartEST);
+                    bucketEnd = fromEasternTime(bucketEndEST);
+                } else { // weekly
+                    // Parse weekly bucket: "2025-10-20" (start of week in EST)
+                    const [year, month, day] = timeKey.split('-').map(Number);
+                    
+                    // Create bucket boundaries in EST, then convert to UTC for comparison with data points
+                    const bucketStartEST = new Date(year, month - 1, day, 0, 0, 0, 0);
+                    const bucketEndEST = new Date(year, month - 1, day + 6, 23, 59, 59, 999);
+                    
+                    bucketStart = fromEasternTime(bucketStartEST);
+                    bucketEnd = fromEasternTime(bucketEndEST);
+                }
+                
+                // Use the EXACT SAME logic as period total calculation
+                let bucketTotalViews = 0;
+                let bucketTotalLikes = 0;
+                let bucketTotalComments = 0;
+                let bucketTotalShares = 0;
+                
+                // Calculate totals consistently - calculate period deltas from historical data (SAME AS PERIOD TOTAL)
+                eligibleVideos.forEach(video => {
+                    if (video.history && video.history.length > 0) {
+                        // Find first and last data points within this specific bucket timeframe
+                        const bucketPoints = video.history.filter(point => {
+                            const pointTime = new Date(point.time);
+                            return pointTime >= bucketStart && pointTime <= bucketEnd;
+                        });
+                        
+                        if (bucketPoints.length > 0) {
+                            const sortedPoints = bucketPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                            const firstPoint = sortedPoints[0];
+                            const lastPoint = sortedPoints[sortedPoints.length - 1];
                             
-                            if (bucketPoints.length > 0) {
-                                const sortedBucketPoints = bucketPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                                const firstPoint = sortedBucketPoints[0];
-                                const lastPoint = sortedBucketPoints[sortedBucketPoints.length - 1];
-                                
-                                // Calculate delta for this video in this hour bucket (SAME AS calculateVideoPeriodViews)
-                                const videoDelta = Math.max(0, lastPoint.views - firstPoint.views);
-                                granularityData[timeKey] += videoDelta;
-                                
-                                if (videoDelta > 0) {
-                                    console.log(`🕐 Bucket ${timeKey}: video ${video.username} has ${bucketPoints.length} points, delta=${videoDelta}, total=${granularityData[timeKey]}`);
-                                } else if (bucketPoints.length > 0) {
-                                    console.log(`🕐 Bucket ${timeKey}: video ${video.username} has ${bucketPoints.length} points but delta=0 (first=${firstPoint.views}, last=${lastPoint.views})`);
-                                }
-                            }
-                        }
-                    });
-                });
-            } else {
-                // For daily/weekly view, use the existing bucket logic
-                const generateTimeBuckets = () => {
-                    const buckets: string[] = [];
-                    const start = new Date(timeframeStart);
-                    const end = new Date(timeframeEnd);
-                    
-                    if (timeGranularity === 'daily') {
-                        // Generate daily buckets
-                        for (let time = start.getTime(); time <= end.getTime(); time += 24 * 60 * 60 * 1000) {
-                            const dayDate = new Date(time);
-                            const dayEST = toEasternTime(dayDate);
-                            const key = `${dayEST.getFullYear()}-${String(dayEST.getMonth() + 1).padStart(2, '0')}-${String(dayEST.getDate()).padStart(2, '0')}`;
-                            buckets.push(key);
-                        }
-                    } else if (timeGranularity === 'weekly') {
-                        // Generate weekly buckets
-                        for (let time = start.getTime(); time <= end.getTime(); time += 7 * 24 * 60 * 60 * 1000) {
-                            const weekDate = new Date(time);
-                            const weekEST = toEasternTime(weekDate);
-                            const weekStart = new Date(weekEST);
-                            const day = weekStart.getDay();
-                            const diff = weekStart.getDate() - day;
-                            weekStart.setDate(diff);
-                            weekStart.setHours(0, 0, 0, 0);
-                            const key = weekStart.toISOString().split('T')[0];
-                            buckets.push(key);
+                            // Calculate delta for this video in this bucket (EXACT SAME AS PERIOD TOTAL)
+                            bucketTotalViews += Math.max(0, lastPoint.views - firstPoint.views);
+                            bucketTotalLikes += Math.max(0, lastPoint.likes - firstPoint.likes);
+                            bucketTotalComments += Math.max(0, lastPoint.comments - firstPoint.comments);
+                            bucketTotalShares += Math.max(0, lastPoint.shares - firstPoint.shares);
                         }
                     }
-                    
-                    return buckets;
-                };
-                
-                const timeBuckets = generateTimeBuckets();
-                
-                // Initialize all buckets to 0
-                timeBuckets.forEach(bucket => {
-                    granularityData[bucket] = 0;
                 });
                 
-                // For each time bucket, calculate the delta using the SAME logic as calculateVideoPeriodViews
-                timeBuckets.forEach(timeKey => {
-                    let bucketStart: Date;
-                    let bucketEnd: Date;
-                    
-                    if (timeGranularity === 'daily') {
-                        // Parse daily bucket: "2025-10-20" (this is in EST)
-                        const [year, month, day] = timeKey.split('-').map(Number);
-                        
-                        // Create bucket boundaries in EST, then convert to UTC for comparison with data points
-                        const bucketStartEST = new Date(year, month - 1, day, 0, 0, 0, 0);
-                        const bucketEndEST = new Date(year, month - 1, day, 23, 59, 59, 999);
-                        
-                        bucketStart = fromEasternTime(bucketStartEST);
-                        bucketEnd = fromEasternTime(bucketEndEST);
-                    } else { // weekly
-                        // Parse weekly bucket: "2025-10-20" (start of week in EST)
-                        const [year, month, day] = timeKey.split('-').map(Number);
-                        
-                        // Create bucket boundaries in EST, then convert to UTC for comparison with data points
-                        const bucketStartEST = new Date(year, month - 1, day, 0, 0, 0, 0);
-                        const bucketEndEST = new Date(year, month - 1, day + 6, 23, 59, 59, 999);
-                        
-                        bucketStart = fromEasternTime(bucketStartEST);
-                        bucketEnd = fromEasternTime(bucketEndEST);
-                    }
-                    
-                    // Calculate delta for each video in this time bucket using SAME logic as calculateVideoPeriodViews
-                    videosWithSufficientData.forEach(video => {
-                        if (video.history && video.history.length > 0) {
-                            // Find data points within this specific time bucket
-                            const bucketPoints = video.history.filter(point => {
-                                const pointTime = new Date(point.time);
-                                return pointTime >= bucketStart && pointTime <= bucketEnd;
-                            });
-                            
-                            if (bucketPoints.length > 0) {
-                                const sortedBucketPoints = bucketPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                                const firstPoint = sortedBucketPoints[0];
-                                const lastPoint = sortedBucketPoints[sortedBucketPoints.length - 1];
-                                
-                                // Calculate delta for this video in this time bucket (SAME AS calculateVideoPeriodViews)
-                                const videoDelta = Math.max(0, lastPoint.views - firstPoint.views);
-                                granularityData[timeKey] += videoDelta;
-                            }
-                        }
-                    });
-                });
-            }
-            
-            // Convert granularity data to chart data points
-            const bucketsWithData = Object.entries(granularityData).filter(([, views]) => views > 0);
-            const bucketsWithoutData = Object.entries(granularityData).filter(([, views]) => views === 0);
-            
-            console.log(`📊 Granularity Summary: ${bucketsWithData.length} buckets with data, ${bucketsWithoutData.length} empty buckets`);
-            if (bucketsWithData.length > 0) {
-                console.log(`📊 Buckets with data:`, bucketsWithData.map(([time, views]) => `${time}: ${views}`).slice(0, 5));
-            }
-            
-            Object.entries(granularityData).forEach(([timeKey, views]) => {
+                // Add this bucket's data to the chart
                 aggregateData.push({
                     time: timeKey,
-                    views: views,
-                    likes: 0,
-                    comments: 0,
-                    shares: 0,
-                    delta: views, // Actual delta for this time bucket
+                    views: bucketTotalViews,
+                    likes: bucketTotalLikes,
+                    comments: bucketTotalComments,
+                    shares: bucketTotalShares,
+                    delta: bucketTotalViews, // Actual delta for this time bucket
                     originalTime: new Date(timeKey)
                 });
+                
+                if (bucketTotalViews > 0) {
+                    console.log(`📊 Bucket ${timeKey}: ${bucketTotalViews} views, ${bucketTotalLikes} likes, ${bucketTotalComments} comments, ${bucketTotalShares} shares`);
+                }
             });
             
             // Sort by time
             aggregateData.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+            
+            console.log(`📊 Final chart data: ${aggregateData.length} data points`);
+            const dataPointsWithViews = aggregateData.filter(point => point.views > 0);
+            console.log(`📊 Data points with views: ${dataPointsWithViews.length}`);
             
         } else {
             // ALL TIME MODE: Show cumulative totals over time
