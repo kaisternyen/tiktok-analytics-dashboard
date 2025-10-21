@@ -1286,93 +1286,6 @@ export default function TikTokTracker() {
         return Math.max(0, lastPoint.views - firstPoint.views);
     };
 
-    // Helper function to calculate daily period views for a specific day (what the tooltip should show)
-    const calculateDailyPeriodViews = (date: Date): number => {
-        // Convert to Eastern time for consistent day boundaries
-        const clickedDateEST = toEasternTime(date);
-        
-        // Get start of clicked day (12am) and start of next day (12am) - 25 hours total
-        const startOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
-        const endOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate() + 1, 0, 0, 0, 0);
-        
-        // Convert back to UTC for API calls
-        const startOfDayUTC = fromEasternTime(startOfDayEST);
-        const endOfDayUTC = fromEasternTime(endOfDayEST);
-        
-        // Calculate daily period views by looking at historical data for this specific day
-        let totalViews = 0;
-        originalVideos.forEach(video => {
-            if (!video.history) return;
-            
-            // Check if video has data within this specific day
-            const hasDataInDay = video.history.some(point => {
-                const pointTime = new Date(point.time);
-                return pointTime >= startOfDayUTC && pointTime <= endOfDayUTC;
-            });
-            
-            if (hasDataInDay) {
-                // Calculate period delta for this video in this specific day
-                const dayPoints = video.history.filter(point => {
-                    const pointTime = new Date(point.time);
-                    return pointTime >= startOfDayUTC && pointTime <= endOfDayUTC;
-                });
-                
-                if (dayPoints.length > 0) {
-                    const sortedPoints = dayPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                    const firstPoint = sortedPoints[0];
-                    const lastPoint = sortedPoints[sortedPoints.length - 1];
-                    
-                    totalViews += Math.max(0, lastPoint.views - firstPoint.views);
-                }
-            }
-        });
-        
-        return totalViews;
-    };
-
-    // Helper function to calculate hourly period views for a specific hour (what the tooltip should show in hourly view)
-    const calculateHourlyPeriodViews = (date: Date): number => {
-        // Convert to Eastern time for consistent hour boundaries
-        const clickedDateEST = toEasternTime(date);
-        
-        // Get start of clicked hour and end of clicked hour
-        const startOfHourEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), clickedDateEST.getHours(), 0, 0, 0);
-        const endOfHourEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), clickedDateEST.getHours() + 1, 0, 0, 0);
-        
-        // Convert back to UTC for API calls
-        const startOfHourUTC = fromEasternTime(startOfHourEST);
-        const endOfHourUTC = fromEasternTime(endOfHourEST);
-        
-        // Calculate hourly period views by looking at historical data for this specific hour
-        let totalViews = 0;
-        originalVideos.forEach(video => {
-            if (!video.history) return;
-            
-            // Check if video has data within this specific hour
-            const hasDataInHour = video.history.some(point => {
-                const pointTime = new Date(point.time);
-                return pointTime >= startOfHourUTC && pointTime <= endOfHourUTC;
-            });
-            
-            if (hasDataInHour) {
-                // Calculate period delta for this video in this specific hour
-                const hourPoints = video.history.filter(point => {
-                    const pointTime = new Date(point.time);
-                    return pointTime >= startOfHourUTC && pointTime <= endOfHourUTC;
-                });
-                
-                if (hourPoints.length > 0) {
-                    const sortedPoints = hourPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                    const firstPoint = sortedPoints[0];
-                    const lastPoint = sortedPoints[sortedPoints.length - 1];
-                    
-                    totalViews += Math.max(0, lastPoint.views - firstPoint.views);
-                }
-            }
-        });
-        
-        return totalViews;
-    };
 
     // Custom tooltip with hover details
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: ChartDataPoint }>; label?: string }) => {
@@ -1630,7 +1543,7 @@ export default function TikTokTracker() {
             // DELTA MODE: Show period changes (deltas) for each time point
             const previousValues: { [videoId: string]: VideoHistory } = {};
             
-            sortedTimestamps.forEach((timestamp, index) => {
+            sortedTimestamps.forEach((timestamp) => {
                 // Update current values for videos that have data at this timestamp
                 const currentValues: { [videoId: string]: VideoHistory } = {};
                 videosWithSufficientData.forEach(video => {
