@@ -1164,13 +1164,11 @@ export default function TikTokTracker() {
         if (data.length === 0) return [0, 100];
         
         const values = data.map(d => showDelta ? d.delta : d.views);
-        const min = Math.min(...values);
         const max = Math.max(...values);
         
         if (showDelta) {
-            // For delta view, include negative values
-            const padding = (max - min) * 0.1;
-            return [min - padding, max + padding];
+            // For delta view, always start from 0 and go to max + 10% padding
+            return [0, max * 1.1];
         } else {
             // For absolute values, start from 0
             return [0, max * 1.1];
@@ -1630,6 +1628,12 @@ export default function TikTokTracker() {
                     originalTime: new Date(dayKey)
                 });
             });
+            
+            // Debug: Log the daily deltas
+            console.log('📊 Daily deltas calculated:', Object.keys(dailyDeltas).map(day => ({
+                day,
+                views: dailyDeltas[day].views
+            })));
         } else {
             // ALL TIME MODE: Show cumulative totals over time
             const lastKnownValues: { [videoId: string]: VideoHistory } = {};
@@ -1670,7 +1674,7 @@ export default function TikTokTracker() {
             likes: point.likes,
             comments: point.comments,
             shares: point.shares,
-            delta: 0,
+            delta: point.delta, // Keep the delta we calculated
             originalTime: new Date(point.time)
         }));
 
