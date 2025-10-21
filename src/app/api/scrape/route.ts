@@ -191,7 +191,13 @@ export async function POST(request: NextRequest) {
             thumbnailUrl = ytData.thumbnails?.medium?.url || ytData.thumbnails?.high?.url;
         } else { // tiktok
             // Use centralized TikHub data extraction for TikTok videos
+            console.log('🎬 TIKTOK EXTRACTION DEBUG:');
+            console.log('🎬 Raw mediaData:', JSON.stringify(mediaData, null, 2));
+            console.log('🎬 URL:', url);
+            
             const extractedData = extractTikTokStatsFromTikHubData(mediaData, url);
+            console.log('🎬 Extracted data:', extractedData);
+            
             views = extractedData.views;
             likes = extractedData.likes;
             comments = extractedData.comments;
@@ -199,6 +205,8 @@ export async function POST(request: NextRequest) {
             username = extractedData.username;
             description = extractedData.description;
             thumbnailUrl = extractedData.thumbnailUrl;
+            
+            console.log('🎬 Final values:', { views, likes, comments, shares, username, thumbnailUrl });
         }
 
         // Always upload thumbnail to S3 if present
