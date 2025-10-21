@@ -1547,13 +1547,24 @@ export default function TikTokTracker() {
                 const start = new Date(timeframeStart);
                 const end = new Date(timeframeEnd);
                 
+                console.log(`🕐 Generating ${timeGranularity} buckets from ${start.toISOString()} to ${end.toISOString()}`);
+                
                 if (timeGranularity === 'hourly') {
-                    // Generate hourly buckets
-                    for (let time = start.getTime(); time <= end.getTime(); time += 60 * 60 * 1000) {
+                    // Generate hourly buckets - round to hour boundaries
+                    const startHour = new Date(start);
+                    startHour.setMinutes(0, 0, 0); // Round down to start of hour
+                    
+                    const endHour = new Date(end);
+                    endHour.setMinutes(0, 0, 0); // Round down to start of hour
+                    
+                    console.log(`🕐 Hourly: startHour=${startHour.toISOString()}, endHour=${endHour.toISOString()}`);
+                    
+                    for (let time = startHour.getTime(); time <= endHour.getTime(); time += 60 * 60 * 1000) {
                         const hourDate = new Date(time);
                         const hourEST = toEasternTime(hourDate);
                         const key = `${hourEST.getFullYear()}-${String(hourEST.getMonth() + 1).padStart(2, '0')}-${String(hourEST.getDate()).padStart(2, '0')} ${String(hourEST.getHours()).padStart(2, '0')}:00`;
                         buckets.push(key);
+                        console.log(`🕐 Added hourly bucket: ${key}`);
                     }
                 } else if (timeGranularity === 'daily') {
                     // Generate daily buckets
@@ -1582,6 +1593,8 @@ export default function TikTokTracker() {
             };
             
             const timeBuckets = generateTimeBuckets();
+            
+            console.log(`🕐 Generated ${timeBuckets.length} ${timeGranularity} buckets:`, timeBuckets);
             
             // Initialize all buckets to 0
             timeBuckets.forEach(bucket => {
@@ -1630,6 +1643,8 @@ export default function TikTokTracker() {
                             // Calculate delta for this video in this time bucket (SAME AS calculateVideoPeriodViews)
                             const videoDelta = Math.max(0, lastPoint.views - firstPoint.views);
                             granularityData[timeKey] += videoDelta;
+                            
+                            console.log(`🕐 Bucket ${timeKey}: video ${video.username} has ${bucketPoints.length} points, delta=${videoDelta}, total=${granularityData[timeKey]}`);
                         }
                     }
                 });
