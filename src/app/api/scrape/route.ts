@@ -359,8 +359,8 @@ export async function POST(request: NextRequest) {
                 hashtags: (mediaData as TikTokVideoData | InstagramPostData).hashtags ? JSON.stringify((mediaData as TikTokVideoData | InstagramPostData).hashtags) : null,
                 music: (mediaData as TikTokVideoData | InstagramPostData).music ? JSON.stringify((mediaData as TikTokVideoData | InstagramPostData).music) : null,
                 scrapingCadence: 'hourly', // Set new videos to hourly by default
-                // Set lastScrapedAt to 2 hours ago so it gets picked up by the next cron run
-                lastScrapedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+                // Set lastScrapedAt to current time so it gets picked up immediately
+                lastScrapedAt: new Date(),
                 isActive: true
             }
         });
@@ -384,8 +384,7 @@ export async function POST(request: NextRequest) {
             console.log(`📊 Added zero baseline entry at posted date: ${postedDate.toISOString()}`);
         }
 
-        // Create initial metrics history entry so the first scrape appears on the graph
-        const normalizedTimestamp = getCurrentNormalizedTimestamp(getIntervalForCadence('manual'));
+        // Create initial metrics history entry so the video appears on the graph immediately
         await prisma.metricsHistory.create({
             data: {
                 videoId: newVideo.id,
@@ -393,11 +392,12 @@ export async function POST(request: NextRequest) {
                 likes: likes,
                 comments: comments,
                 shares: shares,
-                timestamp: new Date(normalizedTimestamp)
+                timestamp: new Date()
             }
         });
+        console.log(`📊 Added initial metrics entry for immediate graph display`);
 
-        console.log(`✅ New media created successfully with initial metrics history at ${normalizedTimestamp}:`, {
+        console.log(`✅ New media created successfully with initial metrics history:`, {
             id: result.data.id,
             username: newVideo.username,
             platform: platform,

@@ -271,6 +271,14 @@ export function extractTikTokStatsFromTikHubData(videoData: unknown, originalUrl
                         undefined;
     
     console.log('📊 EXTRACTED VALUES:', { views, likes, comments, shares, username });
+    console.log('🖼️ THUMBNAIL DEBUG:', {
+        videoInfo: !!videoInfo,
+        coverUrls: coverUrls?.length || 0,
+        originCoverUrls: originCoverUrls?.length || 0,
+        dynamicCoverUrls: dynamicCoverUrls?.length || 0,
+        cover_url: !!data?.cover_url,
+        finalThumbnailUrl: thumbnailUrl
+    });
     
     return {
         views,
