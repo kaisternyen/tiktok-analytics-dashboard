@@ -115,8 +115,15 @@ export async function POST(req: Request) {
         
         if (video.platform === 'tiktok' && tikHubResult.data) {
             // Use centralized TikHub data extraction
-            console.log(`🔍 Passing to extraction function:`, tikHubResult.debugInfo?.tikHubRawResponse);
-            const extractedData = extractTikTokStatsFromTikHubData(tikHubResult.debugInfo?.tikHubRawResponse, video.url);
+            const rawResponse = tikHubResult.debugInfo?.tikHubRawResponse;
+            console.log(`🔍 Raw response exists:`, !!rawResponse);
+            console.log(`🔍 Raw response keys:`, rawResponse ? Object.keys(rawResponse) : 'undefined');
+            
+            // Use raw response if available, otherwise use transformed data
+            const dataToExtract = rawResponse || tikHubResult.data;
+            console.log(`🔍 Using data source:`, rawResponse ? 'raw response' : 'transformed data');
+            
+            const extractedData = extractTikTokStatsFromTikHubData(dataToExtract, video.url);
             console.log(`📊 Extracted data for @${video.username}:`, extractedData);
             views = extractedData.views;
             likes = extractedData.likes;
