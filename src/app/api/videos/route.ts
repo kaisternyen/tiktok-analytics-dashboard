@@ -429,7 +429,7 @@ export async function GET(req: Request) {
                     username: video.username,
                     description: video.description,
                     thumbnailUrl: video.thumbnailUrl,
-                    posted: video.createdAt.toISOString(),
+                    posted: video.postedAt ? video.postedAt.toISOString() : video.createdAt.toISOString(),
                     lastUpdate: video.lastScrapedAt.toISOString(),
                     // Period-specific values (for filtered timeframes)
                     views: periodViews,
