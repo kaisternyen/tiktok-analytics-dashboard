@@ -238,7 +238,9 @@ export function extractTikTokStatsFromTikHubData(videoData: unknown, originalUrl
                     data?.id as string || 
                     'unknown';
                     
-    const timestamp = data?.create_time 
+    const timestamp = data?.timestamp 
+        ? data.timestamp as string  // Already in ISO format
+        : data?.create_time 
         ? new Date((data.create_time as number) * 1000).toISOString()
         : data?.created_at 
         ? new Date((data.created_at as number) * 1000).toISOString()
