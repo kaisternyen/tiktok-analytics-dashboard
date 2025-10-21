@@ -405,43 +405,58 @@ export async function POST(request: NextRequest) {
         });
         console.log(`📊 Added initial metrics entry for immediate graph display`);
 
-        // Immediately scrape the video to get fresh data and update lastScrapedAt
-        console.log(`🔄 Triggering immediate scrape for new video @${username}`);
+        // Use the EXACT same logic as the refresh button
+        console.log(`🔄 Using refresh button logic for new video @${username}`);
         try {
-            const scrapeResult = await scrapeMediaPost(newVideo.url);
-            if (scrapeResult.success && scrapeResult.data) {
-                // Extract fresh data
-                const freshMediaData = scrapeResult.data as TikTokVideoData | InstagramPostData | YouTubeVideoData;
-                let freshViews: number, freshLikes: number, freshComments: number, freshShares: number;
+            const tikHubResult = await scrapeMediaPost(newVideo.url);
+            
+            console.log(`🔍 COMPLETE TIKHUB API RESPONSE FOR @${username}:`);
+            console.log(`📊 Success:`, tikHubResult.success);
+            console.log(`📊 Error:`, tikHubResult.error);
+            console.log(`📊 Has Data:`, !!tikHubResult.data);
+            console.log(`📊 Debug Info:`, tikHubResult.debugInfo);
+            
+            if (tikHubResult.success && tikHubResult.data) {
+                console.log(`📊 All Available Fields:`, Object.keys(tikHubResult.data));
+                console.log(`📊 Raw TikHub Response:`, JSON.stringify(tikHubResult.data, null, 2));
+                
+                // Extract values using the EXACT same logic as refresh button
+                const mediaData = tikHubResult.data as TikTokVideoData | InstagramPostData | YouTubeVideoData;
+                let freshViews = 0;
+                let freshShares = 0;
 
-                if (platform === 'instagram') {
-                    const instaData = freshMediaData as InstagramPostData;
-                    freshViews = instaData.plays || instaData.views || 0;
-                    freshLikes = instaData.likes;
-                    freshComments = instaData.comments;
-                    freshShares = 0;
-                } else if (platform === 'youtube') {
-                    const ytData = freshMediaData as YouTubeVideoData;
-                    freshViews = ytData.views;
-                    freshLikes = ytData.likes;
-                    freshComments = ytData.comments;
-                    freshShares = 0;
-                } else { // tiktok
-                    const extractedData = extractTikTokStatsFromTikHubData(freshMediaData, newVideo.url);
+                if (platform === 'tiktok') {
+                    // Use centralized TikHub data extraction (SAME AS REFRESH BUTTON)
+                    const extractedData = extractTikTokStatsFromTikHubData(mediaData, newVideo.url);
                     freshViews = extractedData.views;
-                    freshLikes = extractedData.likes;
-                    freshComments = extractedData.comments;
                     freshShares = extractedData.shares;
+                } else if (platform === 'instagram') {
+                    const instagramData = mediaData as InstagramPostData;
+                    freshViews = instagramData.views || instagramData.plays || 0;
+                    freshShares = 0; // Instagram doesn't provide share count
+                } else if (platform === 'youtube') {
+                    const youtubeData = mediaData as YouTubeVideoData;
+                    freshViews = youtubeData.views || 0;
+                    freshShares = youtubeData.shares || 0;
                 }
 
-                // Update video with fresh data
+                const extractedValues = {
+                    views: freshViews,
+                    likes: mediaData.likes || 0,
+                    comments: mediaData.comments || 0,
+                    shares: freshShares
+                };
+
+                console.log(`📊 EXTRACTED VALUES FOR @${username}:`, extractedValues);
+
+                // Update database with new values (SAME AS REFRESH BUTTON)
                 await prisma.video.update({
                     where: { id: newVideo.id },
                     data: {
-                        currentViews: freshViews,
-                        currentLikes: freshLikes,
-                        currentComments: freshComments,
-                        currentShares: freshShares,
+                        currentViews: extractedValues.views,
+                        currentLikes: extractedValues.likes,
+                        currentComments: extractedValues.comments,
+                        currentShares: extractedValues.shares,
                         lastScrapedAt: new Date()
                     }
                 });
@@ -450,25 +465,20 @@ export async function POST(request: NextRequest) {
                 await prisma.metricsHistory.create({
                     data: {
                         videoId: newVideo.id,
-                        views: freshViews,
-                        likes: freshLikes,
-                        comments: freshComments,
-                        shares: freshShares,
+                        views: extractedValues.views,
+                        likes: extractedValues.likes,
+                        comments: extractedValues.comments,
+                        shares: extractedValues.shares,
                         timestamp: new Date()
                     }
                 });
 
-                console.log(`✅ Immediate scrape completed for @${username}:`, {
-                    views: freshViews,
-                    likes: freshLikes,
-                    comments: freshComments,
-                    shares: freshShares
-                });
+                console.log(`✅ Refresh-style scrape completed for @${username}:`, extractedValues);
             } else {
-                console.log(`⚠️ Immediate scrape failed for @${username}, using initial data`);
+                console.log(`⚠️ TikHub scrape failed for @${username}, using initial data`);
             }
         } catch (error) {
-            console.error(`❌ Error during immediate scrape for @${username}:`, error);
+            console.error(`❌ Error during refresh-style scrape for @${username}:`, error);
         }
 
         console.log(`✅ New media created successfully with initial metrics history:`, {
