@@ -1538,43 +1538,42 @@ export default function TikTokTracker() {
         const aggregateData: ChartDataPoint[] = [];
         
         if (timeframeStart && timeframeEnd) {
-            // PERIOD MODE: Generate daily data points using the EXACT same logic as calculateVideoPeriodViews
+            // PERIOD MODE: Calculate ACTUAL daily deltas for each individual day
             const dailyData: { [date: string]: number } = {};
             
-            // Calculate period views for each video using the EXACT same logic as calculateVideoPeriodViews
-            videosWithSufficientData.forEach(video => {
-                if (video.history && video.history.length > 0) {
-                    // EXACT same logic as calculateVideoPeriodViews
-                    const timeframePoints = video.history.filter(point => {
-                        const pointTime = new Date(point.time);
-                        return pointTime >= timeframeStart && pointTime <= timeframeEnd;
-                    });
-                    
-                    if (timeframePoints.length > 0) {
-                        const sortedPoints = timeframePoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                        const firstPoint = sortedPoints[0];
-                        const lastPoint = sortedPoints[sortedPoints.length - 1];
+            // Generate all days in the timeframe
+            const totalDays = Math.ceil((timeframeEnd.getTime() - timeframeStart.getTime()) / (1000 * 60 * 60 * 24));
+            for (let i = 0; i < totalDays; i++) {
+                const dayDate = new Date(timeframeStart.getTime() + (i * 24 * 60 * 60 * 1000));
+                const dayKey = dayDate.toISOString().split('T')[0];
+                dailyData[dayKey] = 0;
+            }
+            
+            // For each day, calculate the actual daily delta by summing individual video daily deltas
+            Object.keys(dailyData).forEach(dayKey => {
+                const dayStart = new Date(dayKey + 'T00:00:00.000Z');
+                const dayEnd = new Date(dayKey + 'T23:59:59.999Z');
+                
+                // Calculate daily delta for each video on this specific day
+                videosWithSufficientData.forEach(video => {
+                    if (video.history && video.history.length > 0) {
+                        // Find data points within this specific day
+                        const dayPoints = video.history.filter(point => {
+                            const pointTime = new Date(point.time);
+                            return pointTime >= dayStart && pointTime <= dayEnd;
+                        });
                         
-                        // EXACT same calculation as calculateVideoPeriodViews
-                        const videoPeriodViews = Math.max(0, lastPoint.views - firstPoint.views);
-                        
-                        // Distribute this period delta across all days in the timeframe
-                        const totalDays = Math.ceil((timeframeEnd.getTime() - timeframeStart.getTime()) / (1000 * 60 * 60 * 24));
-                        const dailyViews = videoPeriodViews / totalDays;
-                        
-                        // Add to each day
-                        for (let i = 0; i < totalDays; i++) {
-                            const dayDate = new Date(timeframeStart.getTime() + (i * 24 * 60 * 60 * 1000));
-                            const dayKey = dayDate.toISOString().split('T')[0];
+                        if (dayPoints.length > 0) {
+                            const sortedDayPoints = dayPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                            const firstPoint = sortedDayPoints[0];
+                            const lastPoint = sortedDayPoints[sortedDayPoints.length - 1];
                             
-                            if (!dailyData[dayKey]) {
-                                dailyData[dayKey] = 0;
-                            }
-                            
-                            dailyData[dayKey] += dailyViews;
+                            // Calculate daily delta for this video on this day
+                            const videoDailyDelta = Math.max(0, lastPoint.views - firstPoint.views);
+                            dailyData[dayKey] += videoDailyDelta;
                         }
                     }
-                }
+                });
             });
             
             // Convert daily data to chart data points
@@ -1585,7 +1584,7 @@ export default function TikTokTracker() {
                     likes: 0,
                     comments: 0,
                     shares: 0,
-                    delta: views, // Daily delta
+                    delta: views, // Actual daily delta
                     originalTime: new Date(date)
                 });
             });
