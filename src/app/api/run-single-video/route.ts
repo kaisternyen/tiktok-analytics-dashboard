@@ -77,6 +77,8 @@ export async function POST(req: Request) {
             error: tikHubResult.error,
             duration: tikHubResult.debugInfo?.duration
         });
+        
+        console.log(`🔍 FULL TikHub Result:`, JSON.stringify(tikHubResult, null, 2));
 
         if (!tikHubResult.success) {
             console.error(`❌ TikHub API failed for @${video.username}:`, tikHubResult.error);
@@ -116,7 +118,7 @@ export async function POST(req: Request) {
         
         if (video.platform === 'tiktok' && tikHubResult.data) {
             // Use centralized TikHub data extraction
-            const extractedData = extractTikTokStatsFromTikHubData(tikHubResult.data, video.url);
+            const extractedData = extractTikTokStatsFromTikHubData(tikHubResult.debugInfo?.tikHubRawResponse || tikHubResult.data, video.url);
             console.log(`📊 Extracted data for @${video.username}:`, extractedData);
             views = extractedData.views;
             likes = extractedData.likes;

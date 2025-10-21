@@ -431,7 +431,6 @@ export async function GET(req: Request) {
                     thumbnailUrl: video.thumbnailUrl,
                     posted: video.createdAt.toISOString(),
                     lastUpdate: video.lastScrapedAt.toISOString(),
-                    status: video.isActive ? 'Active' : 'Paused',
                     // Period-specific values (for filtered timeframes)
                     views: periodViews,
                     likes: periodLikes,
@@ -523,9 +522,6 @@ export async function GET(req: Request) {
                                         break;
                                     case 'description':
                                         videoValue = video.description.toLowerCase();
-                                        break;
-                                    case 'status':
-                                        videoValue = video.status.toLowerCase();
                                         break;
                                     case 'platform':
                                         videoValue = video.platform.toLowerCase();

@@ -452,7 +452,7 @@ export default function TikTokTracker() {
             
             // Log TikHub response details in browser console
             if (data.tikHubResult) {
-                console.log(`🔍 TikHub Raw Response:`, data.tikHubResult.data);
+                console.log(`🔍 TikHub Raw Response:`, data.tikHubResult.debugInfo?.tikHubRawResponse || data.tikHubResult.data);
                 console.log(`🔍 TikHub Extracted Values:`, data.tikHubResult.extractedValues);
             }
             
@@ -2787,19 +2787,6 @@ export default function TikTokTracker() {
                                                                              video.scrapingCadence === 'daily' ? '1D' : 
                                                                              '1M'}
                                                                         </span>
-                                                                    </td>
-                                                                    <td className="p-4">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                                                                                video.status === 'Active'
-                                                                                    ? 'bg-green-100 text-green-800'
-                                                                                    : video.status === 'error'
-                                                                                    ? 'bg-red-100 text-red-800'
-                                                                                    : 'bg-yellow-100 text-yellow-800'
-                                                                            }`}>
-                                                                                {video.status}
-                                                                            </span>
-                                                                        </div>
                                                                     </td>
                                                                     <td className="p-4">
                                                                         <div className="flex flex-wrap gap-1 max-w-32">
