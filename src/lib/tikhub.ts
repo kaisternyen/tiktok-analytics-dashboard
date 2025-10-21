@@ -168,7 +168,17 @@ export function extractTikTokStatsFromTikHubData(videoData: unknown, originalUrl
     console.log('📊 Input videoData keys:', Object.keys((videoData as Record<string, unknown>) || {}));
     console.log('📊 videoData.statistics:', (videoData as Record<string, unknown>)?.statistics);
     console.log('📊 videoData.stats:', (videoData as Record<string, unknown>)?.stats);
+    console.log('📊 videoData.aweme_status:', (videoData as Record<string, unknown>)?.aweme_status);
+    console.log('📊 videoData.extra:', (videoData as Record<string, unknown>)?.extra);
     console.log('📊 FULL INPUT DATA:', JSON.stringify(videoData, null, 2));
+    
+    // Debug aweme_status array if it exists
+    const awemeStatus = (videoData as Record<string, unknown>)?.aweme_status as unknown[];
+    if (awemeStatus && Array.isArray(awemeStatus) && awemeStatus.length > 0) {
+        console.log('📊 aweme_status[0] keys:', Object.keys((awemeStatus[0] as Record<string, unknown>) || {}));
+        console.log('📊 aweme_status[0] statistics:', (awemeStatus[0] as Record<string, unknown>)?.statistics);
+        console.log('📊 aweme_status[0] stats:', (awemeStatus[0] as Record<string, unknown>)?.stats);
+    }
     
     const data = videoData as Record<string, unknown>;
     
