@@ -1381,20 +1381,6 @@ export default function TikTokTracker() {
             // Format in EST
             const dateStr = formatInTimeZone(label || '', 'America/New_York', 'MMM d, yyyy h:mm aa zzz');
 
-            // Calculate the period total for the specific day/hour being hovered
-            let periodTotal = 0;
-            if (showDelta) {
-                const clickedDate = new Date(data.time);
-                
-                if (timeGranularity === 'hourly') {
-                    // For hourly granularity: show hourly period views for that specific hour
-                    periodTotal = calculateHourlyPeriodViews(clickedDate);
-                } else {
-                    // For daily/weekly granularity: show daily period views for that specific day
-                    periodTotal = calculateDailyPeriodViews(clickedDate);
-                }
-            }
-
             return (
                 <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
                     <p className="font-medium text-gray-900">
@@ -1403,7 +1389,7 @@ export default function TikTokTracker() {
                     {showDelta ? (
                         <>
                             <p className="text-blue-600">
-                                Change: {formatNumber(periodTotal)} views
+                                Change: {formatNumber(data.delta)} views
                             </p>
                             <p className="text-gray-600 text-sm">
                                 Total at this time: {formatNumber(data.views)} views
@@ -1640,40 +1626,63 @@ export default function TikTokTracker() {
         // Build chart data based on timeframe type
         const aggregateData: ChartDataPoint[] = [];
         
-        if (timeframeStart && timeframeEnd) {
-            // PERIOD MODE: Show cumulative progress within the timeframe (EXACT ORIGINAL LOGIC)
-            const lastKnownValues: { [videoId: string]: VideoHistory } = {};
+        if (showDelta) {
+            // DELTA MODE: Show period changes (deltas) for each time point
+            const previousValues: { [videoId: string]: VideoHistory } = {};
             
-            sortedTimestamps.forEach(timestamp => {
-                // Update last known values for videos that have data at this timestamp
+            sortedTimestamps.forEach((timestamp, index) => {
+                // Update current values for videos that have data at this timestamp
+                const currentValues: { [videoId: string]: VideoHistory } = {};
                 videosWithSufficientData.forEach(video => {
                     const pointAtTime = video.history?.find(h => h.time === timestamp);
                     if (pointAtTime) {
-                        lastKnownValues[video.id] = pointAtTime;
+                        currentValues[video.id] = pointAtTime;
                     }
                 });
 
-                // Calculate cumulative values within the timeframe
-                const aggregateViews = Object.values(lastKnownValues).reduce((sum, point) => sum + point.views, 0);
-                const aggregateLikes = Object.values(lastKnownValues).reduce((sum, point) => sum + point.likes, 0);
-                const aggregateComments = Object.values(lastKnownValues).reduce((sum, point) => sum + point.comments, 0);
-                const aggregateShares = Object.values(lastKnownValues).reduce((sum, point) => sum + point.shares, 0);
+                // Calculate period deltas from previous timestamp
+                let aggregateViews = 0;
+                let aggregateLikes = 0;
+                let aggregateComments = 0;
+                let aggregateShares = 0;
 
-                if (Object.keys(lastKnownValues).length > 0) {
+                Object.keys(currentValues).forEach(videoId => {
+                    const current = currentValues[videoId];
+                    const previous = previousValues[videoId];
+                    
+                    if (previous) {
+                        // Calculate delta from previous point
+                        aggregateViews += Math.max(0, current.views - previous.views);
+                        aggregateLikes += Math.max(0, current.likes - previous.likes);
+                        aggregateComments += Math.max(0, current.comments - previous.comments);
+                        aggregateShares += Math.max(0, current.shares - previous.shares);
+                    } else {
+                        // First data point for this video - no delta
+                        aggregateViews += 0;
+                        aggregateLikes += 0;
+                        aggregateComments += 0;
+                        aggregateShares += 0;
+                    }
+                });
+
+                if (Object.keys(currentValues).length > 0) {
                     aggregateData.push({
                         time: timestamp,
                         views: aggregateViews,
                         likes: aggregateLikes,
                         comments: aggregateComments,
                         shares: aggregateShares,
-                        delta: 0,
+                        delta: aggregateViews, // Store delta for tooltip consistency
                         originalTime: new Date(timestamp)
                     });
                 }
+
+                // Update previous values for next iteration
+                Object.assign(previousValues, currentValues);
             });
             
         } else {
-            // ALL TIME MODE: Show cumulative totals over time
+            // ABSOLUTE MODE: Show cumulative totals over time
             const lastKnownValues: { [videoId: string]: VideoHistory } = {};
             
             sortedTimestamps.forEach(timestamp => {
@@ -1728,7 +1737,7 @@ export default function TikTokTracker() {
             chartData: aggregatedData,
             filteredVideoCount: videosWithSufficientData.length
         };
-    }, [originalVideos, timeframe, timeGranularity]);
+    }, [originalVideos, timeframe, timeGranularity, showDelta]);
 
     // Get videos with sufficient data points for totals calculation (same filtering as chart)
     const getFilteredVideosForTotals = (): TrackedVideo[] => {
