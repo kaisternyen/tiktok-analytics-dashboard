@@ -1541,7 +1541,7 @@ export default function TikTokTracker() {
         const aggregateData: ChartDataPoint[] = [];
         
         if (timeframeStart && timeframeEnd) {
-            // PERIOD MODE: Show cumulative progress within the timeframe
+            // PERIOD MODE: Show cumulative progress within the timeframe (EXACT ORIGINAL LOGIC)
             const lastKnownValues: { [videoId: string]: VideoHistory } = {};
             
             sortedTimestamps.forEach(timestamp => {
