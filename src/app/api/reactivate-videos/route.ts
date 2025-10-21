@@ -65,10 +65,43 @@ export async function POST(req: Request) {
 
         console.log(`✅ Reactivated ${result.count} videos`);
 
+        // Trigger immediate scraping for reactivated videos
+        const scrapePromises = videosToReactivate.map(async (video) => {
+            try {
+                const scrapeResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/run-single-video`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ videoId: video.id }),
+                });
+                
+                if (scrapeResponse.ok) {
+                    console.log(`✅ Triggered scrape for @${video.username}`);
+                    return { success: true, video: video.username };
+                } else {
+                    console.log(`⚠️ Failed to trigger scrape for @${video.username}`);
+                    return { success: false, video: video.username };
+                }
+            } catch (error) {
+                console.error(`❌ Error triggering scrape for @${video.username}:`, error);
+                return { success: false, video: video.username };
+            }
+        });
+
+        // Wait for all scrape requests to complete
+        const scrapeResults = await Promise.all(scrapePromises);
+        const successfulScrapes = scrapeResults.filter(r => r.success).length;
+        const failedScrapes = scrapeResults.filter(r => !r.success).length;
+
+        console.log(`📊 Scrape results: ${successfulScrapes} successful, ${failedScrapes} failed`);
+
         return NextResponse.json({
             success: true,
-            message: `Successfully reactivated ${result.count} videos`,
+            message: `Successfully reactivated ${result.count} videos and triggered scraping for ${successfulScrapes} videos`,
             reactivated: result.count,
+            scrapesTriggered: successfulScrapes,
+            scrapesFailed: failedScrapes,
             videos: videosToReactivate.map(v => ({
                 id: v.id,
                 username: v.username,
