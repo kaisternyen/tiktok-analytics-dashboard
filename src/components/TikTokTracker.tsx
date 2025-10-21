@@ -1381,13 +1381,20 @@ export default function TikTokTracker() {
             const isTimeframeMode = timeframe && timeframe[0] && timeframe[1];
             
             if (isTimeframeMode) {
-                // PERIOD MODE: Use the period delta from the data points
+                // PERIOD MODE: Calculate daily delta from consecutive points
                 const latestPoint = sortedPoints[sortedPoints.length - 1];
                 views = latestPoint.views;
                 likes = latestPoint.likes || 0;
                 comments = latestPoint.comments || 0;
                 shares = latestPoint.shares || 0;
-                delta = latestPoint.delta; // Use the period delta from the data
+                
+                // Calculate daily delta: difference between latest and previous point
+                if (sortedPoints.length > 1) {
+                    const previousPoint = sortedPoints[sortedPoints.length - 2];
+                    delta = Math.max(0, latestPoint.views - previousPoint.views);
+                } else {
+                    delta = latestPoint.delta; // First point uses period delta
+                }
             } else {
                 // ALL TIME MODE: Use latest point
                 const latestPoint = sortedPoints[sortedPoints.length - 1];
