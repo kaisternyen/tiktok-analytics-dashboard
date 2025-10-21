@@ -289,6 +289,18 @@ export async function POST(request: NextRequest) {
         }
         console.log(`📅 Video posted date extracted: ${postedDate.toISOString()}`);
 
+        // Check if video already exists
+        const existingVideo = await prisma.video.findUnique({
+            where: { url: result.data.url || url }
+        });
+        
+        console.log(`🔍 EXISTING VIDEO CHECK:`, {
+            exists: !!existingVideo,
+            existingPostedAt: existingVideo?.postedAt?.toISOString(),
+            newPostedAt: postedDate.toISOString(),
+            url: result.data.url || url
+        });
+
         // Create or update video record (upsert handles both new and existing videos)
         const newVideo = await prisma.video.upsert({
             where: { url: result.data.url || url },
@@ -329,7 +341,9 @@ export async function POST(request: NextRequest) {
             postedAt: newVideo.postedAt,
             postedAtISO: newVideo.postedAt?.toISOString(),
             platform: newVideo.platform,
-            extractedPostedDate: postedDate.toISOString()
+            extractedPostedDate: postedDate.toISOString(),
+            wasUpdate: !!existingVideo,
+            operation: existingVideo ? 'UPDATE' : 'CREATE'
         });
 
         // Add zero baseline metrics entry at the video's posted date
