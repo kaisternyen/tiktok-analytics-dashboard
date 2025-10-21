@@ -906,7 +906,7 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
 // Clean up videos from accounts that are no longer being tracked
 async function cleanupOrphanedVideos(): Promise<{ deactivated: number; accounts: string[] }> {
     try {
-        // Get all currently active tracked accounts
+        // Get all currently active tracked accounts that are not marked as deleted
         const trackedAccounts = await prisma.trackedAccount.findMany({
             where: { isActive: true },
             select: { username: true, platform: true }
