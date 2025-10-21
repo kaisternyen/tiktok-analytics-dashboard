@@ -1716,23 +1716,19 @@ export default function TikTokTracker() {
                 delta = Math.max(0, point.views - previousPoint.views);
             }
             
-            // When showDelta is true, use the SAME period calculation as the tooltip
-            let primaryViews = point.views;
+            // When showDelta is true, delta should be the same as periodTotal in tooltip
             if (showDelta) {
                 const pointDate = new Date(point.time);
-                
                 if (timeGranularity === 'hourly') {
-                    // Use the SAME function as tooltip: calculateHourlyPeriodViews
-                    primaryViews = calculateHourlyPeriodViews(pointDate);
+                    delta = calculateHourlyPeriodViews(pointDate);
                 } else {
-                    // Use the SAME function as tooltip: calculateDailyPeriodViews
-                    primaryViews = calculateDailyPeriodViews(pointDate);
+                    delta = calculateDailyPeriodViews(pointDate);
                 }
             }
             
             return {
                 time: point.time,
-                views: primaryViews, // This is what gets plotted - SAME as tooltip
+                views: showDelta ? (timeGranularity === 'hourly' ? calculateHourlyPeriodViews(new Date(point.time)) : calculateDailyPeriodViews(new Date(point.time))) : point.views,
                 likes: point.likes,
                 comments: point.comments,
                 shares: point.shares,
