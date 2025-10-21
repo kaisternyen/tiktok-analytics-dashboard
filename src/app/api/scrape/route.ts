@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
-import { getCurrentNormalizedTimestamp, getIntervalForCadence } from '@/lib/timestamp-utils';
 import { uploadToS3 } from '../../../lib/s3';
 import fetch from 'node-fetch';
 
@@ -158,12 +157,6 @@ export async function POST(request: NextRequest) {
 
         console.log('✅ Media scraping successful, proceeding to database operations...');
 
-        // Check if video already exists in database
-        console.log('🔍 Checking if media already exists in database...');
-        const existingVideo = await prisma.video.findUnique({
-            where: { url: result.data.url || url }
-        });
-
         // Handle different data structures for each platform
         const mediaData = result.data as TikTokVideoData | InstagramPostData | YouTubeVideoData;
         
@@ -243,7 +236,7 @@ export async function POST(request: NextRequest) {
                     console.log('✅ [DEBUG] Thumbnail fetch successful, preparing to upload to S3...');
                     const buffer = await res.buffer();
                     console.log('📦 [DEBUG] Buffer created, size:', buffer.length);
-                    const key = `thumbnails/${existingVideo ? existingVideo.id : result.data.id}.jpg`;
+                    const key = `thumbnails/${result.data.id}.jpg`;
                     console.log('🔑 [DEBUG] S3 key to use:', key);
                     const s3Url = await uploadToS3(buffer, key, 'image/jpeg');
                     console.log('🔗 [DEBUG] S3 URL returned:', s3Url);
@@ -259,86 +252,6 @@ export async function POST(request: NextRequest) {
             console.log('⚠️ [DEBUG] No thumbnail URL found, skipping S3 upload');
         }
         console.log('📋 [DEBUG] Final thumbnail URL to be stored in DB:', thumbnailUrl);
-
-        if (existingVideo) {
-            console.log('📋 [DEBUG] Media already exists, updating with latest data...');
-
-            // Update existing video with latest data
-            const updatedVideo = await prisma.video.update({
-                where: { url: result.data.url || url },
-                data: {
-                    platform: platform,
-                    currentViews: views,
-                    currentLikes: likes,
-                    currentComments: comments,
-                    currentShares: shares,
-                    lastScrapedAt: new Date(),
-                    isActive: true,
-                    thumbnailUrl: thumbnailUrl
-                }
-            });
-
-            // Add metrics history entry for manual scrapes to appear on graph
-            const normalizedTimestamp = getCurrentNormalizedTimestamp(getIntervalForCadence('manual'));
-            
-            // Check if we already have a metric entry at this normalized timestamp
-            const existingMetric = await prisma.metricsHistory.findFirst({
-                where: {
-                    videoId: updatedVideo.id,
-                    timestamp: new Date(normalizedTimestamp)
-                }
-            });
-            
-            if (!existingMetric) {
-                await prisma.metricsHistory.create({
-                    data: {
-                        videoId: updatedVideo.id,
-                        views: views,
-                        likes: likes,
-                        comments: comments,
-                        shares: shares,
-                        timestamp: new Date(normalizedTimestamp)
-                    }
-                });
-                console.log(`📊 Created new metrics entry at normalized timestamp: ${normalizedTimestamp}`);
-            } else {
-                // Update existing entry with latest values (this handles multiple scrapes within the same interval)
-                await prisma.metricsHistory.update({
-                    where: { id: existingMetric.id },
-                    data: {
-                        views: views,
-                        likes: likes,
-                        comments: comments,
-                        shares: shares,
-                    }
-                });
-                console.log(`📊 Updated existing metrics entry at normalized timestamp: ${normalizedTimestamp}`);
-            }
-
-            console.log('✅ Media updated successfully with new metrics history:', {
-                id: result.data.id,
-                username: updatedVideo.username,
-                platform: platform,
-                url: updatedVideo.url,
-                views: views,
-                likes: likes
-            });
-
-            return NextResponse.json({
-                success: true,
-                message: 'updated',
-                data: {
-                    id: result.data.id,
-                    username: updatedVideo.username,
-                    url: updatedVideo.url,
-                    views: updatedVideo.currentViews,
-                    likes: updatedVideo.currentLikes,
-                    comments: updatedVideo.currentComments,
-                    shares: updatedVideo.currentShares,
-                    platform: platform
-                }
-            });
-        }
 
         console.log('📝 [DEBUG] Creating new media record in database with thumbnailUrl:', thumbnailUrl);
 
@@ -373,15 +286,27 @@ export async function POST(request: NextRequest) {
         }
         console.log(`📅 Video posted date extracted: ${postedDate.toISOString()}`);
 
-        // Create new video record
-        const newVideo = await prisma.video.create({
-            data: {
+        // Create or update video record (upsert handles both new and existing videos)
+        const newVideo = await prisma.video.upsert({
+            where: { url: result.data.url || url },
+            update: {
+                platform: platform,
+                currentViews: views,
+                currentLikes: likes,
+                currentComments: comments,
+                currentShares: shares,
+                postedAt: postedDate,  // Update with fresh timestamp
+                lastScrapedAt: new Date(),
+                isActive: true,
+                thumbnailUrl: thumbnailUrl
+            },
+            create: {
                 url: result.data.url || url,
                 username: username,
                 description: description,
                 thumbnailUrl: thumbnailUrl,
                 platform: platform,
-                postedAt: postedDate,  // Add the actual posted date
+                postedAt: postedDate,  // Use fresh timestamp
                 currentViews: views,
                 currentLikes: likes,
                 currentComments: comments,
