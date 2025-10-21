@@ -1339,22 +1339,19 @@ export default function TikTokTracker() {
             
             let views, likes, comments, shares, delta;
             
-            // Check if we're in timeframe mode with daily granularity - calculate day delta
+            // Check if we're in timeframe mode (PERIOD MODE) - use period deltas
             const isTimeframeMode = timeframe && timeframe[0] && timeframe[1];
-            const isDailyGranularity = granularity === 'daily';
             
-            if (isTimeframeMode && isDailyGranularity && sortedPoints.length >= 2) {
-                // PERIOD MODE + DAILY: Calculate delta for this specific day
-                const firstPoint = sortedPoints[0];
-                const lastPoint = sortedPoints[sortedPoints.length - 1];
-                
-                views = lastPoint.views;
-                likes = lastPoint.likes || 0;
-                comments = lastPoint.comments || 0;
-                shares = lastPoint.shares || 0;
-                delta = Math.max(0, lastPoint.views - firstPoint.views); // Day delta
+            if (isTimeframeMode) {
+                // PERIOD MODE: Use the period delta from the data points
+                const latestPoint = sortedPoints[sortedPoints.length - 1];
+                views = latestPoint.views;
+                likes = latestPoint.likes || 0;
+                comments = latestPoint.comments || 0;
+                shares = latestPoint.shares || 0;
+                delta = latestPoint.delta; // Use the period delta from the data
             } else {
-                // ALL TIME MODE or other granularities: Use latest point
+                // ALL TIME MODE: Use latest point
                 const latestPoint = sortedPoints[sortedPoints.length - 1];
                 views = latestPoint.views;
                 likes = latestPoint.likes || 0;
@@ -1503,67 +1500,66 @@ export default function TikTokTracker() {
         const aggregateData: ChartDataPoint[] = [];
         
         if (timeframeStart && timeframeEnd) {
-            // PERIOD MODE: Calculate daily deltas for each day
-            const dailyDeltas: { [dayKey: string]: { views: number; likes: number; comments: number; shares: number } } = {};
+            // PERIOD MODE: Generate raw timestamp data for aggregation
+            const baselineValues: { [videoId: string]: VideoHistory } = {};
             
-            // Calculate daily deltas for each video
+            // Find baseline values (first data point for each video in timeframe)
             videosWithSufficientData.forEach(video => {
                 if (video.history?.length) {
-                    // Filter to timeframe and sort by time
-                    const timeframePoints = video.history
+                    const firstPointInTimeframe = video.history
                         .filter(point => {
                             const pointTime = new Date(point.time);
                             return pointTime >= timeframeStart && pointTime <= timeframeEnd;
                         })
-                        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())[0];
                     
-                    // Group points by day (EST)
-                    const pointsByDay: { [dayKey: string]: VideoHistory[] } = {};
-                    timeframePoints.forEach(point => {
-                        const pointDate = toEasternTime(new Date(point.time));
-                        const dayKey = `${pointDate.getFullYear()}-${String(pointDate.getMonth() + 1).padStart(2, '0')}-${String(pointDate.getDate()).padStart(2, '0')}`;
-                        
-                        if (!pointsByDay[dayKey]) {
-                            pointsByDay[dayKey] = [];
-                        }
-                        pointsByDay[dayKey].push(point);
-                    });
-                    
-                    // Calculate daily deltas for this video
-                    Object.keys(pointsByDay).forEach(dayKey => {
-                        const dayPoints = pointsByDay[dayKey].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                        const firstPoint = dayPoints[0];
-                        const lastPoint = dayPoints[dayPoints.length - 1];
-                        
-                        const dayDeltaViews = Math.max(0, lastPoint.views - firstPoint.views);
-                        const dayDeltaLikes = Math.max(0, lastPoint.likes - firstPoint.likes);
-                        const dayDeltaComments = Math.max(0, lastPoint.comments - firstPoint.comments);
-                        const dayDeltaShares = Math.max(0, lastPoint.shares - firstPoint.shares);
-                        
-                        if (!dailyDeltas[dayKey]) {
-                            dailyDeltas[dayKey] = { views: 0, likes: 0, comments: 0, shares: 0 };
-                        }
-                        
-                        dailyDeltas[dayKey].views += dayDeltaViews;
-                        dailyDeltas[dayKey].likes += dayDeltaLikes;
-                        dailyDeltas[dayKey].comments += dayDeltaComments;
-                        dailyDeltas[dayKey].shares += dayDeltaShares;
-                    });
+                    if (firstPointInTimeframe) {
+                        baselineValues[video.id] = firstPointInTimeframe;
+                    }
                 }
             });
             
-            // Convert daily deltas to chart data points
-            Object.keys(dailyDeltas).sort().forEach(dayKey => {
-                const deltas = dailyDeltas[dayKey];
-                aggregateData.push({
-                    time: dayKey,
-                    views: deltas.views,
-                    likes: deltas.likes,
-                    comments: deltas.comments,
-                    shares: deltas.shares,
-                    delta: deltas.views, // Daily delta
-                    originalTime: new Date(dayKey)
+            // Generate data points for each timestamp in the timeframe
+            sortedTimestamps.forEach(timestamp => {
+                const currentValues: { [videoId: string]: VideoHistory } = {};
+                
+                // Get current values for videos that have data at this timestamp
+                videosWithSufficientData.forEach(video => {
+                    const pointAtTime = video.history?.find(h => h.time === timestamp);
+                    if (pointAtTime) {
+                        currentValues[video.id] = pointAtTime;
+                    }
                 });
+
+                // Calculate period deltas (current - baseline for each video)
+                let totalPeriodViews = 0;
+                let totalPeriodLikes = 0;
+                let totalPeriodComments = 0;
+                let totalPeriodShares = 0;
+                
+                Object.keys(currentValues).forEach(videoId => {
+                    const current = currentValues[videoId];
+                    const baseline = baselineValues[videoId];
+                    
+                    if (baseline) {
+                        totalPeriodViews += Math.max(0, current.views - baseline.views);
+                        totalPeriodLikes += Math.max(0, current.likes - baseline.likes);
+                        totalPeriodComments += Math.max(0, current.comments - baseline.comments);
+                        totalPeriodShares += Math.max(0, current.shares - baseline.shares);
+                    }
+                });
+
+                if (Object.keys(currentValues).length > 0) {
+                    aggregateData.push({
+                        time: timestamp,
+                        views: totalPeriodViews,
+                        likes: totalPeriodLikes,
+                        comments: totalPeriodComments,
+                        shares: totalPeriodShares,
+                        delta: totalPeriodViews, // Period delta
+                        originalTime: new Date(timestamp)
+                    });
+                }
             });
             
         } else {
