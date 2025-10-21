@@ -449,12 +449,16 @@ export default function TikTokTracker() {
             });
             
             const data = await response.json();
+            console.log(`🔄 Refresh response for video ${videoId}:`, data);
+            
             if (data.success) {
+                console.log(`✅ Refresh successful for @${data.video?.username}, new stats:`, data.video?.newStats);
                 // Refresh the videos list to show updated data
                 await fetchVideos();
                 setSuccess(`Video data refreshed successfully for @${data.video?.username || 'video'}`);
                 setTimeout(() => setSuccess(''), 3000);
             } else {
+                console.error(`❌ Refresh failed for video ${videoId}:`, data.error);
                 setError(data.error || 'Failed to refresh video data');
                 setTimeout(() => setError(''), 3000);
             }

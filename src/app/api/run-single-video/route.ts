@@ -102,9 +102,12 @@ export async function POST(req: Request) {
         // Extract stats based on platform
         let views = 0, likes = 0, comments = 0, shares = 0;
         
+        console.log(`🔍 TikHub data for @${video.username}:`, JSON.stringify(tikHubResult.data, null, 2));
+        
         if (video.platform === 'tiktok' && tikHubResult.data) {
             // Use centralized TikHub data extraction
             const extractedData = extractTikTokStatsFromTikHubData(tikHubResult.data, video.url);
+            console.log(`📊 Extracted data for @${video.username}:`, extractedData);
             views = extractedData.views;
             likes = extractedData.likes;
             comments = extractedData.comments;
@@ -123,6 +126,8 @@ export async function POST(req: Request) {
             shares = 0; // YouTube doesn't track shares
         }
 
+        console.log(`📈 Raw extracted values for @${video.username}: views=${views}, likes=${likes}, comments=${comments}, shares=${shares}`);
+        
         // Sanitize metrics to prevent negative values and corruption
         const sanitizedMetrics = sanitizeMetrics(
             { views, likes, comments, shares },
@@ -133,6 +138,8 @@ export async function POST(req: Request) {
                 shares: video.currentShares 
             }
         );
+        
+        console.log(`🧹 Sanitized metrics for @${video.username}:`, sanitizedMetrics);
         
         // Log any sanitization warnings
         logSanitizationWarnings(video.username, sanitizedMetrics.warnings);
