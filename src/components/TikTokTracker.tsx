@@ -451,6 +451,41 @@ export default function TikTokTracker() {
             const data = await response.json();
             console.log(`🔄 Refresh response for video ${videoId}:`, data);
             
+            // Log TikHub response details in browser console
+            if (data.tikHubResult) {
+                console.log(`🔍 TikHub Response Analysis:`);
+                console.log(`  - Success:`, data.tikHubResult.success);
+                console.log(`  - Has Data:`, data.tikHubResult.hasData);
+                console.log(`  - Extracted Values:`, data.tikHubResult.extractedValues);
+                
+                if (data.tikHubResult.data) {
+                    console.log(`🔍 TikHub Raw Data:`, data.tikHubResult.data);
+                    console.log(`🔍 TikHub Data Keys:`, Object.keys(data.tikHubResult.data));
+                    
+                    // Check for common field patterns
+                    const tikHubData = data.tikHubResult.data;
+                    console.log(`🔍 Field Analysis:`);
+                    console.log(`  - Has statistics?:`, !!tikHubData.statistics);
+                    console.log(`  - Has stats?:`, !!tikHubData.stats);
+                    console.log(`  - Has play_count?:`, !!tikHubData.play_count);
+                    console.log(`  - Has view_count?:`, !!tikHubData.view_count);
+                    console.log(`  - Has digg_count?:`, !!tikHubData.digg_count);
+                    console.log(`  - Has like_count?:`, !!tikHubData.like_count);
+                    console.log(`  - Has comment_count?:`, !!tikHubData.comment_count);
+                    console.log(`  - Has share_count?:`, !!tikHubData.share_count);
+                    
+                    // Log nested statistics if they exist
+                    if (tikHubData.statistics) {
+                        console.log(`🔍 Statistics object:`, tikHubData.statistics);
+                        console.log(`🔍 Statistics keys:`, Object.keys(tikHubData.statistics));
+                    }
+                    if (tikHubData.stats) {
+                        console.log(`🔍 Stats object:`, tikHubData.stats);
+                        console.log(`🔍 Stats keys:`, Object.keys(tikHubData.stats));
+                    }
+                }
+            }
+            
             if (data.success) {
                 console.log(`✅ Refresh successful for @${data.video?.username}, new stats:`, data.video?.newStats);
                 // Refresh the videos list to show updated data
