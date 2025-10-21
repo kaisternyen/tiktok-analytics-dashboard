@@ -1485,15 +1485,14 @@ export default function TikTokTracker() {
             const isDailyGranularity = granularity === 'daily';
             
             if (isTimeframeMode && isDailyGranularity && sortedPoints.length >= 2) {
-                // PERIOD MODE + DAILY: Calculate delta for this specific day
-                const firstPoint = sortedPoints[0];
+                // PERIOD MODE + DAILY: Use the period calculation values (already calculated in chart data)
                 const lastPoint = sortedPoints[sortedPoints.length - 1];
                 
-                views = lastPoint.views;
+                views = lastPoint.views; // This is already the period calculation from calculateDailyPeriodViews
                 likes = lastPoint.likes || 0;
                 comments = lastPoint.comments || 0;
                 shares = lastPoint.shares || 0;
-                delta = Math.max(0, lastPoint.views - firstPoint.views); // Day delta
+                delta = lastPoint.delta; // Use the delta from chart data
             } else {
                 // ALL TIME MODE: Use latest point
                 const latestPoint = sortedPoints[sortedPoints.length - 1];
