@@ -216,7 +216,23 @@ export async function POST(req: Request) {
                 success: tikHubResult.success,
                 hasData: !!tikHubResult.data,
                 duration: tikHubResult.debugInfo?.duration,
-                extractedValues: { views, likes, comments, shares }
+                extractedValues: { views, likes, comments, shares },
+                // Add debugging info to frontend
+                debugInfo: {
+                    tikHubRawResponse: tikHubResult.debugInfo?.tikHubRawResponse,
+                    rawData: tikHubResult.debugInfo?.rawData,
+                    apiKeyCheck: {
+                        hasApiKey: !!process.env.TIKHUB_API_KEY,
+                        apiKeyLength: process.env.TIKHUB_API_KEY?.length,
+                        apiKeyStart: process.env.TIKHUB_API_KEY?.substring(0, 10) + '...'
+                    },
+                    tikHubResultKeys: Object.keys(tikHubResult),
+                    tikHubResultType: typeof tikHubResult,
+                    tikHubResultSuccess: tikHubResult.success,
+                    tikHubResultData: tikHubResult.data,
+                    tikHubResultDebugInfo: tikHubResult.debugInfo,
+                    tikHubResultError: tikHubResult.error
+                }
             },
             warnings: sanitizedMetrics.warnings.length > 0 ? sanitizedMetrics.warnings : undefined
         });

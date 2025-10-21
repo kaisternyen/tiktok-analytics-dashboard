@@ -450,11 +450,21 @@ export default function TikTokTracker() {
             const data = await response.json();
             console.log(`🔄 Refresh response for video ${videoId}:`, data);
             
-            // Log TikHub response details in browser console
-            if (data.tikHubResult) {
-                console.log(`🔍 TikHub Raw Response:`, data.tikHubResult.debugInfo?.tikHubRawResponse || data.tikHubResult.data);
-                console.log(`🔍 TikHub Extracted Values:`, data.tikHubResult.extractedValues);
-            }
+        // Log TikHub response details in browser console
+        if (data.tikHubResult) {
+            console.log(`🔍 TikHub Raw Response:`, data.tikHubResult.debugInfo?.tikHubRawResponse || data.tikHubResult.data);
+            console.log(`🔍 TikHub Extracted Values:`, data.tikHubResult.extractedValues);
+            
+            // Log all debugging info
+            console.log(`🔑 API Key Check:`, data.tikHubResult.debugInfo?.apiKeyCheck);
+            console.log(`📊 TikHub Result Keys:`, data.tikHubResult.debugInfo?.tikHubResultKeys);
+            console.log(`📊 TikHub Result Type:`, data.tikHubResult.debugInfo?.tikHubResultType);
+            console.log(`📊 TikHub Result Success:`, data.tikHubResult.debugInfo?.tikHubResultSuccess);
+            console.log(`📊 TikHub Result Data:`, data.tikHubResult.debugInfo?.tikHubResultData);
+            console.log(`📊 TikHub Result DebugInfo:`, data.tikHubResult.debugInfo?.tikHubResultDebugInfo);
+            console.log(`📊 TikHub Result Error:`, data.tikHubResult.debugInfo?.tikHubResultError);
+            console.log(`📊 Raw Data:`, data.tikHubResult.debugInfo?.rawData);
+        }
             
             if (data.success) {
                 console.log(`✅ Refresh successful for @${data.video?.username}, new stats:`, data.video?.newStats);
