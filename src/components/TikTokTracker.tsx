@@ -1562,6 +1562,19 @@ export default function TikTokTracker() {
                 const hourlyBuckets = generateHourlyBuckets();
                 
                 console.log(`🕐 Generated ${hourlyBuckets.length} hourly buckets:`, hourlyBuckets.slice(0, 5), '...');
+                console.log(`🕐 Timeframe: ${timeframeStart?.toISOString()} to ${timeframeEnd?.toISOString()}`);
+                console.log(`🕐 Videos with sufficient data: ${videosWithSufficientData.length}`);
+                
+                // Debug: Show data points for first few videos
+                videosWithSufficientData.slice(0, 3).forEach((video, index) => {
+                    console.log(`🕐 Video ${index + 1} (@${video.username}): ${video.history?.length} data points`);
+                    if (video.history && video.history.length > 0) {
+                        const firstPoint = video.history[0];
+                        const lastPoint = video.history[video.history.length - 1];
+                        console.log(`🕐   First: ${firstPoint.time} (${firstPoint.views} views)`);
+                        console.log(`🕐   Last: ${lastPoint.time} (${lastPoint.views} views)`);
+                    }
+                });
                 
                 // Initialize all hourly buckets to 0
                 hourlyBuckets.forEach(bucket => {
@@ -1570,13 +1583,18 @@ export default function TikTokTracker() {
                 
                 // For each hourly bucket, calculate the delta using the SAME logic as calculateVideoPeriodViews
                 hourlyBuckets.forEach(timeKey => {
-                    // Parse hourly bucket: "2025-10-20 14:00"
+                    // Parse hourly bucket: "2025-10-20 14:00" (this is in EST)
                     const [datePart, timePart] = timeKey.split(' ');
                     const [year, month, day] = datePart.split('-').map(Number);
                     const hour = parseInt(timePart.split(':')[0]);
                     
-                    const bucketStart = new Date(year, month - 1, day, hour, 0, 0, 0);
-                    const bucketEnd = new Date(year, month - 1, day, hour, 59, 59, 999);
+                    // Create bucket boundaries in EST, then convert to UTC for comparison with data points
+                    const bucketStartEST = new Date(year, month - 1, day, hour, 0, 0, 0);
+                    const bucketEndEST = new Date(year, month - 1, day, hour, 59, 59, 999);
+                    
+                    // Convert EST bucket boundaries to UTC for proper comparison with data points
+                    const bucketStart = fromEasternTime(bucketStartEST);
+                    const bucketEnd = fromEasternTime(bucketEndEST);
                     
                     // Calculate delta for each video in this specific hour bucket
                     videosWithSufficientData.forEach(video => {
@@ -1598,6 +1616,8 @@ export default function TikTokTracker() {
                                 
                                 if (videoDelta > 0) {
                                     console.log(`🕐 Bucket ${timeKey}: video ${video.username} has ${bucketPoints.length} points, delta=${videoDelta}, total=${granularityData[timeKey]}`);
+                                } else if (bucketPoints.length > 0) {
+                                    console.log(`🕐 Bucket ${timeKey}: video ${video.username} has ${bucketPoints.length} points but delta=0 (first=${firstPoint.views}, last=${lastPoint.views})`);
                                 }
                             }
                         }
@@ -1649,15 +1669,25 @@ export default function TikTokTracker() {
                     let bucketEnd: Date;
                     
                     if (timeGranularity === 'daily') {
-                        // Parse daily bucket: "2025-10-20"
+                        // Parse daily bucket: "2025-10-20" (this is in EST)
                         const [year, month, day] = timeKey.split('-').map(Number);
-                        bucketStart = new Date(year, month - 1, day, 0, 0, 0, 0);
-                        bucketEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
+                        
+                        // Create bucket boundaries in EST, then convert to UTC for comparison with data points
+                        const bucketStartEST = new Date(year, month - 1, day, 0, 0, 0, 0);
+                        const bucketEndEST = new Date(year, month - 1, day, 23, 59, 59, 999);
+                        
+                        bucketStart = fromEasternTime(bucketStartEST);
+                        bucketEnd = fromEasternTime(bucketEndEST);
                     } else { // weekly
-                        // Parse weekly bucket: "2025-10-20" (start of week)
+                        // Parse weekly bucket: "2025-10-20" (start of week in EST)
                         const [year, month, day] = timeKey.split('-').map(Number);
-                        bucketStart = new Date(year, month - 1, day, 0, 0, 0, 0);
-                        bucketEnd = new Date(year, month - 1, day + 6, 23, 59, 59, 999);
+                        
+                        // Create bucket boundaries in EST, then convert to UTC for comparison with data points
+                        const bucketStartEST = new Date(year, month - 1, day, 0, 0, 0, 0);
+                        const bucketEndEST = new Date(year, month - 1, day + 6, 23, 59, 59, 999);
+                        
+                        bucketStart = fromEasternTime(bucketStartEST);
+                        bucketEnd = fromEasternTime(bucketEndEST);
                     }
                     
                     // Calculate delta for each video in this time bucket using SAME logic as calculateVideoPeriodViews
@@ -1684,6 +1714,14 @@ export default function TikTokTracker() {
             }
             
             // Convert granularity data to chart data points
+            const bucketsWithData = Object.entries(granularityData).filter(([_, views]) => views > 0);
+            const bucketsWithoutData = Object.entries(granularityData).filter(([_, views]) => views === 0);
+            
+            console.log(`📊 Granularity Summary: ${bucketsWithData.length} buckets with data, ${bucketsWithoutData.length} empty buckets`);
+            if (bucketsWithData.length > 0) {
+                console.log(`📊 Buckets with data:`, bucketsWithData.map(([time, views]) => `${time}: ${views}`).slice(0, 5));
+            }
+            
             Object.entries(granularityData).forEach(([timeKey, views]) => {
                 aggregateData.push({
                     time: timeKey,
