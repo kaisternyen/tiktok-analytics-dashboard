@@ -14,6 +14,9 @@ export async function POST(request: NextRequest) {
         tikHubKeyLength: process.env.TIKHUB_API_KEY?.length || 0
     });
 
+    // Add immediate response to test if endpoint is hit
+    console.log('🚨 TEST: Endpoint is being hit!');
+
     try {
         console.log('🔍 Parsing request body...');
         let body;
@@ -461,6 +464,23 @@ export async function POST(request: NextRequest) {
                 comments: newVideo.currentComments,
                 shares: newVideo.currentShares,
                 platform: platform
+            },
+            debugInfo: {
+                platformDetection: {
+                    detectedPlatform: platform,
+                    mediaDataKeys: Object.keys(mediaData),
+                    mediaDataPlatform: (mediaData as unknown as Record<string, unknown>)?.platform
+                },
+                timestampExtraction: {
+                    extractedTimestamp: postedDate.toISOString(),
+                    tikTokDataKeys: platform === 'tiktok' ? Object.keys(mediaData as unknown as Record<string, unknown>) : null,
+                    tikTokTimestamp: platform === 'tiktok' ? (mediaData as unknown as Record<string, unknown>)?.timestamp : null
+                },
+                databaseResult: {
+                    videoId: newVideo.id,
+                    postedAt: newVideo.postedAt?.toISOString(),
+                    username: newVideo.username
+                }
             }
         });
 
