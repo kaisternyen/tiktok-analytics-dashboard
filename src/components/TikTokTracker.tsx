@@ -219,6 +219,29 @@ export default function TikTokTracker() {
         return [startDate.toISOString(), now.toISOString()];
     }, [selectedTimePeriod, customDateRange]);
 
+    // Auto-switch granularity based on timeframe
+    React.useEffect(() => {
+        if (timeframe) {
+            const [start, end] = timeframe;
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+            const hoursDiff = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60);
+            
+            // Auto-switch to hourly for daily views (24 hours or less)
+            if (hoursDiff <= 25) {
+                setTimeGranularity('hourly');
+            }
+            // Auto-switch to daily for weekly views (7 days or less)
+            else if (hoursDiff <= 7 * 24) {
+                setTimeGranularity('daily');
+            }
+            // Auto-switch to weekly for longer periods
+            else {
+                setTimeGranularity('weekly');
+            }
+        }
+    }, [timeframe]);
+
     // Handle chart point click to focus on specific day with hourly granularity
     const handleChartClick = (data: { activePayload?: Array<{ payload: { time: string } }> }) => {
         if (data && data.activePayload && data.activePayload[0]) {
@@ -2151,6 +2174,11 @@ export default function TikTokTracker() {
                                                                     onClick={() => {
                                                                         setSelectedTimePeriod(period);
                                                                         setCustomDateRange(null); // Clear custom range when selecting preset
+                                                                        
+                                                                        // Auto-switch to hourly granularity for daily views
+                                                                        if (period === 'D' || period === 'TODAY_EST') {
+                                                                            setTimeGranularity('hourly');
+                                                                        }
                                                                     }}
                                                                     className={`px-3 py-1 text-xs font-medium transition-colors ${selectedTimePeriod === period && !customDateRange
                                                                         ? 'bg-blue-500 text-white'
