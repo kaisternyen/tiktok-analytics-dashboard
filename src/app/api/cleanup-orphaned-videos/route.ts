@@ -52,20 +52,11 @@ async function cleanupOrphanedVideos(): Promise<{ deactivated: number; accounts:
         
         orphanedAccounts.forEach(account => console.log(`   - ${account}`));
         
-        // Deactivate orphaned videos
-        const orphanedVideoIds = orphanedVideos.map(v => v.id);
-        const updateResult = await prisma.video.updateMany({
-            where: { id: { in: orphanedVideoIds } },
-            data: { 
-                isActive: false,
-                trackingMode: 'orphaned' // Mark as orphaned for future reference
-            }
-        });
-        
-        console.log(`🧹 Deactivated ${updateResult.count} orphaned videos`);
+        // Don't deactivate orphaned videos - keep them active
+        console.log(`🧹 Found ${orphanedVideos.length} orphaned videos (keeping active)`);
         
         return { 
-            deactivated: updateResult.count, 
+            deactivated: 0, 
             accounts: orphanedAccounts,
             details
         };

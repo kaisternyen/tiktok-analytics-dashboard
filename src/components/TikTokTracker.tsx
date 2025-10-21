@@ -143,7 +143,6 @@ export default function TikTokTracker() {
     const [success, setSuccess] = useState<string | null>(null);
     const [cronStatus, setCronStatus] = useState<CronStatus | null>(null);
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
-    const [isPausingUnpausingAll, setIsPausingUnpausingAll] = useState(false);
     const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('W');
     const [showDelta, setShowDelta] = useState(true); // Default to delta view
     const [timeGranularity, setTimeGranularity] = useState<'hourly' | 'daily' | 'weekly'>('daily');
@@ -453,37 +452,8 @@ export default function TikTokTracker() {
             
             // Log TikHub response details in browser console
             if (data.tikHubResult) {
-                console.log(`🔍 TikHub Response Analysis:`);
-                console.log(`  - Success:`, data.tikHubResult.success);
-                console.log(`  - Has Data:`, data.tikHubResult.hasData);
-                console.log(`  - Extracted Values:`, data.tikHubResult.extractedValues);
-                
-                if (data.tikHubResult.data) {
-                    console.log(`🔍 TikHub Raw Data:`, data.tikHubResult.data);
-                    console.log(`🔍 TikHub Data Keys:`, Object.keys(data.tikHubResult.data));
-                    
-                    // Check for common field patterns
-                    const tikHubData = data.tikHubResult.data;
-                    console.log(`🔍 Field Analysis:`);
-                    console.log(`  - Has statistics?:`, !!tikHubData.statistics);
-                    console.log(`  - Has stats?:`, !!tikHubData.stats);
-                    console.log(`  - Has play_count?:`, !!tikHubData.play_count);
-                    console.log(`  - Has view_count?:`, !!tikHubData.view_count);
-                    console.log(`  - Has digg_count?:`, !!tikHubData.digg_count);
-                    console.log(`  - Has like_count?:`, !!tikHubData.like_count);
-                    console.log(`  - Has comment_count?:`, !!tikHubData.comment_count);
-                    console.log(`  - Has share_count?:`, !!tikHubData.share_count);
-                    
-                    // Log nested statistics if they exist
-                    if (tikHubData.statistics) {
-                        console.log(`🔍 Statistics object:`, tikHubData.statistics);
-                        console.log(`🔍 Statistics keys:`, Object.keys(tikHubData.statistics));
-                    }
-                    if (tikHubData.stats) {
-                        console.log(`🔍 Stats object:`, tikHubData.stats);
-                        console.log(`🔍 Stats keys:`, Object.keys(tikHubData.stats));
-                    }
-                }
+                console.log(`🔍 TikHub Raw Response:`, data.tikHubResult.data);
+                console.log(`🔍 TikHub Extracted Values:`, data.tikHubResult.extractedValues);
             }
             
             if (data.success) {
@@ -1046,118 +1016,6 @@ export default function TikTokTracker() {
             setSuccess(null);
         } finally {
             setDeletingVideoId(null);
-        }
-    };
-
-    // Handle unpausing a video
-    const handleUnpauseVideo = async (videoId: string) => {
-        try {
-            console.log(`▶️ Unpausing video: ${videoId}`);
-            
-            const response = await fetch('/api/reactivate-videos', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    videoIds: [videoId]
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to unpause video');
-            }
-
-            console.log(`✅ Successfully unpaused video: ${videoId}`);
-            
-            // Trigger immediate scraping for the unpaused video
-            try {
-                const scrapeResponse = await fetch('/api/run-single-video', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ videoId }),
-                });
-                
-                if (scrapeResponse.ok) {
-                    console.log(`✅ Triggered immediate scrape for unpaused video`);
-                    setSuccess(`✅ Successfully unpaused video and triggered immediate scraping`);
-                } else {
-                    console.log(`⚠️ Failed to trigger scrape for unpaused video`);
-                    setSuccess(`✅ Successfully unpaused video (scraping may take a moment)`);
-                }
-            } catch (scrapeError) {
-                console.error(`❌ Error triggering scrape:`, scrapeError);
-                setSuccess(`✅ Successfully unpaused video (scraping may take a moment)`);
-            }
-            
-            // Refresh the videos list to show updated status
-            await fetchVideos();
-            
-            setError(null);
-
-        } catch (err) {
-            console.error('💥 Error unpausing video:', err);
-            const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-            setError(`Failed to unpause video: ${errorMessage}`);
-            setSuccess(null);
-        }
-    };
-
-    // Handle pause/unpause all videos
-    const handlePauseUnpauseAll = async () => {
-        try {
-            setIsPausingUnpausingAll(true);
-            
-            // Count paused vs active videos
-            const pausedVideos = displayedVideos.filter(v => v.status === 'Paused');
-            const activeVideos = displayedVideos.filter(v => v.status === 'Active');
-            
-            if (pausedVideos.length > activeVideos.length) {
-                // More paused videos - unpause all paused videos
-                console.log(`▶️ Unpausing all ${pausedVideos.length} paused videos`);
-                
-                const response = await fetch('/api/reactivate-videos', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        reactivateOrphaned: true
-                    }),
-                });
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(result.error || 'Failed to unpause videos');
-                }
-
-                setSuccess(`✅ Successfully unpaused ${result.reactivated} videos and triggered scraping for ${result.scrapesTriggered} videos`);
-                setError(null);
-                
-            } else {
-                // More active videos - pause all active videos
-                console.log(`⏸️ Pausing all ${activeVideos.length} active videos`);
-                
-                // For now, we'll just show a message since we don't have a pause API yet
-                setSuccess(`⏸️ Pause all functionality coming soon. Currently ${activeVideos.length} videos are active.`);
-                setError(null);
-            }
-            
-            // Refresh the videos list
-            await fetchVideos();
-
-        } catch (err) {
-            console.error('💥 Error in pause/unpause all:', err);
-            const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-            setError(`Failed to pause/unpause all videos: ${errorMessage}`);
-            setSuccess(null);
-        } finally {
-            setIsPausingUnpausingAll(false);
         }
     };
 
@@ -2348,16 +2206,6 @@ export default function TikTokTracker() {
                                                 >
                                                     {showDelta ? 'Total Views' : 'View Delta'}
                                                 </Button>
-                                                {/* Pause/Unpause All Button */}
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={handlePauseUnpauseAll}
-                                                    className="text-xs"
-                                                    disabled={isPausingUnpausingAll}
-                                                >
-                                                    {isPausingUnpausingAll ? 'Processing...' : 'Pause/Unpause All'}
-                                                </Button>
                                             </div>
                                         </div>
                                         <div className="h-80">
@@ -2951,18 +2799,6 @@ export default function TikTokTracker() {
                                                                             }`}>
                                                                                 {video.status}
                                                                             </span>
-                                                                            {video.status === 'Paused' && (
-                                                                                <button
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        handleUnpauseVideo(video.id);
-                                                                                    }}
-                                                                                    className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                                                                                    title="Unpause this video"
-                                                                                >
-                                                                                    Unpause
-                                                                                </button>
-                                                                            )}
                                                                         </div>
                                                                     </td>
                                                                     <td className="p-4">
