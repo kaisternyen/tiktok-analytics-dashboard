@@ -1612,7 +1612,7 @@ export default function TikTokTracker() {
             likes: point.likes,
             comments: point.comments,
             shares: point.shares,
-            delta: point.delta, // Keep the delta we calculated
+            delta: 0,
             originalTime: new Date(point.time)
         }));
 
