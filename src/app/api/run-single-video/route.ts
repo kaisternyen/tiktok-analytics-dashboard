@@ -155,6 +155,11 @@ export async function POST(req: Request) {
         console.log(`📈 Previous values in DB: views=${video.currentViews}, likes=${video.currentLikes}, comments=${video.currentComments}, shares=${video.currentShares}`);
         console.log(`📈 Difference: views=${views - video.currentViews}, likes=${likes - video.currentLikes}, comments=${comments - video.currentComments}, shares=${shares - video.currentShares}`);
         
+        // Check if new values are significantly lower (potential data issue)
+        if (views < video.currentViews * 0.8) {
+            console.warn(`⚠️ WARNING: New views (${views}) significantly lower than previous (${video.currentViews}). This might indicate TikHub data inconsistency.`);
+        }
+        
         // Sanitize metrics to prevent negative values and corruption
         const sanitizedMetrics = sanitizeMetrics(
             { views, likes, comments, shares },
