@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData, extractTikTokStatsFromTikHubData } from '@/lib/tikhub';
+import { scrapeMediaPost, TikTokVideoData, InstagramPostData, YouTubeVideoData } from '@/lib/tikhub';
 import { prisma } from '@/lib/prisma';
 import { getCurrentNormalizedTimestamp, getIntervalForCadence } from '@/lib/timestamp-utils';
 import { uploadToS3 } from '../../../lib/s3';
@@ -190,21 +190,19 @@ export async function POST(request: NextRequest) {
             description = ytData.description;
             thumbnailUrl = ytData.thumbnails?.medium?.url || ytData.thumbnails?.high?.url;
         } else { // tiktok
-            // Use centralized TikHub data extraction for TikTok videos
+            // Use DIRECT data extraction (SAME AS REFRESH BUTTON)
             console.log('🎬 TIKTOK EXTRACTION DEBUG:');
             console.log('🎬 Raw mediaData:', JSON.stringify(mediaData, null, 2));
             console.log('🎬 URL:', url);
             
-            const extractedData = extractTikTokStatsFromTikHubData(mediaData, url);
-            console.log('🎬 Extracted data:', extractedData);
-            
-            views = extractedData.views;
-            likes = extractedData.likes;
-            comments = extractedData.comments;
-            shares = extractedData.shares;
-            username = extractedData.username;
-            description = extractedData.description;
-            thumbnailUrl = extractedData.thumbnailUrl;
+            const tikTokData = mediaData as unknown as Record<string, unknown>;
+            views = tikTokData.views as number || 0;
+            likes = tikTokData.likes as number || 0;
+            comments = tikTokData.comments as number || 0;
+            shares = tikTokData.shares as number || 0;
+            username = tikTokData.username as string || 'unknown';
+            description = tikTokData.description as string || '';
+            thumbnailUrl = tikTokData.thumbnailUrl as string || undefined;
             
             console.log('🎬 Final values:', { views, likes, comments, shares, username, thumbnailUrl });
         }
@@ -329,7 +327,7 @@ export async function POST(request: NextRequest) {
                 allKeys: Object.keys(mediaData)
             });
             
-            // Check for timestamp field (TikTok, Instagram)
+            // Check for timestamp field (TikTok, Instagram) - DIRECT EXTRACTION
             if ('timestamp' in mediaData && mediaData.timestamp) {
                 const extractedDate = new Date(mediaData.timestamp);
                 console.log(`📅 DEBUG: Extracted timestamp: ${mediaData.timestamp} -> ${extractedDate.toISOString()}`);
@@ -426,10 +424,10 @@ export async function POST(request: NextRequest) {
                 let freshShares = 0;
 
                 if (platform === 'tiktok') {
-                    // Use centralized TikHub data extraction (SAME AS REFRESH BUTTON)
-                    const extractedData = extractTikTokStatsFromTikHubData(mediaData, newVideo.url);
-                    freshViews = extractedData.views;
-                    freshShares = extractedData.shares;
+                    // Use DIRECT data extraction (SAME AS REFRESH BUTTON)
+                    const tikTokData = tikHubResult.data as unknown as Record<string, unknown>;
+                    freshViews = tikTokData.views as number || 0;
+                    freshShares = tikTokData.shares as number || 0;
                 } else if (platform === 'instagram') {
                     const instagramData = mediaData as InstagramPostData;
                     freshViews = instagramData.views || instagramData.plays || 0;
