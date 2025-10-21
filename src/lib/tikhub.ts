@@ -169,8 +169,19 @@ export function extractTikTokStatsFromTikHubData(videoData: unknown, originalUrl
     console.log('📊 videoData.statistics:', (videoData as Record<string, unknown>)?.statistics);
     console.log('📊 videoData.stats:', (videoData as Record<string, unknown>)?.stats);
     console.log('📊 videoData.aweme_status:', (videoData as Record<string, unknown>)?.aweme_status);
+    console.log('📊 videoData.aweme_detail:', (videoData as Record<string, unknown>)?.aweme_detail);
     console.log('📊 videoData.extra:', (videoData as Record<string, unknown>)?.extra);
     console.log('📊 FULL INPUT DATA:', JSON.stringify(videoData, null, 2));
+    
+    // Debug aweme_detail if it exists (this is where the actual video data is!)
+    const awemeDetail = (videoData as Record<string, unknown>)?.aweme_detail as Record<string, unknown>;
+    if (awemeDetail) {
+        console.log('📊 aweme_detail keys:', Object.keys(awemeDetail));
+        console.log('📊 aweme_detail.statistics:', awemeDetail.statistics);
+        console.log('📊 aweme_detail.stats:', awemeDetail.stats);
+        console.log('📊 aweme_detail.author:', awemeDetail.author);
+        console.log('📊 aweme_detail.desc:', awemeDetail.desc);
+    }
     
     // Debug aweme_status array if it exists
     const awemeStatus = (videoData as Record<string, unknown>)?.aweme_status as unknown[];
@@ -182,29 +193,34 @@ export function extractTikTokStatsFromTikHubData(videoData: unknown, originalUrl
     
     const data = videoData as Record<string, unknown>;
     
+    // Check if we have aweme_detail (the actual video data) - use existing awemeDetail variable
+    const videoDataToUse = awemeDetail || data;
+    
+    console.log('📊 Using video data from:', awemeDetail ? 'aweme_detail' : 'top level');
+    
     // Extract statistics with comprehensive fallback chain
-    const views = (data?.statistics as Record<string, unknown>)?.play_count as number || 
-                  data?.play_count as number || 
-                  (data?.stats as Record<string, unknown>)?.play_count as number || 
-                  data?.view_count as number || 0;
+    const views = (videoDataToUse?.statistics as Record<string, unknown>)?.play_count as number || 
+                  videoDataToUse?.play_count as number || 
+                  (videoDataToUse?.stats as Record<string, unknown>)?.play_count as number || 
+                  videoDataToUse?.view_count as number || 0;
                   
-    const likes = (data?.statistics as Record<string, unknown>)?.digg_count as number || 
-                  data?.digg_count as number || 
-                  (data?.stats as Record<string, unknown>)?.digg_count as number || 
-                  data?.like_count as number || 0;
+    const likes = (videoDataToUse?.statistics as Record<string, unknown>)?.digg_count as number || 
+                  videoDataToUse?.digg_count as number || 
+                  (videoDataToUse?.stats as Record<string, unknown>)?.digg_count as number || 
+                  videoDataToUse?.like_count as number || 0;
                   
-    const comments = (data?.statistics as Record<string, unknown>)?.comment_count as number || 
-                     data?.comment_count as number || 
-                     (data?.stats as Record<string, unknown>)?.comment_count as number || 0;
+    const comments = (videoDataToUse?.statistics as Record<string, unknown>)?.comment_count as number || 
+                     videoDataToUse?.comment_count as number || 
+                     (videoDataToUse?.stats as Record<string, unknown>)?.comment_count as number || 0;
                      
-    const shares = (data?.statistics as Record<string, unknown>)?.share_count as number || 
-                   data?.share_count as number || 
-                   (data?.stats as Record<string, unknown>)?.share_count as number || 0;
+    const shares = (videoDataToUse?.statistics as Record<string, unknown>)?.share_count as number || 
+                   videoDataToUse?.share_count as number || 
+                   (videoDataToUse?.stats as Record<string, unknown>)?.share_count as number || 0;
     
     // Extract other data
-    let username = (data?.author as Record<string, unknown>)?.unique_id as string || 
-                   (data?.author as Record<string, unknown>)?.nickname as string || 
-                   (data?.author as Record<string, unknown>)?.username as string;
+    let username = (videoDataToUse?.author as Record<string, unknown>)?.unique_id as string || 
+                   (videoDataToUse?.author as Record<string, unknown>)?.nickname as string || 
+                   (videoDataToUse?.author as Record<string, unknown>)?.username as string;
     
     // If username is not found in API response, try to extract from URL
     if (!username || username === 'N/A') {
