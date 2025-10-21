@@ -317,36 +317,27 @@ export async function POST(request: NextRequest) {
 
         console.log('📝 [DEBUG] Creating new media record in database with thumbnailUrl:', thumbnailUrl);
 
-        // Extract posted date from the scraped data
-        const getPostedDate = (mediaData: TikTokVideoData | InstagramPostData | YouTubeVideoData): Date => {
-            console.log(`📅 DEBUG: Raw mediaData timestamp fields:`, {
-                hasTimestamp: 'timestamp' in mediaData,
-                hasPublishedAt: 'publishedAt' in mediaData,
-                timestamp: 'timestamp' in mediaData ? mediaData.timestamp : 'NOT_FOUND',
-                publishedAt: 'publishedAt' in mediaData ? mediaData.publishedAt : 'NOT_FOUND',
-                allKeys: Object.keys(mediaData)
-            });
-            
-            // Check for timestamp field (TikTok, Instagram) - DIRECT EXTRACTION
-            if ('timestamp' in mediaData && mediaData.timestamp) {
-                const extractedDate = new Date(mediaData.timestamp);
-                console.log(`📅 DEBUG: Extracted timestamp: ${mediaData.timestamp} -> ${extractedDate.toISOString()}`);
-                return extractedDate;
+        // Extract posted date DIRECTLY from TikHub data (SAME AS VIEWS/LIKES)
+        let postedDate: Date;
+        if (platform === 'tiktok') {
+            const tikTokData = mediaData as unknown as Record<string, unknown>;
+            const timestamp = tikTokData.timestamp as string;
+            if (timestamp) {
+                postedDate = new Date(timestamp);
+                console.log(`📅 DIRECT timestamp extraction: ${timestamp} -> ${postedDate.toISOString()}`);
+            } else {
+                postedDate = new Date(); // Fallback
+                console.log(`📅 No timestamp found, using current date`);
             }
-            
-            // Check for publishedAt field (YouTube)
-            if ('publishedAt' in mediaData && mediaData.publishedAt) {
-                const extractedDate = new Date(mediaData.publishedAt);
-                console.log(`📅 DEBUG: Extracted publishedAt: ${mediaData.publishedAt} -> ${extractedDate.toISOString()}`);
-                return extractedDate;
-            }
-            
-            console.log(`📅 DEBUG: No valid timestamp/publishedAt found, using current time`);
-            // Fallback to current time if timestamp not available
-            return new Date();
-        };
-
-        const postedDate = getPostedDate(mediaData);
+        } else if (platform === 'instagram') {
+            const instaData = mediaData as unknown as Record<string, unknown>;
+            const timestamp = instaData.timestamp as string;
+            postedDate = timestamp ? new Date(timestamp) : new Date();
+        } else { // youtube
+            const ytData = mediaData as unknown as Record<string, unknown>;
+            const publishedAt = ytData.publishedAt as string;
+            postedDate = publishedAt ? new Date(publishedAt) : new Date();
+        }
         console.log(`📅 Video posted date extracted: ${postedDate.toISOString()}`);
 
         // Create new video record
