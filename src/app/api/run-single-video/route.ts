@@ -152,6 +152,8 @@ export async function POST(req: Request) {
         }
 
         console.log(`📈 Raw extracted values for @${video.username}: views=${views}, likes=${likes}, comments=${comments}, shares=${shares}`);
+        console.log(`📈 Previous values in DB: views=${video.currentViews}, likes=${video.currentLikes}, comments=${video.currentComments}, shares=${video.currentShares}`);
+        console.log(`📈 Difference: views=${views - video.currentViews}, likes=${likes - video.currentLikes}, comments=${comments - video.currentComments}, shares=${shares - video.currentShares}`);
         
         // Sanitize metrics to prevent negative values and corruption
         const sanitizedMetrics = sanitizeMetrics(
