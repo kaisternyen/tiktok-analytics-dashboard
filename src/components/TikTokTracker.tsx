@@ -986,6 +986,43 @@ export default function TikTokTracker() {
         }
     };
 
+    // Handle unpausing a video
+    const handleUnpauseVideo = async (videoId: string) => {
+        try {
+            console.log(`▶️ Unpausing video: ${videoId}`);
+            
+            const response = await fetch('/api/reactivate-videos', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    videoIds: [videoId]
+                }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to unpause video');
+            }
+
+            console.log(`✅ Successfully unpaused video: ${videoId}`);
+            
+            // Refresh the videos list to show updated status
+            await fetchVideos();
+            
+            setSuccess(`✅ Successfully unpaused video`);
+            setError(null);
+
+        } catch (err) {
+            console.error('💥 Error unpausing video:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+            setError(`Failed to unpause video: ${errorMessage}`);
+            setSuccess(null);
+        }
+    };
+
     // Handle "Just Moderated" - marks last moderated date
     const handleJustModerated = async (videoId: string) => {
         try {
@@ -2860,15 +2897,29 @@ export default function TikTokTracker() {
                                                                         </span>
                                                                     </td>
                                                                     <td className="p-4">
-                                                                        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                                                                            video.status === 'active'
-                                                                                ? 'bg-green-100 text-green-800'
-                                                                                : video.status === 'error'
-                                                                                ? 'bg-red-100 text-red-800'
-                                                                                : 'bg-yellow-100 text-yellow-800'
-                                                                        }`}>
-                                                                            {video.status}
-                                                                        </span>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                                                                                video.status === 'Active'
+                                                                                    ? 'bg-green-100 text-green-800'
+                                                                                    : video.status === 'error'
+                                                                                    ? 'bg-red-100 text-red-800'
+                                                                                    : 'bg-yellow-100 text-yellow-800'
+                                                                            }`}>
+                                                                                {video.status}
+                                                                            </span>
+                                                                            {video.status === 'Paused' && (
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleUnpauseVideo(video.id);
+                                                                                    }}
+                                                                                    className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                                                                    title="Unpause this video"
+                                                                                >
+                                                                                    Unpause
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
                                                                     </td>
                                                                     <td className="p-4">
                                                                         <div className="flex flex-wrap gap-1 max-w-32">
