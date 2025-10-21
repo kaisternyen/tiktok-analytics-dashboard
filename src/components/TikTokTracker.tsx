@@ -1542,30 +1542,66 @@ export default function TikTokTracker() {
             const granularityData: { [timeKey: string]: number } = {};
             
             if (timeGranularity === 'hourly') {
-                // For hourly view, use actual data points that exist (don't force hourly buckets)
-                videosWithSufficientData.forEach(video => {
-                    if (video.history && video.history.length > 0) {
-                        // Find data points within the timeframe
-                        const timeframePoints = video.history.filter(point => {
-                            const pointTime = new Date(point.time);
-                            return pointTime >= timeframeStart && pointTime <= timeframeEnd;
-                        });
-                        
-                        if (timeframePoints.length >= 2) {
-                            // Calculate total delta for this video in the timeframe
-                            const sortedPoints = timeframePoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                            const firstPoint = sortedPoints[0];
-                            const lastPoint = sortedPoints[sortedPoints.length - 1];
-                            const videoDelta = Math.max(0, lastPoint.views - firstPoint.views);
-                            
-                            // Use the timestamp of the last point as the key
-                            const pointTime = new Date(lastPoint.time);
-                            const hourEST = toEasternTime(pointTime);
-                            const timeKey = `${hourEST.getFullYear()}-${String(hourEST.getMonth() + 1).padStart(2, '0')}-${String(hourEST.getDate()).padStart(2, '0')} ${String(hourEST.getHours()).padStart(2, '0')}:00`;
-                            
-                            granularityData[timeKey] = (granularityData[timeKey] || 0) + videoDelta;
-                        }
+                // For hourly view, generate hourly buckets and calculate deltas for each hour
+                const generateHourlyBuckets = () => {
+                    const buckets: string[] = [];
+                    const start = new Date(timeframeStart);
+                    const end = new Date(timeframeEnd);
+                    
+                    // Generate hourly buckets
+                    for (let time = start.getTime(); time <= end.getTime(); time += 60 * 60 * 1000) { // 1 hour = 60 * 60 * 1000 ms
+                        const hourDate = new Date(time);
+                        const hourEST = toEasternTime(hourDate);
+                        const key = `${hourEST.getFullYear()}-${String(hourEST.getMonth() + 1).padStart(2, '0')}-${String(hourEST.getDate()).padStart(2, '0')} ${String(hourEST.getHours()).padStart(2, '0')}:00`;
+                        buckets.push(key);
                     }
+                    
+                    return buckets;
+                };
+                
+                const hourlyBuckets = generateHourlyBuckets();
+                
+                console.log(`🕐 Generated ${hourlyBuckets.length} hourly buckets:`, hourlyBuckets.slice(0, 5), '...');
+                
+                // Initialize all hourly buckets to 0
+                hourlyBuckets.forEach(bucket => {
+                    granularityData[bucket] = 0;
+                });
+                
+                // For each hourly bucket, calculate the delta using the SAME logic as calculateVideoPeriodViews
+                hourlyBuckets.forEach(timeKey => {
+                    // Parse hourly bucket: "2025-10-20 14:00"
+                    const [datePart, timePart] = timeKey.split(' ');
+                    const [year, month, day] = datePart.split('-').map(Number);
+                    const hour = parseInt(timePart.split(':')[0]);
+                    
+                    const bucketStart = new Date(year, month - 1, day, hour, 0, 0, 0);
+                    const bucketEnd = new Date(year, month - 1, day, hour, 59, 59, 999);
+                    
+                    // Calculate delta for each video in this specific hour bucket
+                    videosWithSufficientData.forEach(video => {
+                        if (video.history && video.history.length > 0) {
+                            // Find data points within this specific hour bucket
+                            const bucketPoints = video.history.filter(point => {
+                                const pointTime = new Date(point.time);
+                                return pointTime >= bucketStart && pointTime <= bucketEnd;
+                            });
+                            
+                            if (bucketPoints.length > 0) {
+                                const sortedBucketPoints = bucketPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                                const firstPoint = sortedBucketPoints[0];
+                                const lastPoint = sortedBucketPoints[sortedBucketPoints.length - 1];
+                                
+                                // Calculate delta for this video in this hour bucket (SAME AS calculateVideoPeriodViews)
+                                const videoDelta = Math.max(0, lastPoint.views - firstPoint.views);
+                                granularityData[timeKey] += videoDelta;
+                                
+                                if (videoDelta > 0) {
+                                    console.log(`🕐 Bucket ${timeKey}: video ${video.username} has ${bucketPoints.length} points, delta=${videoDelta}, total=${granularityData[timeKey]}`);
+                                }
+                            }
+                        }
+                    });
                 });
             } else {
                 // For daily/weekly view, use the existing bucket logic
