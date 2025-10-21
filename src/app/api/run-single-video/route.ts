@@ -103,6 +103,16 @@ export async function POST(req: Request) {
         let views = 0, likes = 0, comments = 0, shares = 0;
         
         console.log(`🔍 TikHub data for @${video.username}:`, JSON.stringify(tikHubResult.data, null, 2));
+        console.log(`🔍 TikHub data structure analysis:`);
+        console.log(`  - Has statistics?:`, !!(tikHubResult.data as unknown as Record<string, unknown>)?.statistics);
+        console.log(`  - Has stats?:`, !!(tikHubResult.data as unknown as Record<string, unknown>)?.stats);
+        console.log(`  - Has play_count?:`, !!(tikHubResult.data as unknown as Record<string, unknown>)?.play_count);
+        console.log(`  - Has view_count?:`, !!(tikHubResult.data as unknown as Record<string, unknown>)?.view_count);
+        console.log(`  - Has digg_count?:`, !!(tikHubResult.data as unknown as Record<string, unknown>)?.digg_count);
+        console.log(`  - Has like_count?:`, !!(tikHubResult.data as unknown as Record<string, unknown>)?.like_count);
+        console.log(`  - Has comment_count?:`, !!(tikHubResult.data as unknown as Record<string, unknown>)?.comment_count);
+        console.log(`  - Has share_count?:`, !!(tikHubResult.data as unknown as Record<string, unknown>)?.share_count);
+        console.log(`  - All keys:`, Object.keys((tikHubResult.data as unknown as Record<string, unknown>) || {}));
         
         if (video.platform === 'tiktok' && tikHubResult.data) {
             // Use centralized TikHub data extraction
