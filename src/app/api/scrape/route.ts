@@ -359,8 +359,8 @@ export async function POST(request: NextRequest) {
                 hashtags: (mediaData as TikTokVideoData | InstagramPostData).hashtags ? JSON.stringify((mediaData as TikTokVideoData | InstagramPostData).hashtags) : null,
                 music: (mediaData as TikTokVideoData | InstagramPostData).music ? JSON.stringify((mediaData as TikTokVideoData | InstagramPostData).music) : null,
                 scrapingCadence: 'hourly', // Set new videos to hourly by default
-                // Set lastScrapedAt to current time so it gets picked up immediately
-                lastScrapedAt: new Date(),
+                // Set lastScrapedAt to 2 hours ago so it gets picked up by the next cron run
+                lastScrapedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
                 isActive: true
             }
         });
@@ -396,6 +396,72 @@ export async function POST(request: NextRequest) {
             }
         });
         console.log(`📊 Added initial metrics entry for immediate graph display`);
+
+        // Immediately scrape the video to get fresh data and update lastScrapedAt
+        console.log(`🔄 Triggering immediate scrape for new video @${username}`);
+        try {
+            const scrapeResult = await scrapeMediaPost(newVideo.url);
+            if (scrapeResult.success && scrapeResult.data) {
+                // Extract fresh data
+                const freshMediaData = scrapeResult.data as TikTokVideoData | InstagramPostData | YouTubeVideoData;
+                let freshViews: number, freshLikes: number, freshComments: number, freshShares: number;
+
+                if (platform === 'instagram') {
+                    const instaData = freshMediaData as InstagramPostData;
+                    freshViews = instaData.plays || instaData.views || 0;
+                    freshLikes = instaData.likes;
+                    freshComments = instaData.comments;
+                    freshShares = 0;
+                } else if (platform === 'youtube') {
+                    const ytData = freshMediaData as YouTubeVideoData;
+                    freshViews = ytData.views;
+                    freshLikes = ytData.likes;
+                    freshComments = ytData.comments;
+                    freshShares = 0;
+                } else { // tiktok
+                    const extractedData = extractTikTokStatsFromTikHubData(freshMediaData, newVideo.url);
+                    freshViews = extractedData.views;
+                    freshLikes = extractedData.likes;
+                    freshComments = extractedData.comments;
+                    freshShares = extractedData.shares;
+                }
+
+                // Update video with fresh data
+                await prisma.video.update({
+                    where: { id: newVideo.id },
+                    data: {
+                        currentViews: freshViews,
+                        currentLikes: freshLikes,
+                        currentComments: freshComments,
+                        currentShares: freshShares,
+                        lastScrapedAt: new Date()
+                    }
+                });
+
+                // Add fresh metrics history entry
+                await prisma.metricsHistory.create({
+                    data: {
+                        videoId: newVideo.id,
+                        views: freshViews,
+                        likes: freshLikes,
+                        comments: freshComments,
+                        shares: freshShares,
+                        timestamp: new Date()
+                    }
+                });
+
+                console.log(`✅ Immediate scrape completed for @${username}:`, {
+                    views: freshViews,
+                    likes: freshLikes,
+                    comments: freshComments,
+                    shares: freshShares
+                });
+            } else {
+                console.log(`⚠️ Immediate scrape failed for @${username}, using initial data`);
+            }
+        } catch (error) {
+            console.error(`❌ Error during immediate scrape for @${username}:`, error);
+        }
 
         console.log(`✅ New media created successfully with initial metrics history:`, {
             id: result.data.id,
