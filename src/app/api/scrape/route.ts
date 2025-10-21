@@ -167,11 +167,19 @@ export async function POST(request: NextRequest) {
         // Handle different data structures for each platform
         const mediaData = result.data as TikTokVideoData | InstagramPostData | YouTubeVideoData;
         
+        console.log(`🔍 PLATFORM DETECTION DEBUG:`, {
+            detectedPlatform: platform,
+            mediaDataType: typeof mediaData,
+            mediaDataKeys: Object.keys(mediaData),
+            mediaDataPlatform: (mediaData as unknown as Record<string, unknown>)?.platform
+        });
+        
         // Get platform-specific data
         let views: number, likes: number, comments: number, shares: number;
         let username: string, description: string, thumbnailUrl: string | undefined;
 
         if (platform === 'instagram') {
+            console.log('📸 INSTAGRAM BRANCH TAKEN');
             const instaData = mediaData as InstagramPostData;
             views = instaData.plays || instaData.views || 0;
             likes = instaData.likes;
@@ -181,6 +189,7 @@ export async function POST(request: NextRequest) {
             description = instaData.description;
             thumbnailUrl = instaData.thumbnailUrl || instaData.displayUrl;
         } else if (platform === 'youtube') {
+            console.log('📺 YOUTUBE BRANCH TAKEN');
             const ytData = mediaData as YouTubeVideoData;
             views = ytData.views;
             likes = ytData.likes;
@@ -190,6 +199,7 @@ export async function POST(request: NextRequest) {
             description = ytData.description;
             thumbnailUrl = ytData.thumbnails?.medium?.url || ytData.thumbnails?.high?.url;
         } else { // tiktok
+            console.log('🎬 TIKTOK BRANCH TAKEN');
             // Use DIRECT data extraction (SAME AS REFRESH BUTTON)
             console.log('🎬 TIKTOK EXTRACTION DEBUG:');
             console.log('🎬 Raw mediaData:', JSON.stringify(mediaData, null, 2));
