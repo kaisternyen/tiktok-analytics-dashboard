@@ -1539,34 +1539,36 @@ export default function TikTokTracker() {
         const aggregateData: ChartDataPoint[] = [];
         
         if (timeframeStart && timeframeEnd) {
-            // PERIOD MODE: Use existing data points - let aggregateDataByGranularity handle the grouping
-            console.log(`📊 PERIOD MODE: Using existing data points for ${timeGranularity} granularity`);
-            console.log(`📊 Timeframe: ${timeframeStart.toISOString()} to ${timeframeEnd.toISOString()}`);
-            console.log(`📊 Videos with sufficient data: ${videosWithSufficientData.length}`);
+            // PERIOD MODE: Show cumulative progress within the timeframe
+            const lastKnownValues: { [videoId: string]: VideoHistory } = {};
             
-            // Use the existing data points directly - aggregateDataByGranularity will handle grouping
-            videosWithSufficientData.forEach(video => {
-                if (video.history?.length) {
-                    video.history.forEach(point => {
-                        const pointTime = new Date(point.time);
-                        // Filter by timeframe if specified
-                        if (pointTime >= timeframeStart && pointTime <= timeframeEnd) {
-                            aggregateData.push({
-                                time: point.time,
-                                views: point.views,
-                                likes: point.likes,
-                                comments: point.comments,
-                                shares: point.shares,
-                                delta: 0, // Will be calculated by aggregateDataByGranularity
-                                originalTime: new Date(point.time)
-                            });
-                        }
+            sortedTimestamps.forEach(timestamp => {
+                // Update last known values for videos that have data at this timestamp
+                videosWithSufficientData.forEach(video => {
+                    const pointAtTime = video.history?.find(h => h.time === timestamp);
+                    if (pointAtTime) {
+                        lastKnownValues[video.id] = pointAtTime;
+                    }
+                });
+
+                // Calculate cumulative values within the timeframe
+                const aggregateViews = Object.values(lastKnownValues).reduce((sum, point) => sum + point.views, 0);
+                const aggregateLikes = Object.values(lastKnownValues).reduce((sum, point) => sum + point.likes, 0);
+                const aggregateComments = Object.values(lastKnownValues).reduce((sum, point) => sum + point.comments, 0);
+                const aggregateShares = Object.values(lastKnownValues).reduce((sum, point) => sum + point.shares, 0);
+
+                if (Object.keys(lastKnownValues).length > 0) {
+                    aggregateData.push({
+                        time: timestamp,
+                        views: aggregateViews,
+                        likes: aggregateLikes,
+                        comments: aggregateComments,
+                        shares: aggregateShares,
+                        delta: 0,
+                        originalTime: new Date(timestamp)
                     });
                 }
             });
-            
-            // Sort by time
-            aggregateData.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
             
         } else {
             // ALL TIME MODE: Show cumulative totals over time
@@ -1612,8 +1614,8 @@ export default function TikTokTracker() {
             originalTime: new Date(point.time)
         }));
 
-        // Apply time granularity aggregation (only for ALL TIME MODE)
-        const aggregatedData = timeframe ? rawChartData : aggregateDataByGranularity(rawChartData, timeGranularity, timeframe);
+        // Apply time granularity aggregation
+        const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity, timeframe);
         
         return {
             videos: eligibleVideos.length,
