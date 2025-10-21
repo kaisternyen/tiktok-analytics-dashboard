@@ -321,6 +321,12 @@ export async function POST(request: NextRequest) {
         let postedDate: Date;
         if (platform === 'tiktok') {
             const tikTokData = mediaData as unknown as Record<string, unknown>;
+            console.log(`📅 TIKTOK TIMESTAMP DEBUG:`, {
+                hasTimestamp: 'timestamp' in tikTokData,
+                timestamp: tikTokData.timestamp,
+                allKeys: Object.keys(tikTokData)
+            });
+            
             const timestamp = tikTokData.timestamp as string;
             if (timestamp) {
                 postedDate = new Date(timestamp);
