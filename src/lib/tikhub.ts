@@ -178,6 +178,7 @@ export function extractTikTokStatsFromTikHubData(videoData: unknown, originalUrl
     if (awemeDetail) {
         console.log('📊 aweme_detail keys:', Object.keys(awemeDetail));
         console.log('📊 aweme_detail.statistics:', awemeDetail.statistics);
+        console.log('📊 FULL statistics object:', JSON.stringify(awemeDetail.statistics, null, 2));
         console.log('📊 aweme_detail.stats:', awemeDetail.stats);
         console.log('📊 aweme_detail.author:', awemeDetail.author);
         console.log('📊 aweme_detail.desc:', awemeDetail.desc);
