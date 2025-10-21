@@ -205,6 +205,21 @@ export async function POST(request: NextRequest) {
             thumbnailUrl = tikTokData.thumbnailUrl as string || undefined;
             
             console.log('🎬 Final values:', { views, likes, comments, shares, username, thumbnailUrl });
+            
+            // Extract timestamp from initial scrape data
+            console.log(`📅 INITIAL SCRAPE TIMESTAMP DEBUG:`, {
+                hasTimestamp: 'timestamp' in tikTokData,
+                timestamp: tikTokData.timestamp,
+                timestampType: typeof tikTokData.timestamp,
+                allKeys: Object.keys(tikTokData)
+            });
+            
+            const initialTimestamp = tikTokData.timestamp as string;
+            if (initialTimestamp) {
+                console.log(`📅 INITIAL SCRAPE timestamp found: ${initialTimestamp}`);
+            } else {
+                console.log(`📅 INITIAL SCRAPE no timestamp found`);
+            }
         }
 
         // Always upload thumbnail to S3 if present
