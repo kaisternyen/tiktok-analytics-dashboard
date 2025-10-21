@@ -1019,6 +1019,38 @@ export default function TikTokTracker() {
         }
     };
 
+    // Handle fixing all videos to active
+    const handleFixAllVideos = async () => {
+        try {
+            console.log('🔧 Fixing all videos to active...');
+            
+            const response = await fetch('/api/fix-videos-active', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log(`✅ Fixed ${result.count} videos to active`);
+                setSuccess(`✅ Fixed ${result.count} videos to active`);
+                setTimeout(() => setSuccess(''), 3000);
+                
+                // Refresh the videos list
+                await fetchVideos();
+            } else {
+                throw new Error(result.error || 'Failed to fix videos');
+            }
+        } catch (error) {
+            console.error('💥 Error fixing videos:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            setError(`Failed to fix videos: ${errorMessage}`);
+            setTimeout(() => setError(''), 3000);
+        }
+    };
+
     // Handle "Just Moderated" - marks last moderated date
     const handleJustModerated = async (videoId: string) => {
         try {
@@ -1859,6 +1891,13 @@ export default function TikTokTracker() {
                                         {cronStatus.system.videosNeedingScrape} pending
                                     </span>
                                 )}
+                                <button
+                                    onClick={handleFixAllVideos}
+                                    className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
+                                    title="Set all videos to active"
+                                >
+                                    Fix All Videos
+                                </button>
                             </div>
                         )}
                     </div>

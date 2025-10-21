@@ -36,21 +36,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, error: 'Video not found' }, { status: 404 });
         }
 
-        // Check if video is active and not deleted
-        if (!video.isActive) {
-            return NextResponse.json({ 
-                success: false, 
-                error: 'Video is inactive',
-                video: {
-                    id: video.id,
-                    username: video.username,
-                    platform: video.platform,
-                    isActive: video.isActive,
-                    trackingMode: video.trackingMode
-                }
-            }, { status: 400 });
-        }
-
+        // Remove isActive check - all videos should be scrapable
         if (video.trackingMode === 'deleted') {
             return NextResponse.json({ 
                 success: false, 
@@ -65,7 +51,7 @@ export async function POST(req: Request) {
         }
 
         console.log(`🎯 Running single video scrape for @${video.username} (${video.platform}) - ID: ${videoId}`);
-        console.log(`🎯 Video status: isActive=${video.isActive}, trackingMode=${video.trackingMode}`);
+        console.log(`🎯 Video trackingMode: ${video.trackingMode}`);
 
         // Call TikHub API
         console.log(`🎯 Calling TikHub API for URL: ${video.url}`);
