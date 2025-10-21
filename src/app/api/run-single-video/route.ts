@@ -52,6 +52,11 @@ export async function POST(req: Request) {
 
         console.log(`🎯 Running single video scrape for @${video.username} (${video.platform}) - ID: ${videoId}`);
         console.log(`🎯 Video trackingMode: ${video.trackingMode}`);
+        console.log(`🔑 TikHub API Key Check:`, {
+            hasApiKey: !!process.env.TIKHUB_API_KEY,
+            apiKeyLength: process.env.TIKHUB_API_KEY?.length,
+            apiKeyStart: process.env.TIKHUB_API_KEY?.substring(0, 10) + '...'
+        });
 
         // Call TikHub API
         console.log(`🎯 Calling TikHub API for URL: ${video.url}`);
@@ -65,6 +70,12 @@ export async function POST(req: Request) {
         });
         
         console.log(`🔍 FULL TikHub Result:`, JSON.stringify(tikHubResult, null, 2));
+        console.log(`🔍 TikHub Result Keys:`, Object.keys(tikHubResult));
+        console.log(`🔍 TikHub Result Type:`, typeof tikHubResult);
+        console.log(`🔍 TikHub Result Success:`, tikHubResult.success);
+        console.log(`🔍 TikHub Result Data:`, tikHubResult.data);
+        console.log(`🔍 TikHub Result DebugInfo:`, tikHubResult.debugInfo);
+        console.log(`🔍 TikHub Result Error:`, tikHubResult.error);
 
         if (!tikHubResult.success) {
             console.error(`❌ TikHub API failed for @${video.username}:`, tikHubResult.error);
