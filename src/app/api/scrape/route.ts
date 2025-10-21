@@ -324,7 +324,9 @@ export async function POST(request: NextRequest) {
             console.log(`📅 TIKTOK TIMESTAMP DEBUG:`, {
                 hasTimestamp: 'timestamp' in tikTokData,
                 timestamp: tikTokData.timestamp,
-                allKeys: Object.keys(tikTokData)
+                timestampType: typeof tikTokData.timestamp,
+                allKeys: Object.keys(tikTokData),
+                fullTikTokData: JSON.stringify(tikTokData, null, 2)
             });
             
             const timestamp = tikTokData.timestamp as string;
@@ -366,6 +368,15 @@ export async function POST(request: NextRequest) {
                 lastScrapedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
                 isActive: true
             }
+        });
+
+        console.log(`📅 DATABASE VIDEO CREATED:`, {
+            id: newVideo.id,
+            username: newVideo.username,
+            postedAt: newVideo.postedAt,
+            postedAtISO: newVideo.postedAt?.toISOString(),
+            platform: newVideo.platform,
+            extractedPostedDate: postedDate.toISOString()
         });
 
         // Add zero baseline metrics entry at the video's posted date
