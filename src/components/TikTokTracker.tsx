@@ -1714,8 +1714,8 @@ export default function TikTokTracker() {
             }
             
             // Convert granularity data to chart data points
-            const bucketsWithData = Object.entries(granularityData).filter(([_, views]) => views > 0);
-            const bucketsWithoutData = Object.entries(granularityData).filter(([_, views]) => views === 0);
+            const bucketsWithData = Object.entries(granularityData).filter(([, views]) => views > 0);
+            const bucketsWithoutData = Object.entries(granularityData).filter(([, views]) => views === 0);
             
             console.log(`📊 Granularity Summary: ${bucketsWithData.length} buckets with data, ${bucketsWithoutData.length} empty buckets`);
             if (bucketsWithData.length > 0) {
