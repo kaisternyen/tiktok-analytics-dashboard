@@ -718,8 +718,19 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                         try {
                             const viralThreshold = checkViralThresholds(hourlyViewsChange);
                             if (viralThreshold) {
-                                // Only send viral notification if this video has never been notified for viral status
-                                if (!video.hasBeenNotifiedViral) {
+                                // Use atomic update to prevent race conditions - only update if hasBeenNotifiedViral is still false
+                                const updateResult = await prisma.video.updateMany({
+                                    where: { 
+                                        id: video.id,
+                                        hasBeenNotifiedViral: false  // Only update if not already notified
+                                    },
+                                    data: { 
+                                        hasBeenNotifiedViral: true
+                                    } as any // eslint-disable-line @typescript-eslint/no-explicit-any -- Field exists in schema but Prisma types need regeneration
+                                });
+                                
+                                // Only send notification if the update actually happened (meaning it was the first to update)
+                                if (updateResult.count > 0) {
                                     await notifyViralVideo(
                                         video.username,
                                         video.platform,
@@ -731,17 +742,9 @@ async function processVideosSmartly(videos: VideoRecord[], maxPerRun: number = 1
                                         viralThreshold
                                     );
                                     
-                                    // Mark this video as having been notified for viral status (one-time only)
-                                    await prisma.video.update({
-                                        where: { id: video.id },
-                                        data: { 
-                                            hasBeenNotifiedViral: true
-                                        } as any // eslint-disable-line @typescript-eslint/no-explicit-any -- Field exists in schema but Prisma types need regeneration
-                                    });
-                                    
                                     console.log(`🔥 Viral threshold notification sent for @${video.username} - gained ${hourlyViewsChange} views in last hour (threshold: ${viralThreshold})`);
                                 } else {
-                                    console.log(`⚠️ Viral notification skipped for @${video.username} - already notified for viral status`);
+                                    console.log(`⚠️ Viral notification skipped for @${video.username} - already notified for viral status (race condition prevented)`);
                                 }
                             }
                         } catch (viralError) {
@@ -952,26 +955,44 @@ async function cleanupOrphanedVideos(): Promise<{ deactivated: number; accounts:
     }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
     const startTime = Date.now();
     const cronStartTime = new Date();
     const estTime = new Date(cronStartTime.toLocaleString("en-US", {timeZone: "America/New_York"}));
     const currentHour = estTime.getHours();
     const currentMinute = estTime.getMinutes();
     
+    // Check if this is being called by the backup scraper
+    const userAgent = request.headers.get('user-agent') || '';
+    const backupHeader = request.headers.get('x-backup-scraper');
+    const isBackupScraper = backupHeader === 'true' || userAgent.includes('Backup-Scraper');
+    
     console.log(`🚀 ===== CRON JOB STARTED (${cronStartTime.toISOString()}) =====`);
     console.log(`🕐 CRON TIMING: EST ${estTime.toLocaleString()} (Hour ${currentHour}, Minute ${currentMinute})`);
     console.log(`🔧 Process info: PID ${process.pid}, Memory: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
     console.log(`🔧 Environment: NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL}`);
-    console.log(`🔧 Headers: User-Agent=${process.env.HTTP_USER_AGENT || 'Not set'}`);
+    console.log(`🔧 Headers: User-Agent=${userAgent}`);
     console.log(`🔧 Request URL: ${process.env.VERCEL_URL || 'localhost'}`);
     console.log(`🔧 Cron Job Source: ${process.env.VERCEL_CRON_SECRET ? 'Vercel Cron' : 'Manual/Test'}`);
+    console.log(`🔧 Backup Scraper Call: ${isBackupScraper ? 'YES - SKIPPING TO PREVENT DUPLICATES' : 'NO'}`);
     console.log(`⚡ 100% RELIABILITY MODE: Every video processed every hour`);
     console.log(`🚨 Hourly videos: ULTRA LENIENT - ensure data for every hour (30min catch-up)`);
     console.log(`🌙 Daily videos: Scrape every 24h (1445min safety net)`);
     console.log(`📋 Strategy: Complete hourly data - prioritize data completeness over timing`);
     console.log(`🔍 CRON DEBUG: This execution will be logged with detailed scraping decisions`);
     console.log(`🎯 PRIORITY: Videos missing data for hour ${currentHour} will be scraped immediately`);
+    
+    // CRITICAL: Skip if this is being called by backup scraper to prevent duplicates
+    if (isBackupScraper) {
+        console.log(`⚠️ SKIPPING: This is a backup scraper call - main cron job should handle this`);
+        return NextResponse.json({
+            success: true,
+            message: 'Skipped - backup scraper call detected',
+            skipped: true,
+            timestamp: cronStartTime.toISOString(),
+            duration: Date.now() - startTime
+        });
+    }
     
     // CRITICAL: Check if this is running at the expected hour
     if (currentMinute !== 0) {
@@ -1349,7 +1370,7 @@ export async function GET() {
 }
 
 // Keep POST endpoint for manual triggers
-export async function POST() {
+export async function POST(request: Request) {
     console.log('🔧 Manual cron trigger requested');
-    return GET();
+    return GET(request);
 } 
