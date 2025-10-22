@@ -100,6 +100,7 @@ interface ChartDataPoint {
     comments?: number;
     shares?: number;
     delta: number;
+    cumulativeViews?: number; // For tooltip display
     originalTime: Date;
     videoId?: string;
 }
@@ -1384,20 +1385,6 @@ export default function TikTokTracker() {
             // Format in EST
             const dateStr = formatInTimeZone(label || '', 'America/New_York', 'MMM d, yyyy h:mm aa zzz');
 
-            // Calculate the period total for the specific day/hour being hovered
-            let periodTotal = 0;
-            if (showDelta) {
-                const clickedDate = new Date(data.time);
-                
-                if (timeGranularity === 'hourly') {
-                    // For hourly granularity: show hourly period views for that specific hour
-                    periodTotal = calculateHourlyPeriodViews(clickedDate);
-                } else {
-                    // For daily/weekly granularity: show daily period views for that specific day
-                    periodTotal = calculateDailyPeriodViews(clickedDate);
-                }
-            }
-
             return (
                 <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
                     <p className="font-medium text-gray-900">
@@ -1406,10 +1393,10 @@ export default function TikTokTracker() {
                     {showDelta ? (
                         <>
                             <p className="text-blue-600">
-                                Change: {formatNumber(periodTotal)} views
+                                Change: {formatNumber(data.views)} views
                             </p>
                             <p className="text-gray-600 text-sm">
-                                Total at this time: {formatNumber(data.views)} views
+                                Total at this time: {formatNumber(data.cumulativeViews || data.views)} views
                             </p>
                         </>
                     ) : (
@@ -1484,26 +1471,21 @@ export default function TikTokTracker() {
             const isTimeframeMode = timeframe && timeframe[0] && timeframe[1];
             const isDailyGranularity = granularity === 'daily';
             
+            let selectedPoint;
             if (isTimeframeMode && isDailyGranularity && sortedPoints.length >= 2) {
                 // PERIOD MODE + DAILY: Use the period calculation values (already calculated in chart data)
-                const lastPoint = sortedPoints[sortedPoints.length - 1];
-                
-                // The views field already contains the correct value (delta or cumulative) from rawChartData processing
-                views = lastPoint.views;
-                likes = lastPoint.likes || 0;
-                comments = lastPoint.comments || 0;
-                shares = lastPoint.shares || 0;
-                delta = lastPoint.delta; // Use the delta from chart data
+                selectedPoint = sortedPoints[sortedPoints.length - 1];
             } else {
                 // ALL TIME MODE: Use latest point
-                const latestPoint = sortedPoints[sortedPoints.length - 1];
-                // The views field already contains the correct value (delta or cumulative) from rawChartData processing
-                views = latestPoint.views;
-                likes = latestPoint.likes || 0;
-                comments = latestPoint.comments || 0;
-                shares = latestPoint.shares || 0;
-                delta = latestPoint.delta; // Use the delta from chart data
+                selectedPoint = sortedPoints[sortedPoints.length - 1];
             }
+            
+            // The views field already contains the correct value (delta or cumulative) from rawChartData processing
+            views = selectedPoint.views;
+            likes = selectedPoint.likes || 0;
+            comments = selectedPoint.comments || 0;
+            shares = selectedPoint.shares || 0;
+            delta = selectedPoint.delta; // Use the delta from chart data
             
             // DEBUG: Log aggregation values
             console.log(`DEBUG AGGREGATION: Date ${timeKey}, Views: ${views}, Delta: ${delta}`);
@@ -1515,6 +1497,7 @@ export default function TikTokTracker() {
                 comments,
                 shares,
                 delta,
+                cumulativeViews: selectedPoint?.cumulativeViews,
                 originalTime: new Date(timeKey)
             });
         }
@@ -1738,6 +1721,7 @@ export default function TikTokTracker() {
                 comments: point.comments,
                 shares: point.shares,
                 delta: delta,
+                cumulativeViews: currentValue, // Store the cumulative value for tooltip
                 originalTime: new Date(point.time)
             };
         });
