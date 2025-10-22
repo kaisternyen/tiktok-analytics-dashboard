@@ -1485,7 +1485,7 @@ export default function TikTokTracker() {
         }
 
         return series;
-    }, [originalVideos, timeframe, timeGranularity, showDelta]);
+    }, [originalVideos, timeframe, timeGranularity, showDelta, calculateHourlyPeriodViews, calculateDailyPeriodViews]);
     // Custom tooltip with hover details
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: ChartDataPoint }>; label?: string }) => {
         if (active && payload && payload.length) {
@@ -1907,7 +1907,7 @@ export default function TikTokTracker() {
 
     // Use the chart calculation for chart data and totals
     const chartMetrics = getChartMetrics;
-    const { chartData } = chartMetrics;
+    const chartData = buildOverviewSeries; // single source of truth
     const yAxisDomain = getYAxisDomain(chartData);
 
     // Enhanced chart data processing for individual video metrics
