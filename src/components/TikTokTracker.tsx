@@ -1503,6 +1503,9 @@ export default function TikTokTracker() {
                 delta = latestPoint.delta; // Use the delta from chart data
             }
             
+            // DEBUG: Log aggregation values
+            console.log(`DEBUG AGGREGATION: Date ${timeKey}, Views: ${views}, Delta: ${delta}`);
+            
             aggregated.push({
                 time: timeKey,
                 views,
@@ -1721,6 +1724,9 @@ export default function TikTokTracker() {
                 } else {
                     plottedValue = calculateDailyPeriodViews(pointDate);
                 }
+                
+                // DEBUG: Log what we're calculating
+                console.log(`DEBUG CHART: Date ${pointDate.toISOString().split('T')[0]}, Original views: ${point.views}, Calculated period: ${plottedValue}`);
             }
             
             return {
