@@ -1496,7 +1496,7 @@ export default function TikTokTracker() {
             } else {
                 // ALL TIME MODE: Use latest point
                 const latestPoint = sortedPoints[sortedPoints.length - 1];
-                views = latestPoint.views;
+                views = latestPoint.views; // This should be the period calculation when showDelta is true
                 likes = latestPoint.likes || 0;
                 comments = latestPoint.comments || 0;
                 shares = latestPoint.shares || 0;
@@ -1710,27 +1710,16 @@ export default function TikTokTracker() {
             });
         }
 
-        // Create chart data - copy exact approach from commit 025e8bd
+        // Create chart data - EXACT copy from commit 025e8bd
         const rawChartData: ChartDataPoint[] = aggregateData.map((point, index) => {
-            const pointDate = new Date(point.time);
-            
-            // Calculate delta (simple consecutive difference like old commit)
             const previousPoint = index > 0 ? aggregateData[index - 1] : point;
-            const delta = Math.max(0, point.views - previousPoint.views);
-            
-            // When showDelta is true, use period calculation (same as tooltip)
-            let plottedValue = point.views; // Default to cumulative
-            if (showDelta) {
-                if (timeGranularity === 'hourly') {
-                    plottedValue = calculateHourlyPeriodViews(pointDate);
-                } else {
-                    plottedValue = calculateDailyPeriodViews(pointDate);
-                }
-            }
-            
+            const currentValue = point.views;
+            const previousValue = previousPoint.views;
+            const delta = Math.max(0, currentValue - previousValue); // Ensure non-negative
+
             return {
                 time: point.time,
-                views: plottedValue, // This is what gets plotted
+                views: showDelta ? delta : currentValue, // EXACT same as working commit
                 likes: point.likes,
                 comments: point.comments,
                 shares: point.shares,
@@ -1739,8 +1728,14 @@ export default function TikTokTracker() {
             };
         });
 
-        // Apply time granularity aggregation
-        const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity, timeframe);
+        // DEBUG: Log raw chart data before aggregation
+        console.log('DEBUG RAW CHART DATA:');
+        rawChartData.forEach(point => {
+            console.log(`Date ${point.time}, Views: ${point.views}, Delta: ${point.delta}`);
+        });
+
+        // Apply time granularity aggregation - but preserve period calculations
+        const aggregatedData = showDelta ? rawChartData : aggregateDataByGranularity(rawChartData, timeGranularity, timeframe);
         
         return {
             videos: eligibleVideos.length,
