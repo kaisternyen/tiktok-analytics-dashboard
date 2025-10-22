@@ -1431,7 +1431,7 @@ export default function TikTokTracker() {
     };
 
     // Helper function to group data points by time granularity
-    const aggregateDataByGranularity = (data: ChartDataPoint[], granularity: 'hourly' | 'daily' | 'weekly', timeframe?: [string, string] | null, showDelta?: boolean): ChartDataPoint[] => {
+    const aggregateDataByGranularity = (data: ChartDataPoint[], granularity: 'hourly' | 'daily' | 'weekly', timeframe?: [string, string] | null): ChartDataPoint[] => {
         if (data.length === 0) return [];
 
         const grouped = new Map<string, ChartDataPoint[]>();
@@ -1488,8 +1488,8 @@ export default function TikTokTracker() {
                 // PERIOD MODE + DAILY: Use the period calculation values (already calculated in chart data)
                 const lastPoint = sortedPoints[sortedPoints.length - 1];
                 
-                // Use delta when showDelta is true, otherwise use views
-                views = showDelta ? lastPoint.delta : lastPoint.views;
+                // The views field already contains the correct value (delta or cumulative) from rawChartData processing
+                views = lastPoint.views;
                 likes = lastPoint.likes || 0;
                 comments = lastPoint.comments || 0;
                 shares = lastPoint.shares || 0;
@@ -1497,8 +1497,8 @@ export default function TikTokTracker() {
             } else {
                 // ALL TIME MODE: Use latest point
                 const latestPoint = sortedPoints[sortedPoints.length - 1];
-                // Use delta when showDelta is true, otherwise use views
-                views = showDelta ? latestPoint.delta : latestPoint.views;
+                // The views field already contains the correct value (delta or cumulative) from rawChartData processing
+                views = latestPoint.views;
                 likes = latestPoint.likes || 0;
                 comments = latestPoint.comments || 0;
                 shares = latestPoint.shares || 0;
@@ -1712,16 +1712,28 @@ export default function TikTokTracker() {
             });
         }
 
-        // Create chart data - EXACT copy from commit 025e8bd
+        // Create chart data - Fixed to match tooltip calculations
         const rawChartData: ChartDataPoint[] = aggregateData.map((point, index) => {
             const previousPoint = index > 0 ? aggregateData[index - 1] : point;
             const currentValue = point.views;
             const previousValue = previousPoint.views;
             const delta = Math.max(0, currentValue - previousValue); // Ensure non-negative
 
+            let chartValue = currentValue;
+            if (showDelta) {
+                // When showDelta is true, calculate the period delta for this specific day/hour
+                // This should match what the tooltip shows as "Change"
+                const pointDate = new Date(point.time);
+                if (timeGranularity === 'hourly') {
+                    chartValue = calculateHourlyPeriodViews(pointDate);
+                } else {
+                    chartValue = calculateDailyPeriodViews(pointDate);
+                }
+            }
+
             return {
                 time: point.time,
-                views: showDelta ? delta : currentValue, // EXACT same as working commit
+                views: chartValue,
                 likes: point.likes,
                 comments: point.comments,
                 shares: point.shares,
@@ -1737,7 +1749,7 @@ export default function TikTokTracker() {
         });
 
         // Apply time granularity aggregation
-        const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity, timeframe, showDelta);
+        const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity, timeframe);
         
         return {
             videos: eligibleVideos.length,
