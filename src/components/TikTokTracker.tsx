@@ -1464,7 +1464,7 @@ export default function TikTokTracker() {
             // Sort points by time
             const sortedPoints = points.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
             
-            let views, likes, comments, shares, delta;
+            // Select the point representing this bucket, then derive immutable values
             
             // Check if we're in timeframe mode with daily granularity - calculate day delta
             const isTimeframeMode = timeframe && timeframe[0] && timeframe[1];
@@ -1480,11 +1480,11 @@ export default function TikTokTracker() {
             }
             
             // The views field already contains the correct value (delta or cumulative) from rawChartData processing
-            views = selectedPoint.views;
-            likes = selectedPoint.likes || 0;
-            comments = selectedPoint.comments || 0;
-            shares = selectedPoint.shares || 0;
-            delta = selectedPoint.delta; // Use the delta from chart data
+            const views = selectedPoint.views;
+            const likes = selectedPoint.likes || 0;
+            const comments = selectedPoint.comments || 0;
+            const shares = selectedPoint.shares || 0;
+            const delta = selectedPoint.delta; // Use the delta from chart data
             
             // DEBUG: Log aggregation values
             console.log(`DEBUG AGGREGATION: Date ${timeKey}, Views: ${views}, Delta: ${delta}`);
