@@ -1707,39 +1707,29 @@ export default function TikTokTracker() {
             });
         }
 
-        // Create raw chart data with absolute values
-        const rawChartData: ChartDataPoint[] = aggregateData.map((point, index) => {
-            // Calculate delta for each point
-            let delta = 0;
-            if (index > 0) {
-                const previousPoint = aggregateData[index - 1];
-                delta = Math.max(0, point.views - previousPoint.views);
-            }
+        // Create chart data - simple and logical
+        const rawChartData: ChartDataPoint[] = aggregateData.map((point) => {
+            const pointDate = new Date(point.time);
             
-            // When showDelta is true, delta should be the same as periodTotal in tooltip
+            // Calculate what should be plotted
+            let plottedValue = point.views; // Default to cumulative views
+            
             if (showDelta) {
-                const pointDate = new Date(point.time);
+                // When showing delta, plot the period calculation (same as tooltip)
                 if (timeGranularity === 'hourly') {
-                    delta = calculateHourlyPeriodViews(pointDate);
-                } else if (timeGranularity === 'daily') {
-                    delta = calculateDailyPeriodViews(pointDate);
-                } else if (timeGranularity === 'weekly') {
-                    delta = calculateDailyPeriodViews(pointDate); // Weekly uses daily calculation
+                    plottedValue = calculateHourlyPeriodViews(pointDate);
+                } else {
+                    plottedValue = calculateDailyPeriodViews(pointDate);
                 }
             }
             
             return {
                 time: point.time,
-                views: showDelta ? (
-                    timeGranularity === 'hourly' ? calculateHourlyPeriodViews(new Date(point.time)) :
-                    timeGranularity === 'daily' ? calculateDailyPeriodViews(new Date(point.time)) :
-                    timeGranularity === 'weekly' ? calculateDailyPeriodViews(new Date(point.time)) :
-                    point.views
-                ) : point.views,
+                views: plottedValue, // This is what gets plotted
                 likes: point.likes,
                 comments: point.comments,
                 shares: point.shares,
-                delta: delta,
+                delta: plottedValue, // Same value for consistency
                 originalTime: new Date(point.time)
             };
         });
@@ -2380,7 +2370,7 @@ export default function TikTokTracker() {
                                                         <Tooltip content={<CustomTooltip />} />
                                                         <Area
                                                             type="monotone"
-                                                            dataKey={showDelta ? "delta" : "views"}
+                                                            dataKey="views"
                                                             stroke="#3b82f6"
                                                             fill="#3b82f6"
                                                             fillOpacity={0.1}
