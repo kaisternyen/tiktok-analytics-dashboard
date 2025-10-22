@@ -1301,32 +1301,25 @@ export default function TikTokTracker() {
         const startOfHourUTC = fromEasternTime(startOfHourEST);
         const endOfHourUTC = fromEasternTime(endOfHourEST);
         
-        // Calculate hourly period views by looking at historical data for this specific hour
+        // Calculate hourly period views using baseline at start-of-hour (last point BEFORE start)
         let totalViews = 0;
         originalVideos.forEach(video => {
             if (!video.history) return;
-            
-            // Check if video has data within this specific hour
-            const hasDataInHour = video.history.some(point => {
-                const pointTime = new Date(point.time);
-                return pointTime >= startOfHourUTC && pointTime <= endOfHourUTC;
-            });
-            
-            if (hasDataInHour) {
-                // Calculate period delta for this video in this specific hour
-                const hourPoints = video.history.filter(point => {
-                    const pointTime = new Date(point.time);
-                    return pointTime >= startOfHourUTC && pointTime <= endOfHourUTC;
-                });
-                
-                if (hourPoints.length > 0) {
-                    const sortedPoints = hourPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                    const firstPoint = sortedPoints[0];
-                    const lastPoint = sortedPoints[sortedPoints.length - 1];
-                    
-                    totalViews += Math.max(0, lastPoint.views - firstPoint.views);
-                }
-            }
+            const points = video.history
+                .map(p => ({ t: new Date(p.time).getTime(), v: p.views }))
+                .sort((a, b) => a.t - b.t);
+
+            // Latest point at or before end of hour
+            const endCandidates = points.filter(p => p.t <= endOfHourUTC.getTime());
+            if (endCandidates.length === 0) return;
+            const lastAtEnd = endCandidates[endCandidates.length - 1];
+
+            // Baseline is latest at or before start of hour
+            const baselineCandidates = points.filter(p => p.t <= startOfHourUTC.getTime());
+            const baseline = baselineCandidates.length > 0 ? baselineCandidates[baselineCandidates.length - 1] : undefined;
+
+            const baselineValue = baseline ? baseline.v : 0;
+            totalViews += Math.max(0, lastAtEnd.v - baselineValue);
         });
         
         return totalViews;
@@ -1348,32 +1341,23 @@ export default function TikTokTracker() {
         const startOfDayUTC = fromEasternTime(startOfDayEST);
         const endOfDayUTC = fromEasternTime(endOfDayEST);
         
-        // Calculate daily period views by looking at historical data for this specific day
+        // Calculate daily period views using baseline at start-of-day (last point BEFORE start)
         let totalViews = 0;
         originalVideos.forEach(video => {
             if (!video.history) return;
-            
-            // Check if video has data within this specific day
-            const hasDataInDay = video.history.some(point => {
-                const pointTime = new Date(point.time);
-                return pointTime >= startOfDayUTC && pointTime <= endOfDayUTC;
-            });
-            
-            if (hasDataInDay) {
-                // Calculate period delta for this video in this specific day
-                const dayPoints = video.history.filter(point => {
-                    const pointTime = new Date(point.time);
-                    return pointTime >= startOfDayUTC && pointTime <= endOfDayUTC;
-                });
-                
-                if (dayPoints.length > 0) {
-                    const sortedPoints = dayPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                    const firstPoint = sortedPoints[0];
-                    const lastPoint = sortedPoints[sortedPoints.length - 1];
-                    
-                    totalViews += Math.max(0, lastPoint.views - firstPoint.views);
-                }
-            }
+            const points = video.history
+                .map(p => ({ t: new Date(p.time).getTime(), v: p.views }))
+                .sort((a, b) => a.t - b.t);
+
+            const endCandidates = points.filter(p => p.t <= endOfDayUTC.getTime());
+            if (endCandidates.length === 0) return;
+            const lastAtEnd = endCandidates[endCandidates.length - 1];
+
+            const baselineCandidates = points.filter(p => p.t <= startOfDayUTC.getTime());
+            const baseline = baselineCandidates.length > 0 ? baselineCandidates[baselineCandidates.length - 1] : undefined;
+
+            const baselineValue = baseline ? baseline.v : 0;
+            totalViews += Math.max(0, lastAtEnd.v - baselineValue);
         });
         
         return totalViews;
