@@ -1301,27 +1301,21 @@ export default function TikTokTracker() {
         const startOfHourUTC = fromEasternTime(startOfHourEST);
         const endOfHourUTC = fromEasternTime(endOfHourEST);
         
-        // Calculate hourly period views using baseline at start-of-hour (last point BEFORE start)
+        // Restore original inclusive-hour delta logic
         let totalViews = 0;
         originalVideos.forEach(video => {
             if (!video.history) return;
-            const points = video.history
-                .map(p => ({ t: new Date(p.time).getTime(), v: p.views }))
-                .sort((a, b) => a.t - b.t);
-
-            // Latest point at or before end of hour
-            const endCandidates = points.filter(p => p.t <= endOfHourUTC.getTime());
-            if (endCandidates.length === 0) return;
-            const lastAtEnd = endCandidates[endCandidates.length - 1];
-
-            // Baseline is latest at or before start of hour
-            const baselineCandidates = points.filter(p => p.t <= startOfHourUTC.getTime());
-            const baseline = baselineCandidates.length > 0 ? baselineCandidates[baselineCandidates.length - 1] : undefined;
-
-            const baselineValue = baseline ? baseline.v : 0;
-            totalViews += Math.max(0, lastAtEnd.v - baselineValue);
+            const hourPoints = video.history.filter(point => {
+                const pointTime = new Date(point.time);
+                return pointTime >= startOfHourUTC && pointTime <= endOfHourUTC;
+            });
+            if (hourPoints.length > 0) {
+                const sortedPoints = hourPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                const firstPoint = sortedPoints[0];
+                const lastPoint = sortedPoints[sortedPoints.length - 1];
+                totalViews += Math.max(0, lastPoint.views - firstPoint.views);
+            }
         });
-        
         return totalViews;
     };
 
@@ -1341,25 +1335,21 @@ export default function TikTokTracker() {
         const startOfDayUTC = fromEasternTime(startOfDayEST);
         const endOfDayUTC = fromEasternTime(endOfDayEST);
         
-        // Calculate daily period views using baseline at start-of-day (last point BEFORE start)
+        // Restore original inclusive-day delta logic
         let totalViews = 0;
         originalVideos.forEach(video => {
             if (!video.history) return;
-            const points = video.history
-                .map(p => ({ t: new Date(p.time).getTime(), v: p.views }))
-                .sort((a, b) => a.t - b.t);
-
-            const endCandidates = points.filter(p => p.t <= endOfDayUTC.getTime());
-            if (endCandidates.length === 0) return;
-            const lastAtEnd = endCandidates[endCandidates.length - 1];
-
-            const baselineCandidates = points.filter(p => p.t <= startOfDayUTC.getTime());
-            const baseline = baselineCandidates.length > 0 ? baselineCandidates[baselineCandidates.length - 1] : undefined;
-
-            const baselineValue = baseline ? baseline.v : 0;
-            totalViews += Math.max(0, lastAtEnd.v - baselineValue);
+            const dayPoints = video.history.filter(point => {
+                const pointTime = new Date(point.time);
+                return pointTime >= startOfDayUTC && pointTime <= endOfDayUTC;
+            });
+            if (dayPoints.length > 0) {
+                const sortedPoints = dayPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+                const firstPoint = sortedPoints[0];
+                const lastPoint = sortedPoints[sortedPoints.length - 1];
+                totalViews += Math.max(0, lastPoint.views - firstPoint.views);
+            }
         });
-        
         return totalViews;
     };
 
@@ -1515,6 +1505,9 @@ export default function TikTokTracker() {
                             </p>
                             <p className="text-gray-600 text-sm">
                                 Total at this time: {formatNumber(data.cumulativeViews || data.views)} views
+                            </p>
+                            <p className="text-gray-500 text-xs">
+                                {`Videos included: ${chartMetrics.filteredVideoCount} • Avg age: ${chartMetrics.videos > 0 ? Math.round((originalVideos.reduce((acc, v) => acc + (Date.now() - new Date(v.posted).getTime()) / (1000*60*60*24), 0) / chartMetrics.videos)) : 0}d`}
                             </p>
                         </>
                     ) : (
@@ -1914,7 +1907,7 @@ export default function TikTokTracker() {
 
     // Use the chart calculation for chart data and totals
     const chartMetrics = getChartMetrics;
-    const chartData = buildOverviewSeries; // single source of truth for chart + tooltip
+    const { chartData } = chartMetrics;
     const yAxisDomain = getYAxisDomain(chartData);
 
     // Enhanced chart data processing for individual video metrics
@@ -1961,7 +1954,7 @@ export default function TikTokTracker() {
         // Sort by time
         filteredData.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
-        // Calculate delta values
+        // Calculate delta and cumulative values consistently
         const chartData: ChartDataPoint[] = filteredData.map((point, index) => {
             const previousPoint = index > 0 ? filteredData[index - 1] : point;
             const currentValue = point[metric];
@@ -1972,6 +1965,7 @@ export default function TikTokTracker() {
                 time: point.time,
                 views: showDelta ? delta : currentValue,
                 delta,
+                cumulativeViews: currentValue,
                 originalTime: new Date(point.time)
             };
         });
@@ -3229,7 +3223,7 @@ export default function TikTokTracker() {
                                 <Card>
                                     <CardContent className="p-6">
                                         <div className="flex items-center justify-between mb-4">
-                                            <h3 className="font-semibold">Views Over Time</h3>
+                                            <h3 className="font-semibold">{showViewsDelta ? 'Views Delta Over Time' : 'Total Views Over Time'}</h3>
                                             <Button
                                                 variant={showViewsDelta ? "default" : "outline"}
                                                 size="sm"
@@ -3281,7 +3275,7 @@ export default function TikTokTracker() {
                                 <Card>
                                     <CardContent className="p-6">
                                         <div className="flex items-center justify-between mb-4">
-                                            <h3 className="font-semibold">Likes Over Time</h3>
+                                            <h3 className="font-semibold">{showLikesDelta ? 'Likes Delta Over Time' : 'Total Likes Over Time'}</h3>
                                             <Button
                                                 variant={showLikesDelta ? "default" : "outline"}
                                                 size="sm"
@@ -3333,7 +3327,7 @@ export default function TikTokTracker() {
                                 <Card>
                                     <CardContent className="p-6">
                                         <div className="flex items-center justify-between mb-4">
-                                            <h3 className="font-semibold">Comments Over Time</h3>
+                                            <h3 className="font-semibold">{showCommentsDelta ? 'Comments Delta Over Time' : 'Total Comments Over Time'}</h3>
                                             <Button
                                                 variant={showCommentsDelta ? "default" : "outline"}
                                                 size="sm"
@@ -3385,7 +3379,7 @@ export default function TikTokTracker() {
                                 <Card>
                                     <CardContent className="p-6">
                                         <div className="flex items-center justify-between mb-4">
-                                            <h3 className="font-semibold">Shares Over Time</h3>
+                                            <h3 className="font-semibold">{showSharesDelta ? 'Shares Delta Over Time' : 'Total Shares Over Time'}</h3>
                                             <Button
                                                 variant={showSharesDelta ? "default" : "outline"}
                                                 size="sm"
