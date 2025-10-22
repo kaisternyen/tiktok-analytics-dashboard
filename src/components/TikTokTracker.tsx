@@ -1239,16 +1239,15 @@ export default function TikTokTracker() {
     const getYAxisDomain = (data: ChartDataPoint[]) => {
         if (data.length === 0) return [0, 100];
         
-        const values = data.map(d => showDelta ? d.delta : d.views);
+        // IMPORTANT: Always base the axis domain on the series we actually plot
+        // We plot `views` in the chart (which is period delta when showDelta=true,
+        // or cumulative when showDelta=false). Using anything else (like `delta`)
+        // desynchronizes the scale from the plotted data.
+        const values = data.map(d => d.views);
         const max = Math.max(...values);
         
-        if (showDelta) {
-            // For delta view, always start from 0 and go to max + 10% padding
-            return [0, max * 1.1];
-        } else {
-            // For absolute values, start from 0
-            return [0, max * 1.1];
-        }
+        // Start from 0 with 10% headroom regardless of mode
+        return [0, max * 1.1];
     };
 
     // Custom tick formatter for individual video charts
