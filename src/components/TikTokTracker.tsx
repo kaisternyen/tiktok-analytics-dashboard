@@ -1734,8 +1734,8 @@ export default function TikTokTracker() {
             console.log(`Date ${point.time}, Views: ${point.views}, Delta: ${point.delta}`);
         });
 
-        // Apply time granularity aggregation - but preserve period calculations
-        const aggregatedData = showDelta ? rawChartData : aggregateDataByGranularity(rawChartData, timeGranularity, timeframe);
+        // Apply time granularity aggregation
+        const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity, timeframe);
         
         return {
             videos: eligibleVideos.length,
