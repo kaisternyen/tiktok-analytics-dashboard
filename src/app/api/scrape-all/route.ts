@@ -967,6 +967,9 @@ export async function GET(request: Request) {
     const backupHeader = request.headers.get('x-backup-scraper');
     const isBackupScraper = backupHeader === 'true' || userAgent.includes('Backup-Scraper');
     
+    // If it's a backup scraper call, only run if we're NOT at minute 0 (to avoid duplicates with main cron)
+    const shouldSkipBackupScraper = isBackupScraper && currentMinute === 0;
+    
     console.log(`🚀 ===== CRON JOB STARTED (${cronStartTime.toISOString()}) =====`);
     console.log(`🕐 CRON TIMING: EST ${estTime.toLocaleString()} (Hour ${currentHour}, Minute ${currentMinute})`);
     console.log(`🔧 Process info: PID ${process.pid}, Memory: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
@@ -974,7 +977,8 @@ export async function GET(request: Request) {
     console.log(`🔧 Headers: User-Agent=${userAgent}`);
     console.log(`🔧 Request URL: ${process.env.VERCEL_URL || 'localhost'}`);
     console.log(`🔧 Cron Job Source: ${process.env.VERCEL_CRON_SECRET ? 'Vercel Cron' : 'Manual/Test'}`);
-    console.log(`🔧 Backup Scraper Call: ${isBackupScraper ? 'YES - SKIPPING TO PREVENT DUPLICATES' : 'NO'}`);
+    console.log(`🔧 Backup Scraper Call: ${isBackupScraper ? 'YES' : 'NO'}`);
+    console.log(`🔧 Skip Backup Scraper: ${shouldSkipBackupScraper ? 'YES - PREVENTING DUPLICATE AT MINUTE 0' : 'NO'}`);
     console.log(`⚡ 100% RELIABILITY MODE: Every video processed every hour`);
     console.log(`🚨 Hourly videos: ULTRA LENIENT - ensure data for every hour (30min catch-up)`);
     console.log(`🌙 Daily videos: Scrape every 24h (1445min safety net)`);
@@ -982,12 +986,12 @@ export async function GET(request: Request) {
     console.log(`🔍 CRON DEBUG: This execution will be logged with detailed scraping decisions`);
     console.log(`🎯 PRIORITY: Videos missing data for hour ${currentHour} will be scraped immediately`);
     
-    // CRITICAL: Skip if this is being called by backup scraper to prevent duplicates
-    if (isBackupScraper) {
-        console.log(`⚠️ SKIPPING: This is a backup scraper call - main cron job should handle this`);
+    // CRITICAL: Skip backup scraper calls only at minute 0 to prevent duplicates with main cron
+    if (shouldSkipBackupScraper) {
+        console.log(`⚠️ SKIPPING: Backup scraper call at minute 0 - main cron job should handle this`);
         return NextResponse.json({
             success: true,
-            message: 'Skipped - backup scraper call detected',
+            message: 'Skipped - backup scraper call at minute 0 to prevent duplicates',
             skipped: true,
             timestamp: cronStartTime.toISOString(),
             duration: Date.now() - startTime
