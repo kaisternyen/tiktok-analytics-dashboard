@@ -1431,7 +1431,7 @@ export default function TikTokTracker() {
     };
 
     // Helper function to group data points by time granularity
-    const aggregateDataByGranularity = (data: ChartDataPoint[], granularity: 'hourly' | 'daily' | 'weekly', timeframe?: [string, string] | null): ChartDataPoint[] => {
+    const aggregateDataByGranularity = (data: ChartDataPoint[], granularity: 'hourly' | 'daily' | 'weekly', timeframe?: [string, string] | null, showDelta?: boolean): ChartDataPoint[] => {
         if (data.length === 0) return [];
 
         const grouped = new Map<string, ChartDataPoint[]>();
@@ -1488,7 +1488,8 @@ export default function TikTokTracker() {
                 // PERIOD MODE + DAILY: Use the period calculation values (already calculated in chart data)
                 const lastPoint = sortedPoints[sortedPoints.length - 1];
                 
-                views = lastPoint.views; // This is already the period calculation from calculateDailyPeriodViews
+                // Use delta when showDelta is true, otherwise use views
+                views = showDelta ? lastPoint.delta : lastPoint.views;
                 likes = lastPoint.likes || 0;
                 comments = lastPoint.comments || 0;
                 shares = lastPoint.shares || 0;
@@ -1496,7 +1497,8 @@ export default function TikTokTracker() {
             } else {
                 // ALL TIME MODE: Use latest point
                 const latestPoint = sortedPoints[sortedPoints.length - 1];
-                views = latestPoint.views; // This should be the period calculation when showDelta is true
+                // Use delta when showDelta is true, otherwise use views
+                views = showDelta ? latestPoint.delta : latestPoint.views;
                 likes = latestPoint.likes || 0;
                 comments = latestPoint.comments || 0;
                 shares = latestPoint.shares || 0;
@@ -1735,7 +1737,7 @@ export default function TikTokTracker() {
         });
 
         // Apply time granularity aggregation
-        const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity, timeframe);
+        const aggregatedData = aggregateDataByGranularity(rawChartData, timeGranularity, timeframe, showDelta);
         
         return {
             videos: eligibleVideos.length,
