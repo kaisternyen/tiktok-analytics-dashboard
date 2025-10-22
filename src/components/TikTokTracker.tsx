@@ -1256,6 +1256,51 @@ export default function TikTokTracker() {
         return formatInTimeZone(new Date(tickItem), 'America/New_York', 'MMM d, h aa');
     };
 
+    // Compute the exact UTC window for a chart bucket based on current granularity
+    const getBucketWindowUTC = (date: Date): [Date, Date] => {
+        const est = toEasternTime(date);
+        if (timeGranularity === 'hourly') {
+            const startEST = new Date(est.getFullYear(), est.getMonth(), est.getDate(), est.getHours(), 0, 0, 0);
+            const endEST = new Date(est.getFullYear(), est.getMonth(), est.getDate(), est.getHours() + 1, 0, 0, 0);
+            return [fromEasternTime(startEST), fromEasternTime(endEST)];
+        }
+        if (timeGranularity === 'daily') {
+            const startEST = new Date(est.getFullYear(), est.getMonth(), est.getDate(), 0, 0, 0, 0);
+            const endEST = new Date(est.getFullYear(), est.getMonth(), est.getDate() + 1, 0, 0, 0, 0);
+            return [fromEasternTime(startEST), fromEasternTime(endEST)];
+        }
+        // weekly - start of week (Sunday 00:00 EST) to next week start
+        const weekStartEST = new Date(est);
+        const day = weekStartEST.getDay();
+        weekStartEST.setDate(weekStartEST.getDate() - day);
+        weekStartEST.setHours(0, 0, 0, 0);
+        const nextWeekStartEST = new Date(weekStartEST);
+        nextWeekStartEST.setDate(nextWeekStartEST.getDate() + 7);
+        return [fromEasternTime(weekStartEST), fromEasternTime(nextWeekStartEST)];
+    };
+
+    // Stats for videos contributing to a specific bucket
+    const getBucketContributionStats = (bucketTimeISO: string): { count: number; avgAgeDays: number } => {
+        if (!originalVideos.length) return { count: 0, avgAgeDays: 0 };
+        const [startUTC, endUTC] = getBucketWindowUTC(new Date(bucketTimeISO));
+        const contributing: { posted: Date }[] = [];
+        originalVideos.forEach(video => {
+            if (!video.history || video.history.length === 0) return;
+            const contributes = video.history.some(p => {
+                const t = new Date(p.time).getTime();
+                return t >= startUTC.getTime() && t <= endUTC.getTime();
+            });
+            if (contributes) {
+                contributing.push({ posted: new Date(video.posted) });
+            }
+        });
+        const count = contributing.length;
+        const avgAgeDays = count > 0
+            ? Math.round(contributing.reduce((acc, v) => acc + ((endUTC.getTime() - v.posted.getTime()) / (1000 * 60 * 60 * 24)), 0) / count)
+            : 0;
+        return { count, avgAgeDays };
+    };
+
     // (moved below helpers)
 
     // Helper function to calculate period views for a specific video within a timeframe
@@ -1506,9 +1551,14 @@ export default function TikTokTracker() {
                             <p className="text-gray-600 text-sm">
                                 Total at this time: {formatNumber(data.cumulativeViews || data.views)} views
                             </p>
-                            <p className="text-gray-500 text-xs">
-                                {`Videos included: ${chartMetrics.filteredVideoCount} • Avg age: ${chartMetrics.videos > 0 ? Math.round((originalVideos.reduce((acc, v) => acc + (Date.now() - new Date(v.posted).getTime()) / (1000*60*60*24), 0) / chartMetrics.videos)) : 0}d`}
-                            </p>
+                            {(() => {
+                                const stats = getBucketContributionStats(data.time);
+                                return (
+                                    <p className="text-gray-500 text-xs">
+                                        {`Videos included: ${stats.count} • Avg age: ${stats.avgAgeDays}d`}
+                                    </p>
+                                );
+                            })()}
                         </>
                     ) : (
                         <>
