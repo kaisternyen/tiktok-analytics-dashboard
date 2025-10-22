@@ -1256,121 +1256,7 @@ export default function TikTokTracker() {
         return formatInTimeZone(new Date(tickItem), 'America/New_York', 'MMM d, h aa');
     };
 
-    // -------- Single-source-of-truth series builder (charts + tooltip use the same data) --------
-    const buildOverviewSeries = useMemo((): ChartDataPoint[] => {
-        if (originalVideos.length === 0) return [];
-
-        // Determine timeframe window
-        let startUTC: Date;
-        let endUTC: Date;
-        if (timeframe && timeframe[0] && timeframe[1]) {
-            startUTC = new Date(timeframe[0]);
-            endUTC = new Date(timeframe[1]);
-        } else {
-            // Derive from data if no timeframe selected
-            const allTimes: number[] = [];
-            originalVideos.forEach(v => v.history?.forEach(p => allTimes.push(new Date(p.time).getTime())));
-            if (allTimes.length === 0) return [];
-            allTimes.sort((a, b) => a - b);
-            startUTC = new Date(allTimes[0]);
-            endUTC = new Date(allTimes[allTimes.length - 1]);
-        }
-
-        // Generate bucket starts in EST, then convert to UTC
-        const bucketStartsUTC: Date[] = [];
-        const startEST = toEasternTime(startUTC);
-        const endEST = toEasternTime(endUTC);
-        const cursor = new Date(startEST);
-
-        if (timeGranularity === 'hourly') {
-            cursor.setMinutes(0, 0, 0);
-            while (cursor <= endEST) {
-                bucketStartsUTC.push(fromEasternTime(new Date(cursor)));
-                cursor.setHours(cursor.getHours() + 1);
-            }
-        } else if (timeGranularity === 'daily') {
-            cursor.setHours(0, 0, 0, 0);
-            while (cursor <= endEST) {
-                bucketStartsUTC.push(fromEasternTime(new Date(cursor)));
-                cursor.setDate(cursor.getDate() + 1);
-            }
-        } else { // weekly
-            const day = cursor.getDay();
-            cursor.setDate(cursor.getDate() - day); // start of week (Sun)
-            cursor.setHours(0, 0, 0, 0);
-            while (cursor <= endEST) {
-                bucketStartsUTC.push(fromEasternTime(new Date(cursor)));
-                cursor.setDate(cursor.getDate() + 7);
-            }
-        }
-
-        // Helper: cumulative total at an instant
-        const cumulativeAt = (instantUTC: Date): number => {
-            let sum = 0;
-            originalVideos.forEach(video => {
-                if (!video.history || video.history.length === 0) return;
-                const pts = video.history
-                    .map(p => ({ t: new Date(p.time).getTime(), v: p.views }))
-                    .filter(p => p.t <= instantUTC.getTime())
-                    .sort((a, b) => a.t - b.t);
-                if (pts.length > 0) sum += pts[pts.length - 1].v;
-            });
-            return sum;
-        };
-
-        // Compute series value per bucket
-        const series: ChartDataPoint[] = bucketStartsUTC.map((bucketStartUTC) => {
-            let value = 0;
-            if (showDelta) {
-                if (timeGranularity === 'hourly') {
-                    value = calculateHourlyPeriodViews(bucketStartUTC);
-                } else if (timeGranularity === 'daily') {
-                    value = calculateDailyPeriodViews(bucketStartUTC);
-                } else {
-                    // weekly = sum of 7 daily deltas starting at bucket start day
-                    let weekSum = 0;
-                    for (let i = 0; i < 7; i++) {
-                        const dayStart = new Date(bucketStartUTC.getTime() + i * 24 * 60 * 60 * 1000);
-                        weekSum += calculateDailyPeriodViews(dayStart);
-                    }
-                    value = weekSum;
-                }
-            } else {
-                // cumulative total at end of bucket
-                if (timeGranularity === 'hourly') {
-                    const endOfHourEST = toEasternTime(bucketStartUTC);
-                    endOfHourEST.setMinutes(59, 59, 999);
-                    value = cumulativeAt(fromEasternTime(endOfHourEST));
-                } else if (timeGranularity === 'daily') {
-                    const endOfDayEST = toEasternTime(bucketStartUTC);
-                    endOfDayEST.setHours(23, 59, 59, 999);
-                    value = cumulativeAt(fromEasternTime(endOfDayEST));
-                } else {
-                    const endOfWeekEST = toEasternTime(bucketStartUTC);
-                    endOfWeekEST.setDate(endOfWeekEST.getDate() + 6);
-                    endOfWeekEST.setHours(23, 59, 59, 999);
-                    value = cumulativeAt(fromEasternTime(endOfWeekEST));
-                }
-            }
-
-            return {
-                time: bucketStartUTC.toISOString(),
-                views: value,
-                delta: value,
-                originalTime: new Date(bucketStartUTC),
-            };
-        });
-
-        // For cumulative mode, compute delta field as difference between consecutive cumulative points
-        if (!showDelta) {
-            for (let i = 0; i < series.length; i++) {
-                if (i === 0) { series[i].delta = 0; continue; }
-                series[i].delta = Math.max(0, series[i].views - series[i - 1].views);
-            }
-        }
-
-        return series;
-    }, [originalVideos, timeframe, timeGranularity, showDelta]);
+    // (moved below helpers)
 
     // Helper function to calculate period views for a specific video within a timeframe
     const calculateVideoPeriodViews = (video: TrackedVideo, timeframeStart: Date, timeframeEnd: Date): number => {
@@ -1493,6 +1379,139 @@ export default function TikTokTracker() {
         return totalViews;
     };
 
+    // -------- Single-source-of-truth series builder (charts + tooltip use the same data) --------
+    const buildOverviewSeries = useMemo((): ChartDataPoint[] => {
+        if (originalVideos.length === 0) return [];
+
+        // Determine timeframe window
+        let startUTC: Date;
+        let endUTC: Date;
+        if (timeframe && timeframe[0] && timeframe[1]) {
+            startUTC = new Date(timeframe[0]);
+            endUTC = new Date(timeframe[1]);
+        } else {
+            // Derive from data if no timeframe selected
+            const allTimes: number[] = [];
+            originalVideos.forEach(v => v.history?.forEach(p => allTimes.push(new Date(p.time).getTime())));
+            if (allTimes.length === 0) return [];
+            allTimes.sort((a, b) => a - b);
+            startUTC = new Date(allTimes[0]);
+            endUTC = new Date(allTimes[allTimes.length - 1]);
+        }
+
+        // Generate bucket starts in EST, then convert to UTC
+        const bucketStartsUTC: Date[] = [];
+        const startEST = toEasternTime(startUTC);
+        const endEST = toEasternTime(endUTC);
+        const cursor = new Date(startEST);
+
+        if (timeGranularity === 'hourly') {
+            cursor.setMinutes(0, 0, 0);
+            while (cursor <= endEST) {
+                bucketStartsUTC.push(fromEasternTime(new Date(cursor)));
+                cursor.setHours(cursor.getHours() + 1);
+            }
+        } else if (timeGranularity === 'daily') {
+            cursor.setHours(0, 0, 0, 0);
+            while (cursor <= endEST) {
+                bucketStartsUTC.push(fromEasternTime(new Date(cursor)));
+                cursor.setDate(cursor.getDate() + 1);
+            }
+        } else { // weekly
+            const day = cursor.getDay();
+            cursor.setDate(cursor.getDate() - day); // start of week (Sun)
+            cursor.setHours(0, 0, 0, 0);
+            while (cursor <= endEST) {
+                bucketStartsUTC.push(fromEasternTime(new Date(cursor)));
+                cursor.setDate(cursor.getDate() + 7);
+            }
+        }
+
+        // Helper: cumulative total at an instant
+        const cumulativeAt = (instantUTC: Date): number => {
+            let sum = 0;
+            originalVideos.forEach(video => {
+                if (!video.history || video.history.length === 0) return;
+                const pts = video.history
+                    .map(p => ({ t: new Date(p.time).getTime(), v: p.views }))
+                    .filter(p => p.t <= instantUTC.getTime())
+                    .sort((a, b) => a.t - b.t);
+                if (pts.length > 0) sum += pts[pts.length - 1].v;
+            });
+            return sum;
+        };
+
+        // Compute series value per bucket
+        const series: ChartDataPoint[] = bucketStartsUTC.map((bucketStartUTC) => {
+            let value = 0;
+            let cumulativeForTooltip = 0;
+            if (showDelta) {
+                if (timeGranularity === 'hourly') {
+                    value = calculateHourlyPeriodViews(bucketStartUTC);
+                } else if (timeGranularity === 'daily') {
+                    value = calculateDailyPeriodViews(bucketStartUTC);
+                } else {
+                    // weekly = sum of 7 daily deltas starting at bucket start day
+                    let weekSum = 0;
+                    for (let i = 0; i < 7; i++) {
+                        const dayStart = new Date(bucketStartUTC.getTime() + i * 24 * 60 * 60 * 1000);
+                        weekSum += calculateDailyPeriodViews(dayStart);
+                    }
+                    value = weekSum;
+                }
+                // cumulative at end of bucket (for tooltip)
+                if (timeGranularity === 'hourly') {
+                    const endOfHourEST = toEasternTime(bucketStartUTC);
+                    endOfHourEST.setMinutes(59, 59, 999);
+                    cumulativeForTooltip = cumulativeAt(fromEasternTime(endOfHourEST));
+                } else if (timeGranularity === 'daily') {
+                    const endOfDayEST = toEasternTime(bucketStartUTC);
+                    endOfDayEST.setHours(23, 59, 59, 999);
+                    cumulativeForTooltip = cumulativeAt(fromEasternTime(endOfDayEST));
+                } else {
+                    const endOfWeekEST = toEasternTime(bucketStartUTC);
+                    endOfWeekEST.setDate(endOfWeekEST.getDate() + 6);
+                    endOfWeekEST.setHours(23, 59, 59, 999);
+                    cumulativeForTooltip = cumulativeAt(fromEasternTime(endOfWeekEST));
+                }
+            } else {
+                // cumulative total at end of bucket
+                if (timeGranularity === 'hourly') {
+                    const endOfHourEST = toEasternTime(bucketStartUTC);
+                    endOfHourEST.setMinutes(59, 59, 999);
+                    value = cumulativeAt(fromEasternTime(endOfHourEST));
+                } else if (timeGranularity === 'daily') {
+                    const endOfDayEST = toEasternTime(bucketStartUTC);
+                    endOfDayEST.setHours(23, 59, 59, 999);
+                    value = cumulativeAt(fromEasternTime(endOfDayEST));
+                } else {
+                    const endOfWeekEST = toEasternTime(bucketStartUTC);
+                    endOfWeekEST.setDate(endOfWeekEST.getDate() + 6);
+                    endOfWeekEST.setHours(23, 59, 59, 999);
+                    value = cumulativeAt(fromEasternTime(endOfWeekEST));
+                }
+                cumulativeForTooltip = value;
+            }
+
+            return {
+                time: bucketStartUTC.toISOString(),
+                views: value,
+                delta: value,
+                cumulativeViews: cumulativeForTooltip,
+                originalTime: new Date(bucketStartUTC),
+            };
+        });
+
+        // For cumulative mode, compute delta field as difference between consecutive cumulative points
+        if (!showDelta) {
+            for (let i = 0; i < series.length; i++) {
+                if (i === 0) { series[i].delta = 0; continue; }
+                series[i].delta = Math.max(0, series[i].views - series[i - 1].views);
+            }
+        }
+
+        return series;
+    }, [originalVideos, timeframe, timeGranularity, showDelta]);
     // Custom tooltip with hover details
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: ChartDataPoint }>; label?: string }) => {
         if (active && payload && payload.length) {
