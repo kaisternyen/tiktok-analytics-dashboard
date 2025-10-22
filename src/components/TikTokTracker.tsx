@@ -1710,23 +1710,22 @@ export default function TikTokTracker() {
             });
         }
 
-        // Create chart data - simple and logical
-        const rawChartData: ChartDataPoint[] = aggregateData.map((point) => {
+        // Create chart data - copy exact approach from commit 025e8bd
+        const rawChartData: ChartDataPoint[] = aggregateData.map((point, index) => {
             const pointDate = new Date(point.time);
             
-            // Calculate what should be plotted
-            let plottedValue = point.views; // Default to cumulative views
+            // Calculate delta (simple consecutive difference like old commit)
+            const previousPoint = index > 0 ? aggregateData[index - 1] : point;
+            const delta = Math.max(0, point.views - previousPoint.views);
             
+            // When showDelta is true, use period calculation (same as tooltip)
+            let plottedValue = point.views; // Default to cumulative
             if (showDelta) {
-                // When showing delta, plot the period calculation (same as tooltip)
                 if (timeGranularity === 'hourly') {
                     plottedValue = calculateHourlyPeriodViews(pointDate);
                 } else {
                     plottedValue = calculateDailyPeriodViews(pointDate);
                 }
-                
-                // DEBUG: Log what we're calculating
-                console.log(`DEBUG CHART: Date ${pointDate.toISOString().split('T')[0]}, Original views: ${point.views}, Calculated period: ${plottedValue}`);
             }
             
             return {
@@ -1735,7 +1734,7 @@ export default function TikTokTracker() {
                 likes: point.likes,
                 comments: point.comments,
                 shares: point.shares,
-                delta: plottedValue, // Same value for consistency
+                delta: delta,
                 originalTime: new Date(point.time)
             };
         });
