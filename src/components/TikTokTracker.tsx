@@ -744,10 +744,28 @@ export default function TikTokTracker() {
                             };
                         }
                         
-                        const views = end.views - start.views;
-                        const likes = end.likes - start.likes;
-                        const comments = end.comments - start.comments;
-                        const shares = end.shares - start.shares;
+                        // Check if the first data point is 0 (zero baseline exists)
+                        // If not, treat as starting from 0 to ensure period views = total views for videos posted within timeframe
+                        const hasZeroBaseline = start.views === 0 && start.likes === 0 && start.comments === 0 && start.shares === 0;
+                        
+                        // If video was posted during timeframe and doesn't have zero baseline, use total views
+                        // Otherwise, calculate delta normally
+                        let views, likes, comments, shares;
+                        
+                        if (isPostedInTimeframe && !hasZeroBaseline && end === start) {
+                            // Video posted during timeframe without zero baseline - use total views
+                            views = end.views;
+                            likes = end.likes;
+                            comments = end.comments;
+                            shares = end.shares;
+                        } else {
+                            // Normal delta calculation
+                            views = end.views - start.views;
+                            likes = end.likes - start.likes;
+                            comments = end.comments - start.comments;
+                            shares = end.shares - start.shares;
+                        }
+                        
                         const growth = {
                             views: start.views > 0 ? ((end.views - start.views) / start.views) * 100 : 0,
                             likes: start.likes > 0 ? ((end.likes - start.likes) / start.likes) * 100 : 0,
@@ -2090,7 +2108,18 @@ export default function TikTokTracker() {
             
             // Find the last point before the first filtered point
             const baselinePoint = allHistory.filter(p => p.t < firstPointTime).slice(-1)[0];
+            
+            // If no baseline point exists, treat as starting from 0
+            // This ensures period views calculate correctly for videos without a zero baseline entry
             baselineValue = baselinePoint ? baselinePoint.v : 0;
+            
+            // Important: If the first data point is 0, use that as baseline
+            // Otherwise, assume the video started at 0 before we began tracking
+            const firstDataPoint = allHistory[0];
+            if (firstDataPoint && firstDataPoint.v === 0) {
+                // Video has a zero baseline entry - use it as the starting point
+                baselineValue = 0;
+            }
         }
         
         const chartData: ChartDataPoint[] = filteredData.map((point, index) => {
