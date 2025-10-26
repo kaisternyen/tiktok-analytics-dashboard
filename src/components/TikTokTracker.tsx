@@ -2075,16 +2075,45 @@ export default function TikTokTracker() {
 
         // Calculate delta and cumulative values consistently (with monotonic protection)
         let runningMax = 0; // Track maximum value seen so far to prevent dips
-        const chartData: ChartDataPoint[] = filteredData.map((point, index) => {
-            const previousPoint = index > 0 ? filteredData[index - 1] : point;
-            const currentValue = point[metric];
-            const previousValue = previousPoint[metric];
-            const delta = Math.max(0, currentValue - previousValue); // Ensure non-negative
+        
+        // For delta mode, we need to find the baseline before the first point
+        let baselineValue = 0;
+        if (showDelta && filteredData.length > 0) {
+            // Find the last point before the timeframe or use 0 as baseline
+            const firstPointTime = new Date(filteredData[0].time).getTime();
             
-            // For cumulative mode, ensure values only increase (monotonic protection)
-            // This prevents dips from bad data points
-            const protectedValue = Math.max(currentValue, runningMax);
-            runningMax = protectedValue;
+            // Look at ALL history, not just filtered, to find baseline
+            const allHistory = history.map(p => ({ 
+                t: new Date(p.time).getTime(), 
+                v: p[metric] 
+            })).sort((a, b) => a.t - b.t);
+            
+            // Find the last point before the first filtered point
+            const baselinePoint = allHistory.filter(p => p.t < firstPointTime).slice(-1)[0];
+            baselineValue = baselinePoint ? baselinePoint.v : 0;
+        }
+        
+        const chartData: ChartDataPoint[] = filteredData.map((point, index) => {
+            const currentValue = point[metric];
+            
+            // For delta mode, calculate delta from the baseline or previous point
+            let delta = 0;
+            let protectedValue = currentValue;
+            
+            if (showDelta) {
+                if (index === 0) {
+                    // First point: delta from baseline
+                    delta = Math.max(0, currentValue - baselineValue);
+                } else {
+                    // Subsequent points: delta from previous point
+                    const previousValue = filteredData[index - 1][metric];
+                    delta = Math.max(0, currentValue - previousValue);
+                }
+            } else {
+                // For cumulative mode, ensure values only increase (monotonic protection)
+                protectedValue = Math.max(currentValue, runningMax);
+                runningMax = protectedValue;
+            }
 
             return {
                 time: point.time,

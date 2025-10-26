@@ -255,24 +255,19 @@ export async function POST(req: NextRequest) {
       });
 
       // Add zero baseline metrics entry at the video's posted date
-      // Only if the video was posted in the past (not just now)
+      // Always add this, even for recent videos, so period views calculate correctly
       const postedDate = getPostedDate(mediaData);
-      const timeSincePosted = Date.now() - postedDate.getTime();
-      const ONE_HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
-      
-      if (timeSincePosted > ONE_HOUR) {
-        await prisma.metricsHistory.create({
-          data: {
-            videoId: newVideo.id,
-            views: 0,
-            likes: 0,
-            comments: 0,
-            shares: 0,
-            timestamp: postedDate
-          }
-        });
-        console.log(`📊 Discord: Added zero baseline entry at posted date: ${postedDate.toISOString()}`);
-      }
+      await prisma.metricsHistory.create({
+        data: {
+          videoId: newVideo.id,
+          views: 0,
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          timestamp: postedDate
+        }
+      });
+      console.log(`📊 Discord: Added zero baseline entry at posted date: ${postedDate.toISOString()}`);
 
       // Add initial metrics history entry
       const normalizedTimestamp = getCurrentNormalizedTimestamp('60min');
