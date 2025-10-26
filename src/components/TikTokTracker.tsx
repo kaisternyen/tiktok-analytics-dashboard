@@ -649,7 +649,12 @@ export default function TikTokTracker() {
             
             const apiUrl = `/api/videos${params.toString() ? `?${params.toString()}` : ''}`;
             console.log('➡️ API Request URL:', apiUrl);
-            const response = await fetch(apiUrl);
+            const response = await fetch(apiUrl, {
+                cache: 'no-store', // Ensure fresh data on every request
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
+            });
             const result = await response.json();
 
             let timeframeStart: Date | null = null;

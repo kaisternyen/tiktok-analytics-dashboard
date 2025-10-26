@@ -638,10 +638,17 @@ export async function GET(req: Request) {
             console.log('📊 Using default sorting (no filters or sorts)');
         }
 
-        return NextResponse.json({
+        const response = NextResponse.json({
             success: true,
             videos: finalVideos
         });
+        
+        // Disable caching to ensure fresh data is always fetched
+        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        response.headers.set('Pragma', 'no-cache');
+        response.headers.set('Expires', '0');
+        
+        return response;
 
     } catch (error) {
         console.error('💥 Error fetching videos:', error);
