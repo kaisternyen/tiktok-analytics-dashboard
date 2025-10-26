@@ -360,18 +360,8 @@ export async function POST(request: NextRequest) {
         });
         console.log(`📊 Added zero baseline entry at posted date: ${postedDate.toISOString()}`);
 
-        // Create initial metrics history entry so the video appears on the graph immediately
-        await prisma.metricsHistory.create({
-            data: {
-                videoId: newVideo.id,
-                views: views,
-                likes: likes,
-                comments: comments,
-                shares: shares,
-                timestamp: new Date()
-            }
-        });
-        console.log(`📊 Added initial metrics entry for immediate graph display`);
+        // Note: We don't create an initial metrics entry here because the refresh-style scrape below will do it
+        // This prevents duplicate entries and ensures the first tracked value comes from a proper scrape
 
         // Use the EXACT same logic as the refresh button
         console.log(`🔄 Using refresh button logic for new video @${username}`);
@@ -461,6 +451,17 @@ export async function POST(request: NextRequest) {
             lastScrapedAt: newVideo.lastScrapedAt.toISOString()
         });
 
+        // Fetch the latest video data after refresh scrape completes to return accurate stats
+        const latestVideo = await prisma.video.findUnique({
+            where: { id: newVideo.id },
+            select: {
+                currentViews: true,
+                currentLikes: true,
+                currentComments: true,
+                currentShares: true
+            }
+        });
+
         return NextResponse.json({
             success: true,
             message: 'added',
@@ -468,10 +469,10 @@ export async function POST(request: NextRequest) {
                 id: result.data.id,
                 username: newVideo.username,
                 url: newVideo.url,
-                views: newVideo.currentViews,
-                likes: newVideo.currentLikes,
-                comments: newVideo.currentComments,
-                shares: newVideo.currentShares,
+                views: latestVideo?.currentViews || newVideo.currentViews,
+                likes: latestVideo?.currentLikes || newVideo.currentLikes,
+                comments: latestVideo?.currentComments || newVideo.currentComments,
+                shares: latestVideo?.currentShares || newVideo.currentShares,
                 platform: platform
             },
             debugInfo: {
