@@ -1351,19 +1351,37 @@ export default function TikTokTracker() {
         const startOfHourUTC = fromEasternTime(startOfHourEST);
         const endOfHourUTC = fromEasternTime(endOfHourEST);
         
-        // Restore original inclusive-hour delta logic
+        // Improved delta calculation: use baseline from before the bucket
         let totalViews = 0;
         originalVideos.forEach(video => {
             if (!video.history) return;
-            const hourPoints = video.history.filter(point => {
-                const pointTime = new Date(point.time);
-                return pointTime >= startOfHourUTC && pointTime <= endOfHourUTC;
-            });
-            if (hourPoints.length > 0) {
-                const sortedPoints = hourPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                const firstPoint = sortedPoints[0];
-                const lastPoint = sortedPoints[sortedPoints.length - 1];
-                totalViews += Math.max(0, lastPoint.views - firstPoint.views);
+            
+            // Find the last point BEFORE the bucket and the last point UP TO the bucket end
+            const allPoints = video.history
+                .map(p => ({ t: new Date(p.time).getTime(), views: p.views }))
+                .sort((a, b) => a.t - b.t);
+            
+            const startTime = startOfHourUTC.getTime();
+            const endTime = endOfHourUTC.getTime();
+            
+            // Find the last point before bucket start (baseline)
+            const baselinePoint = allPoints
+                .filter(p => p.t < startTime)
+                .slice(-1)[0];
+            
+            // Find the last point up to bucket end
+            const endPoint = allPoints
+                .filter(p => p.t <= endTime)
+                .slice(-1)[0];
+            
+            if (baselinePoint && endPoint) {
+                totalViews += Math.max(0, endPoint.views - baselinePoint.views);
+            } else if (endPoint && !baselinePoint) {
+                // No baseline, use the points in the bucket itself
+                const hourPoints = allPoints.filter(p => p.t >= startTime && p.t <= endTime);
+                if (hourPoints.length > 0) {
+                    totalViews += endPoint.views - hourPoints[0].views;
+                }
             }
         });
         return totalViews;
@@ -1377,7 +1395,7 @@ export default function TikTokTracker() {
         // Convert to Eastern time for consistent day boundaries
         const clickedDateEST = toEasternTime(date);
         
-        // Get start of clicked day (12am) and start of next day (12am) - 25 hours total
+        // Get start of clicked day (12am) and start of next day (12am)
         const startOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
         const endOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate() + 1, 0, 0, 0, 0);
         
@@ -1385,19 +1403,37 @@ export default function TikTokTracker() {
         const startOfDayUTC = fromEasternTime(startOfDayEST);
         const endOfDayUTC = fromEasternTime(endOfDayEST);
         
-        // Restore original inclusive-day delta logic
+        // Improved delta calculation: use baseline from before the bucket
         let totalViews = 0;
         originalVideos.forEach(video => {
             if (!video.history) return;
-            const dayPoints = video.history.filter(point => {
-                const pointTime = new Date(point.time);
-                return pointTime >= startOfDayUTC && pointTime <= endOfDayUTC;
-            });
-            if (dayPoints.length > 0) {
-                const sortedPoints = dayPoints.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
-                const firstPoint = sortedPoints[0];
-                const lastPoint = sortedPoints[sortedPoints.length - 1];
-                totalViews += Math.max(0, lastPoint.views - firstPoint.views);
+            
+            // Find the last point BEFORE the bucket and the last point UP TO the bucket end
+            const allPoints = video.history
+                .map(p => ({ t: new Date(p.time).getTime(), views: p.views }))
+                .sort((a, b) => a.t - b.t);
+            
+            const startTime = startOfDayUTC.getTime();
+            const endTime = endOfDayUTC.getTime();
+            
+            // Find the last point before bucket start (baseline)
+            const baselinePoint = allPoints
+                .filter(p => p.t < startTime)
+                .slice(-1)[0];
+            
+            // Find the last point up to bucket end
+            const endPoint = allPoints
+                .filter(p => p.t <= endTime)
+                .slice(-1)[0];
+            
+            if (baselinePoint && endPoint) {
+                totalViews += Math.max(0, endPoint.views - baselinePoint.views);
+            } else if (endPoint && !baselinePoint) {
+                // No baseline, use the points in the bucket itself
+                const dayPoints = allPoints.filter(p => p.t >= startTime && p.t <= endTime);
+                if (dayPoints.length > 0) {
+                    totalViews += endPoint.views - dayPoints[0].views;
+                }
             }
         });
         return totalViews;
@@ -1451,7 +1487,7 @@ export default function TikTokTracker() {
             }
         }
 
-        // Helper: cumulative total at an instant
+        // Helper: cumulative total at an instant (with monotonic protection)
         const cumulativeAt = (instantUTC: Date): number => {
             let sum = 0;
             originalVideos.forEach(video => {
@@ -1460,7 +1496,13 @@ export default function TikTokTracker() {
                     .map(p => ({ t: new Date(p.time).getTime(), v: p.views }))
                     .filter(p => p.t <= instantUTC.getTime())
                     .sort((a, b) => a.t - b.t);
-                if (pts.length > 0) sum += pts[pts.length - 1].v;
+                
+                // Ensure monotonic increase: use the maximum value seen so far, not the last value
+                // This prevents temporary dips from bad data points
+                if (pts.length > 0) {
+                    const maxValue = Math.max(...pts.map(p => p.v));
+                    sum += maxValue;
+                }
             });
             return sum;
         };
@@ -2009,18 +2051,24 @@ export default function TikTokTracker() {
         // Sort by time
         filteredData.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
-        // Calculate delta and cumulative values consistently
+        // Calculate delta and cumulative values consistently (with monotonic protection)
+        let runningMax = 0; // Track maximum value seen so far to prevent dips
         const chartData: ChartDataPoint[] = filteredData.map((point, index) => {
             const previousPoint = index > 0 ? filteredData[index - 1] : point;
             const currentValue = point[metric];
             const previousValue = previousPoint[metric];
             const delta = Math.max(0, currentValue - previousValue); // Ensure non-negative
+            
+            // For cumulative mode, ensure values only increase (monotonic protection)
+            // This prevents dips from bad data points
+            const protectedValue = Math.max(currentValue, runningMax);
+            runningMax = protectedValue;
 
             return {
                 time: point.time,
-                views: showDelta ? delta : currentValue,
+                views: showDelta ? delta : protectedValue,
                 delta,
-                cumulativeViews: currentValue,
+                cumulativeViews: protectedValue,
                 originalTime: new Date(point.time)
             };
         });
