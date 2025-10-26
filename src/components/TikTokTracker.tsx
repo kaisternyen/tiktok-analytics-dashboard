@@ -2246,6 +2246,35 @@ export default function TikTokTracker() {
                             >
                                 🧪 Test Single Video
                             </Button>
+                            <Button
+                                variant="outline"
+                                onClick={async () => {
+                                    console.log('🔄 Adding zero baselines to all videos...');
+                                    try {
+                                        const response = await fetch('/api/add-zero-baselines', {
+                                            method: 'POST',
+                                        });
+                                        const result = await response.json();
+                                        
+                                        if (result.success) {
+                                            console.log('✅ Zero baseline migration complete:', result.summary);
+                                            setSuccess(`Zero baselines added: ${result.summary.videosUpdated} videos updated`);
+                                            setTimeout(() => setSuccess(''), 5000);
+                                            await fetchVideos(); // Refresh data
+                                        } else {
+                                            setError(result.error || 'Migration failed');
+                                            setTimeout(() => setError(''), 5000);
+                                        }
+                                    } catch (error) {
+                                        console.error('❌ Migration error:', error);
+                                        setError('Failed to add zero baselines');
+                                        setTimeout(() => setError(''), 5000);
+                                    }
+                                }}
+                                disabled={isLoading}
+                            >
+                                🗄️ Add Zero Baselines
+                            </Button>
                             <Input
                                 placeholder="Paste TikTok or Instagram URL"
                                 value={videoUrl}
