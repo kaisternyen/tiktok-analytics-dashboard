@@ -688,6 +688,10 @@ export default function TikTokTracker() {
                     likes: number;
                     comments: number;
                     shares: number;
+                    totalViews?: number;
+                    totalLikes?: number;
+                    totalComments?: number;
+                    totalShares?: number;
                     hashtags: string[];
                     thumbnailUrl?: string;
                     music?: { name: string; author: string };
@@ -697,6 +701,24 @@ export default function TikTokTracker() {
                 }) => {
                     // If timeframe filter is present, use delta logic
                     if (timeframeStart && timeframeEnd) {
+                        // Check if video was posted within the timeframe
+                        const postedDate = new Date(video.posted);
+                        const postedTime = postedDate.getTime();
+                        const isPostedInTimeframe = postedTime >= timeframeStart.getTime() && postedTime <= timeframeEnd.getTime();
+                        
+                        // If video was posted during the timeframe, period views = total views
+                        if (isPostedInTimeframe) {
+                            return {
+                                ...video,
+                                views: video.totalViews ?? video.views,
+                                likes: video.totalLikes ?? video.likes,
+                                comments: video.totalComments ?? video.comments,
+                                shares: video.totalShares ?? video.shares,
+                                growth: video.growth || { views: 0, likes: 0, comments: 0, shares: 0 },
+                                history: video.history,
+                            };
+                        }
+                        
                         const filteredHistory = video.history.filter(h => {
                             const t = new Date(h.time).getTime();
                             return t >= timeframeStart!.getTime() && t <= timeframeEnd!.getTime();
