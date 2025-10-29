@@ -958,9 +958,9 @@ async function cleanupOrphanedVideos(): Promise<{ deactivated: number; accounts:
 export async function GET(request: Request) {
     const startTime = Date.now();
     const cronStartTime = new Date();
-    const estTime = new Date(cronStartTime.toLocaleString("en-US", {timeZone: "America/New_York"}));
-    const currentHour = estTime.getHours();
-    const currentMinute = estTime.getMinutes();
+    const pstTime = new Date(cronStartTime.toLocaleString("en-US", {timeZone: "America/Los_Angeles"}));
+    const currentHour = pstTime.getHours();
+    const currentMinute = pstTime.getMinutes();
     
     // Check if this is being called by the backup scraper
     const userAgent = request.headers.get('user-agent') || '';
@@ -971,7 +971,7 @@ export async function GET(request: Request) {
     const shouldSkipBackupScraper = isBackupScraper && currentMinute === 0;
     
     console.log(`🚀 ===== CRON JOB STARTED (${cronStartTime.toISOString()}) =====`);
-    console.log(`🕐 CRON TIMING: EST ${estTime.toLocaleString()} (Hour ${currentHour}, Minute ${currentMinute})`);
+    console.log(`🕐 CRON TIMING: PST ${pstTime.toLocaleString()} (Hour ${currentHour}, Minute ${currentMinute})`);
     console.log(`🔧 Process info: PID ${process.pid}, Memory: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
     console.log(`🔧 Environment: NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL}`);
     console.log(`🔧 Headers: User-Agent=${userAgent}`);
@@ -1045,14 +1045,14 @@ export async function GET(request: Request) {
         // }, { status: 500 });
     }
     
-    // Get current EST time for logging
+    // Get current PST time for logging
     const currentTime = new Date();
-    const estTimeForLogging = new Date(currentTime.toLocaleString("en-US", {timeZone: "America/New_York"}));
-    const currentHourForLogging = estTimeForLogging.getHours();
-    console.log(`🕐 Current EST time: ${estTimeForLogging.toLocaleTimeString('en-US', {timeZone: 'America/New_York'})} (Hour ${currentHourForLogging})`);
+    const pstTimeForLogging = new Date(currentTime.toLocaleString("en-US", {timeZone: "America/Los_Angeles"}));
+    const currentHourForLogging = pstTimeForLogging.getHours();
+    console.log(`🕐 Current PST time: ${pstTimeForLogging.toLocaleTimeString('en-US', {timeZone: 'America/Los_Angeles'})} (Hour ${currentHourForLogging})`);
     
     if (currentHourForLogging === 0) {
-        console.log(`🌙 MIDNIGHT EST: Cadence evaluation window active - performance-based switching enabled`);
+        console.log(`🌙 MIDNIGHT PST: Cadence evaluation window active - performance-based switching enabled`);
     } else {
         console.log(`⏰ Non-midnight hour: Hourly videos + performance-based switching`);
     }

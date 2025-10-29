@@ -110,7 +110,7 @@ type TimePeriod = 'D' | 'W' | 'M' | '3M' | '1Y' | 'ALL' | 'TODAY_EST';
 // Helper function to get display label for time periods
 const getTimePeriodLabel = (period: TimePeriod): string => {
     switch (period) {
-        case 'TODAY_EST': return 'Today EST';
+        case 'TODAY_EST': return 'Today PST';
         case 'D': return 'D';
         case 'W': return 'W';
         case 'M': return 'M';
@@ -121,16 +121,16 @@ const getTimePeriodLabel = (period: TimePeriod): string => {
     }
 };
 
-// UNIFIED TIMEZONE HELPERS: Convert any date to EST consistently
-const toEasternTime = (date: Date): Date => {
-    // EST is UTC-5, EDT is UTC-4
-    // Simple approach: always use EST (UTC-5) for consistency
-    return new Date(date.getTime() - (5 * 60 * 60 * 1000));
+// UNIFIED TIMEZONE HELPERS: Convert any date to PST consistently
+const toPacificTime = (date: Date): Date => {
+    // PST is UTC-8, PDT is UTC-7
+    // Simple approach: always use PST (UTC-8) for consistency
+    return new Date(date.getTime() - (8 * 60 * 60 * 1000));
 };
 
-// UNIFIED TIMEZONE HELPER: Convert EST date back to UTC
-const fromEasternTime = (estDate: Date): Date => {
-    return new Date(estDate.getTime() + (5 * 60 * 60 * 1000));
+// UNIFIED TIMEZONE HELPER: Convert PST date back to UTC
+const fromPacificTime = (pstDate: Date): Date => {
+    return new Date(pstDate.getTime() + (8 * 60 * 60 * 1000));
 };
 
 export default function TikTokTracker() {
@@ -147,6 +147,7 @@ export default function TikTokTracker() {
     const [selectedTimePeriod, setSelectedTimePeriod] = useState<TimePeriod>('W');
     const [showDelta, setShowDelta] = useState(true); // Default to delta view
     const [timeGranularity, setTimeGranularity] = useState<'hourly' | 'daily' | 'weekly'>('daily');
+    const [displayTimezone, setDisplayTimezone] = useState<'America/Los_Angeles' | 'America/New_York' | 'UTC'>('America/Los_Angeles');
     
     // Custom date range state
     const [customDateRange, setCustomDateRange] = useState<[string, string] | null>(null);
@@ -206,11 +207,11 @@ export default function TikTokTracker() {
                 startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
                 break;
             case 'TODAY_EST':
-                // Get today at midnight EST using consistent timezone helpers
-                const nowEST = toEasternTime(now);
-                const midnightEST = new Date(nowEST.getFullYear(), nowEST.getMonth(), nowEST.getDate(), 0, 0, 0, 0);
-                // Convert back to UTC for API calls
-                startDate = fromEasternTime(midnightEST);
+                        // Get today at midnight PST using consistent timezone helpers
+                        const nowPST = toPacificTime(now);
+                        const midnightPST = new Date(nowPST.getFullYear(), nowPST.getMonth(), nowPST.getDate(), 0, 0, 0, 0);
+                        // Convert back to UTC for API calls
+                        startDate = fromPacificTime(midnightPST);
                 break;
             default:
                 return null;
@@ -265,15 +266,15 @@ export default function TikTokTracker() {
                 setTimeGranularity('hourly');
             } else {
                 // FIXED: Use consistent Eastern timezone
-                const clickedDateEST = toEasternTime(clickedDate);
+                const clickedDatePST = toPacificTime(clickedDate);
                 
-                // Get start of clicked day and start of next day in Eastern time
-                const startOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
-                const endOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate() + 1, 0, 0, 0, 0);
+                // Get start of clicked day and start of next day in Pacific time
+                const startOfDayPST = new Date(clickedDatePST.getFullYear(), clickedDatePST.getMonth(), clickedDatePST.getDate(), 0, 0, 0, 0);
+                const endOfDayPST = new Date(clickedDatePST.getFullYear(), clickedDatePST.getMonth(), clickedDatePST.getDate() + 1, 0, 0, 0, 0);
                 
                 // Convert back to UTC for API calls
-                const startOfDayUTC = fromEasternTime(startOfDayEST);
-                const endOfDayUTC = fromEasternTime(endOfDayEST);
+                const startOfDayUTC = fromPacificTime(startOfDayPST);
+                const endOfDayUTC = fromPacificTime(endOfDayPST);
                 
                 setCustomDateRange([startOfDayUTC.toISOString(), endOfDayUTC.toISOString()]);
                 setSelectedTimePeriod('D'); // Update period display
@@ -1297,31 +1298,31 @@ export default function TikTokTracker() {
 
     // Custom tick formatter for individual video charts
     const formatVideoXAxisTick = (tickItem: string) => {
-        // Format in EST
-        return formatInTimeZone(new Date(tickItem), 'America/New_York', 'MMM d, h aa');
+        // Format in display timezone
+        return formatInTimeZone(new Date(tickItem), displayTimezone, 'MMM d, h aa');
     };
 
     // Compute the exact UTC window for a chart bucket based on current granularity
     const getBucketWindowUTC = (date: Date): [Date, Date] => {
-        const est = toEasternTime(date);
+        const pst = toPacificTime(date);
         if (timeGranularity === 'hourly') {
-            const startEST = new Date(est.getFullYear(), est.getMonth(), est.getDate(), est.getHours(), 0, 0, 0);
-            const endEST = new Date(est.getFullYear(), est.getMonth(), est.getDate(), est.getHours() + 1, 0, 0, 0);
-            return [fromEasternTime(startEST), fromEasternTime(endEST)];
+            const startPST = new Date(pst.getFullYear(), pst.getMonth(), pst.getDate(), pst.getHours(), 0, 0, 0);
+            const endPST = new Date(pst.getFullYear(), pst.getMonth(), pst.getDate(), pst.getHours() + 1, 0, 0, 0);
+            return [fromPacificTime(startPST), fromPacificTime(endPST)];
         }
         if (timeGranularity === 'daily') {
-            const startEST = new Date(est.getFullYear(), est.getMonth(), est.getDate(), 0, 0, 0, 0);
-            const endEST = new Date(est.getFullYear(), est.getMonth(), est.getDate() + 1, 0, 0, 0, 0);
-            return [fromEasternTime(startEST), fromEasternTime(endEST)];
+            const startPST = new Date(pst.getFullYear(), pst.getMonth(), pst.getDate(), 0, 0, 0, 0);
+            const endPST = new Date(pst.getFullYear(), pst.getMonth(), pst.getDate() + 1, 0, 0, 0, 0);
+            return [fromPacificTime(startPST), fromPacificTime(endPST)];
         }
-        // weekly - start of week (Sunday 00:00 EST) to next week start
-        const weekStartEST = new Date(est);
-        const day = weekStartEST.getDay();
-        weekStartEST.setDate(weekStartEST.getDate() - day);
-        weekStartEST.setHours(0, 0, 0, 0);
-        const nextWeekStartEST = new Date(weekStartEST);
-        nextWeekStartEST.setDate(nextWeekStartEST.getDate() + 7);
-        return [fromEasternTime(weekStartEST), fromEasternTime(nextWeekStartEST)];
+        // weekly - start of week (Sunday 00:00 PST) to next week start
+        const weekStartPST = new Date(pst);
+        const day = weekStartPST.getDay();
+        weekStartPST.setDate(weekStartPST.getDate() - day);
+        weekStartPST.setHours(0, 0, 0, 0);
+        const nextWeekStartPST = new Date(weekStartPST);
+        nextWeekStartPST.setDate(nextWeekStartPST.getDate() + 7);
+        return [fromPacificTime(weekStartPST), fromPacificTime(nextWeekStartPST)];
     };
 
     // Stats for videos contributing to a specific bucket
@@ -1378,18 +1379,18 @@ export default function TikTokTracker() {
         }, 0);
     };
 
-    // Helper function to calculate hourly period views for a specific hour (what the tooltip should show in hourly view)
-    const calculateHourlyPeriodViews = (date: Date): number => {
-        // Convert to Eastern time for consistent hour boundaries
-        const clickedDateEST = toEasternTime(date);
-        
-        // Get start of clicked hour and end of clicked hour
-        const startOfHourEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), clickedDateEST.getHours(), 0, 0, 0);
-        const endOfHourEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), clickedDateEST.getHours() + 1, 0, 0, 0);
-        
-        // Convert back to UTC for API calls
-        const startOfHourUTC = fromEasternTime(startOfHourEST);
-        const endOfHourUTC = fromEasternTime(endOfHourEST);
+        // Helper function to calculate hourly period views for a specific hour (what the tooltip should show in hourly view)
+        const calculateHourlyPeriodViews = (date: Date): number => {
+            // Convert to Pacific time for consistent hour boundaries
+            const clickedDatePST = toPacificTime(date);
+            
+            // Get start of clicked hour and end of clicked hour
+            const startOfHourPST = new Date(clickedDatePST.getFullYear(), clickedDatePST.getMonth(), clickedDatePST.getDate(), clickedDatePST.getHours(), 0, 0, 0);
+            const endOfHourPST = new Date(clickedDatePST.getFullYear(), clickedDatePST.getMonth(), clickedDatePST.getDate(), clickedDatePST.getHours() + 1, 0, 0, 0);
+            
+            // Convert back to UTC for API calls
+            const startOfHourUTC = fromPacificTime(startOfHourPST);
+            const endOfHourUTC = fromPacificTime(endOfHourPST);
         
         // Improved delta calculation: use baseline from before the bucket
         let totalViews = 0;
@@ -1432,16 +1433,16 @@ export default function TikTokTracker() {
 
     // Helper function to calculate daily period views for a specific day (what the tooltip should show)
     const calculateDailyPeriodViews = (date: Date): number => {
-        // Convert to Eastern time for consistent day boundaries
-        const clickedDateEST = toEasternTime(date);
+        // Convert to Pacific time for consistent day boundaries
+        const clickedDatePST = toPacificTime(date);
         
         // Get start of clicked day (12am) and start of next day (12am)
-        const startOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate(), 0, 0, 0, 0);
-        const endOfDayEST = new Date(clickedDateEST.getFullYear(), clickedDateEST.getMonth(), clickedDateEST.getDate() + 1, 0, 0, 0, 0);
+        const startOfDayPST = new Date(clickedDatePST.getFullYear(), clickedDatePST.getMonth(), clickedDatePST.getDate(), 0, 0, 0, 0);
+        const endOfDayPST = new Date(clickedDatePST.getFullYear(), clickedDatePST.getMonth(), clickedDatePST.getDate() + 1, 0, 0, 0, 0);
         
         // Convert back to UTC for API calls
-        const startOfDayUTC = fromEasternTime(startOfDayEST);
-        const endOfDayUTC = fromEasternTime(endOfDayEST);
+        const startOfDayUTC = fromPacificTime(startOfDayPST);
+        const endOfDayUTC = fromPacificTime(endOfDayPST);
         
         // Improved delta calculation: use baseline from before the bucket
         let totalViews = 0;
@@ -1499,30 +1500,30 @@ export default function TikTokTracker() {
             endUTC = new Date(allTimes[allTimes.length - 1]);
         }
 
-        // Generate bucket starts in EST, then convert to UTC
+        // Generate bucket starts in PST, then convert to UTC
         const bucketStartsUTC: Date[] = [];
-        const startEST = toEasternTime(startUTC);
-        const endEST = toEasternTime(endUTC);
-        const cursor = new Date(startEST);
+        const startPST = toPacificTime(startUTC);
+        const endPST = toPacificTime(endUTC);
+        const cursor = new Date(startPST);
 
         if (timeGranularity === 'hourly') {
             cursor.setMinutes(0, 0, 0);
-            while (cursor <= endEST) {
-                bucketStartsUTC.push(fromEasternTime(new Date(cursor)));
+            while (cursor <= endPST) {
+                bucketStartsUTC.push(fromPacificTime(new Date(cursor)));
                 cursor.setHours(cursor.getHours() + 1);
             }
         } else if (timeGranularity === 'daily') {
             cursor.setHours(0, 0, 0, 0);
-            while (cursor <= endEST) {
-                bucketStartsUTC.push(fromEasternTime(new Date(cursor)));
+            while (cursor <= endPST) {
+                bucketStartsUTC.push(fromPacificTime(new Date(cursor)));
                 cursor.setDate(cursor.getDate() + 1);
             }
         } else { // weekly
             const day = cursor.getDay();
             cursor.setDate(cursor.getDate() - day); // start of week (Sun)
             cursor.setHours(0, 0, 0, 0);
-            while (cursor <= endEST) {
-                bucketStartsUTC.push(fromEasternTime(new Date(cursor)));
+            while (cursor <= endPST) {
+                bucketStartsUTC.push(fromPacificTime(new Date(cursor)));
                 cursor.setDate(cursor.getDate() + 7);
             }
         }
@@ -1567,34 +1568,34 @@ export default function TikTokTracker() {
                 }
                 // cumulative at end of bucket (for tooltip)
                 if (timeGranularity === 'hourly') {
-                    const endOfHourEST = toEasternTime(bucketStartUTC);
-                    endOfHourEST.setMinutes(59, 59, 999);
-                    cumulativeForTooltip = cumulativeAt(fromEasternTime(endOfHourEST));
+                    const endOfHourPST = toPacificTime(bucketStartUTC);
+                    endOfHourPST.setMinutes(59, 59, 999);
+                    cumulativeForTooltip = cumulativeAt(fromPacificTime(endOfHourPST));
                 } else if (timeGranularity === 'daily') {
-                    const endOfDayEST = toEasternTime(bucketStartUTC);
-                    endOfDayEST.setHours(23, 59, 59, 999);
-                    cumulativeForTooltip = cumulativeAt(fromEasternTime(endOfDayEST));
+                    const endOfDayPST = toPacificTime(bucketStartUTC);
+                    endOfDayPST.setHours(23, 59, 59, 999);
+                    cumulativeForTooltip = cumulativeAt(fromPacificTime(endOfDayPST));
                 } else {
-                    const endOfWeekEST = toEasternTime(bucketStartUTC);
-                    endOfWeekEST.setDate(endOfWeekEST.getDate() + 6);
-                    endOfWeekEST.setHours(23, 59, 59, 999);
-                    cumulativeForTooltip = cumulativeAt(fromEasternTime(endOfWeekEST));
+                    const endOfWeekPST = toPacificTime(bucketStartUTC);
+                    endOfWeekPST.setDate(endOfWeekPST.getDate() + 6);
+                    endOfWeekPST.setHours(23, 59, 59, 999);
+                    cumulativeForTooltip = cumulativeAt(fromPacificTime(endOfWeekPST));
                 }
             } else {
                 // cumulative total at end of bucket
                 if (timeGranularity === 'hourly') {
-                    const endOfHourEST = toEasternTime(bucketStartUTC);
-                    endOfHourEST.setMinutes(59, 59, 999);
-                    value = cumulativeAt(fromEasternTime(endOfHourEST));
+                    const endOfHourPST = toPacificTime(bucketStartUTC);
+                    endOfHourPST.setMinutes(59, 59, 999);
+                    value = cumulativeAt(fromPacificTime(endOfHourPST));
                 } else if (timeGranularity === 'daily') {
-                    const endOfDayEST = toEasternTime(bucketStartUTC);
-                    endOfDayEST.setHours(23, 59, 59, 999);
-                    value = cumulativeAt(fromEasternTime(endOfDayEST));
+                    const endOfDayPST = toPacificTime(bucketStartUTC);
+                    endOfDayPST.setHours(23, 59, 59, 999);
+                    value = cumulativeAt(fromPacificTime(endOfDayPST));
                 } else {
-                    const endOfWeekEST = toEasternTime(bucketStartUTC);
-                    endOfWeekEST.setDate(endOfWeekEST.getDate() + 6);
-                    endOfWeekEST.setHours(23, 59, 59, 999);
-                    value = cumulativeAt(fromEasternTime(endOfWeekEST));
+                    const endOfWeekPST = toPacificTime(bucketStartUTC);
+                    endOfWeekPST.setDate(endOfWeekPST.getDate() + 6);
+                    endOfWeekPST.setHours(23, 59, 59, 999);
+                    value = cumulativeAt(fromPacificTime(endOfWeekPST));
                 }
                 cumulativeForTooltip = value;
             }
@@ -1622,8 +1623,8 @@ export default function TikTokTracker() {
     const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: ChartDataPoint }>; label?: string }) => {
         if (active && payload && payload.length) {
             const data = payload[0].payload as ChartDataPoint;
-            // Format in EST
-            const dateStr = formatInTimeZone(label || '', 'America/New_York', 'MMM d, yyyy h:mm aa zzz');
+            // Format in display timezone
+            const dateStr = formatInTimeZone(label || '', displayTimezone, 'MMM d, yyyy h:mm aa zzz');
 
             return (
                 <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
@@ -1677,19 +1678,19 @@ export default function TikTokTracker() {
             
             switch (granularity) {
                 case 'hourly':
-                    // Group by hour (YYYY-MM-DD HH:00) - use Eastern time
-                    const hourEST = toEasternTime(date);
-                    key = `${hourEST.getFullYear()}-${String(hourEST.getMonth() + 1).padStart(2, '0')}-${String(hourEST.getDate()).padStart(2, '0')} ${String(hourEST.getHours()).padStart(2, '0')}:00`;
+                    // Group by hour (YYYY-MM-DD HH:00) - use Pacific time
+                    const hourPST = toPacificTime(date);
+                    key = `${hourPST.getFullYear()}-${String(hourPST.getMonth() + 1).padStart(2, '0')}-${String(hourPST.getDate()).padStart(2, '0')} ${String(hourPST.getHours()).padStart(2, '0')}:00`;
                     break;
                 case 'daily':
-                    // Group by day (YYYY-MM-DD) - use Eastern time for consistent day boundaries
-                    const dayEST = toEasternTime(date);
-                    key = `${dayEST.getFullYear()}-${String(dayEST.getMonth() + 1).padStart(2, '0')}-${String(dayEST.getDate()).padStart(2, '0')}`;
+                    // Group by day (YYYY-MM-DD) - use Pacific time for consistent day boundaries
+                    const dayPST = toPacificTime(date);
+                    key = `${dayPST.getFullYear()}-${String(dayPST.getMonth() + 1).padStart(2, '0')}-${String(dayPST.getDate()).padStart(2, '0')}`;
                     break;
                 case 'weekly':
-                    // Group by week (start of week) - use Eastern time
-                    const weekEST = toEasternTime(date);
-                    const weekStart = new Date(weekEST);
+                    // Group by week (start of week) - use Pacific time
+                    const weekPST = toPacificTime(date);
+                    const weekStart = new Date(weekPST);
                     const day = weekStart.getDay();
                     const diff = weekStart.getDate() - day;
                     weekStart.setDate(diff);
@@ -2658,6 +2659,16 @@ export default function TikTokTracker() {
                                                         )}
                                                     </div>
                                                 )}
+                                                {/* Timezone Selector */}
+                                                <select
+                                                    value={displayTimezone}
+                                                    onChange={(e) => setDisplayTimezone(e.target.value as 'America/Los_Angeles' | 'America/New_York' | 'UTC')}
+                                                    className="px-3 py-1 text-xs border border-gray-200 rounded-md"
+                                                >
+                                                    <option value="America/Los_Angeles">PST/PDT</option>
+                                                    <option value="America/New_York">EST/EDT</option>
+                                                    <option value="UTC">UTC</option>
+                                                </select>
                                                 {/* Delta Toggle */}
                                                 <Button
                                                     variant={showDelta ? "default" : "outline"}

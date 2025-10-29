@@ -15,9 +15,9 @@ function shouldScrapeVideo(video: VideoForScrapeCheck): { shouldScrape: boolean;
     const lastScraped = new Date(video.lastScrapedAt);
     const videoAgeInDays = (now.getTime() - video.createdAt.getTime()) / (1000 * 60 * 60 * 24);
     
-    // Get current EST time for daily video scheduling
-    const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-    const currentHour = estTime.getHours();
+    // Get current PST time for daily video scheduling
+    const pstTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Los_Angeles"}));
+    const currentHour = pstTime.getHours();
     
     // For testing mode (every minute), check if we're at a new normalized minute
     if (video.scrapingCadence === 'testing') {
@@ -31,53 +31,53 @@ function shouldScrapeVideo(video: VideoForScrapeCheck): { shouldScrape: boolean;
         }
     }
     
-    // All videos under 7 days old: scrape at the top of each EST hour
+    // All videos under 7 days old: scrape at the top of each PST hour
     if (videoAgeInDays < 7) {
-        // Use EST timezone for hour boundaries
-        const estCurrentNormalizedTime = normalizeTimestamp(estTime, '60min');
-        const estLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/New_York"}));
-        const estLastScrapedNormalizedTime = normalizeTimestamp(estLastScrapedTime, '60min');
+        // Use PST timezone for hour boundaries
+        const pstCurrentNormalizedTime = normalizeTimestamp(pstTime, '60min');
+        const pstLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/Los_Angeles"}));
+        const pstLastScrapedNormalizedTime = normalizeTimestamp(pstLastScrapedTime, '60min');
         
-        if (estCurrentNormalizedTime !== estLastScrapedNormalizedTime) {
-            return { shouldScrape: true, reason: `Video ${videoAgeInDays.toFixed(1)} days old - new EST hour` };
+        if (pstCurrentNormalizedTime !== pstLastScrapedNormalizedTime) {
+            return { shouldScrape: true, reason: `Video ${videoAgeInDays.toFixed(1)} days old - new PST hour` };
         } else {
-            return { shouldScrape: false, reason: 'Same EST hour' };
+            return { shouldScrape: false, reason: 'Same PST hour' };
         }
     }
     
-    // Videos 7+ days old with daily cadence: scrape only at 12:00 AM EST
+    // Videos 7+ days old with daily cadence: scrape only at 12:00 AM PST
     if (video.scrapingCadence === 'daily') {
         if (currentHour === 0) {
-            // Use EST timezone for day boundaries (normalize to start of day)
-            const estCurrentDayStart = new Date(estTime);
-            estCurrentDayStart.setHours(0, 0, 0, 0);
+            // Use PST timezone for day boundaries (normalize to start of day)
+            const pstCurrentDayStart = new Date(pstTime);
+            pstCurrentDayStart.setHours(0, 0, 0, 0);
             
-            const estLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/New_York"}));
-            const estLastScrapedDayStart = new Date(estLastScrapedTime);
-            estLastScrapedDayStart.setHours(0, 0, 0, 0);
+            const pstLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/Los_Angeles"}));
+            const pstLastScrapedDayStart = new Date(pstLastScrapedTime);
+            pstLastScrapedDayStart.setHours(0, 0, 0, 0);
             
             // Check if we're in a different day than when last scraped
-            if (estCurrentDayStart.getTime() !== estLastScrapedDayStart.getTime()) {
-                return { shouldScrape: true, reason: 'Daily video - new EST day' };
+            if (pstCurrentDayStart.getTime() !== pstLastScrapedDayStart.getTime()) {
+                return { shouldScrape: true, reason: 'Daily video - new PST day' };
             } else {
                 return { shouldScrape: false, reason: 'Daily video - already scraped today' };
             }
         } else {
-            return { shouldScrape: false, reason: 'Daily video - waiting for midnight EST' };
+            return { shouldScrape: false, reason: 'Daily video - waiting for midnight PST' };
         }
     }
     
-    // Videos 7+ days old with hourly cadence: scrape at the top of each EST hour
+    // Videos 7+ days old with hourly cadence: scrape at the top of each PST hour
     if (video.scrapingCadence === 'hourly') {
-        // Use EST timezone for hour boundaries
-        const estCurrentNormalizedTime = normalizeTimestamp(estTime, '60min');
-        const estLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/New_York"}));
-        const estLastScrapedNormalizedTime = normalizeTimestamp(estLastScrapedTime, '60min');
+        // Use PST timezone for hour boundaries
+        const pstCurrentNormalizedTime = normalizeTimestamp(pstTime, '60min');
+        const pstLastScrapedTime = new Date(lastScraped.toLocaleString("en-US", {timeZone: "America/Los_Angeles"}));
+        const pstLastScrapedNormalizedTime = normalizeTimestamp(pstLastScrapedTime, '60min');
         
-        if (estCurrentNormalizedTime !== estLastScrapedNormalizedTime) {
-            return { shouldScrape: true, reason: 'High-performance video - new EST hour' };
+        if (pstCurrentNormalizedTime !== pstLastScrapedNormalizedTime) {
+            return { shouldScrape: true, reason: 'High-performance video - new PST hour' };
         } else {
-            return { shouldScrape: false, reason: 'Same EST hour' };
+            return { shouldScrape: false, reason: 'Same PST hour' };
         }
     }
     
