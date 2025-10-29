@@ -2522,6 +2522,17 @@ export default function TikTokTracker() {
                                                         </button>
                                                     ))}
                                                 </div>
+                                                {/* Timezone Selector */}
+                                                <select
+                                                    value={displayTimezone}
+                                                    onChange={(e) => setDisplayTimezone(e.target.value as 'America/Los_Angeles' | 'America/New_York' | 'UTC')}
+                                                    className="px-3 py-1 text-xs border border-gray-200 rounded-md"
+                                                >
+                                                    <option value="America/Los_Angeles">PST/PDT</option>
+                                                    <option value="America/New_York">EST/EDT</option>
+                                                    <option value="UTC">UTC</option>
+                                                </select>
+                                                
                                                 {/* Unified Time Period Selector (controls both chart and videos) */}
                                                 <div className="space-y-3">
                                                     <div className="flex items-center gap-2">
@@ -2659,16 +2670,6 @@ export default function TikTokTracker() {
                                                         )}
                                                     </div>
                                                 )}
-                                                {/* Timezone Selector */}
-                                                <select
-                                                    value={displayTimezone}
-                                                    onChange={(e) => setDisplayTimezone(e.target.value as 'America/Los_Angeles' | 'America/New_York' | 'UTC')}
-                                                    className="px-3 py-1 text-xs border border-gray-200 rounded-md"
-                                                >
-                                                    <option value="America/Los_Angeles">PST/PDT</option>
-                                                    <option value="America/New_York">EST/EDT</option>
-                                                    <option value="UTC">UTC</option>
-                                                </select>
                                                 {/* Delta Toggle */}
                                                 <Button
                                                     variant={showDelta ? "default" : "outline"}
@@ -2755,7 +2756,7 @@ export default function TikTokTracker() {
                                                     <h4 className="font-medium text-gray-900 mb-1">Adaptive Scraping Cadence</h4>
                                                     <div className="text-sm text-gray-600 space-y-1">
                                                         <p>• <span className="text-blue-600 font-medium">Hourly</span>: New videos (first week) and high-performance videos (10k+ daily views)</p>
-                                                        <p>• <span className="text-orange-600 font-medium">Daily</span>: Older videos with low views - scraped at 12:00 AM EST</p>
+                                                        <p>• <span className="text-orange-600 font-medium">Daily</span>: Older videos with low views</p>
                                                         <p>• <span className="text-purple-600 font-medium">Testing</span>: Development mode - scraped every minute</p>
                                                     </div>
                                                 </div>
